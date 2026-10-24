@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // Suppress benign Vite HMR WebSocket errors in sandbox iframe environment (as per platform constraints)
+      (function() {
+        function isViteHmrError(args) {
+          if (!args || !args.length) return false;
+          var combined = '';
+          for (var i = 0; i < args.length; i++) {
+            var arg = args[i];
+            if (!arg) continue;
+            if (typeof arg === 'string') {
+              combined += ' ' + arg;
+            } else if (arg instanceof Error) {
+              combined += ' ' + (arg.message || '') + ' ' + (arg.stack || '');
+            } else if (typeof arg === 'object') {
+              try {
+                combined += ' ' + (arg.message || JSON.stringify(arg));
+              } catch (_) {
+                combined += ' ' + String(arg);
+              }
+            }
+          }
+          return (
+            combined.includes('WebSocket closed without opened') ||
+            combined.includes('[vite] WebSocket') ||
+            (combined.includes('[vite]') && combined.includes('WebSocket')) ||
+            combined.includes('failed to connect to websocket')
+          );
+        }
+
+        var origConsoleError = console.error;
+        console.error = function() {
+          if (isViteHmrError(arguments)) {
+            return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+
+        var origConsoleWarn = console.warn;
+        console.warn = function() {
+          if (isViteHmrError(arguments)) {
+            return;
+          }
+          origConsoleWarn.apply(console, arguments);
+        };
+
+        window.addEventListener('error', function(event) {
+          var msg = (event && (event.message || (event.error && event.error.message))) || '';
+          if (typeof msg === 'string' && (msg.includes('WebSocket closed without opened') || (msg.includes('[vite]') && msg.includes('WebSocket')))) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event && event.reason;
+          var msg = (reason && (reason.message || reason.stack || String(reason))) || '';
+          if (typeof msg === 'string' && (msg.includes('WebSocket closed without opened') || (msg.includes('[vite]') && msg.includes('WebSocket')))) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>حامی - سامانه مدیریت رانندگان، پرسنل و تعویض روغن</title>
+    <meta name="description" content="سامانه حامی - مدیریت حضور و غیاب رانندگان و پرسنل، سرویس تعویض روغن و آیین‌نامه انضباطی" />
+    <meta property="og:title" content="حامی - سامانه مدیریت رانندگان، پرسنل و تعویض روغن" />
+    <meta property="og:description" content="سامانه حامی - مدیریت حضور و غیاب رانندگان و پرسنل، سرویس تعویض روغن و آیین‌نامه انضباطی" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0a101f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="حامی بار" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/shabnam-font@v5.0.1/dist/font-face.css">
+  </head>
+  <body class="bg-[#0a101f] text-slate-100 font-['Vazirmatn','Shabnam',Tahoma,sans-serif] antialiased selection:bg-blue-600 selection:text-white min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

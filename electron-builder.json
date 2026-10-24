@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "ir.hamibar.dispatcher",
+  "productName": "HamiBar Dispatcher",
+  "copyright": "Copyright © 2026 HamiBar",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron-main.js",
+    "preload.cjs",
+    "package.json"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64", "ia32"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "سامانه دیسپچ حامی‌بار"
+  },
+  "linux": {
+    "target": ["AppImage", "deb"],
+    "category": "Office"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "category": "public.app-category.business"
+  }
+}

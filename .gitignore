@@ -1,0 +1,14 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+data/hami-database.json
+data/*.tmp.*
+data/backups/
+data/audit-log.jsonl
+*.sqlite
+*.db

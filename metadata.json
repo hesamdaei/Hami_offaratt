@@ -1,0 +1,8 @@
+{
+  "name": " حامی - سامانه لجستیک ",
+  "description": "سامانه جامع مدیریت هوشمند ناوگان، حضور و غیاب رانندگان، بیمه‌نامه‌ها و بورد عملیاتی حامی بار",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

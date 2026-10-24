@@ -1,0 +1,1545 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Self-Hosted Vazirmatn Font Definitions for 100% Offline & High-Clarity Persian Display */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #0a101f;
+    color: #f8fafc;
+    font-family: 'Vazirmatn', 'Shabnam', 'IRANSans', Tahoma, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "tnum" 1, "ss01" 1;
+    direction: rtl;
+  }
+}
+
+/* Persian Monospace & Tabular Figures Fix */
+.font-mono, [class*="font-mono"], code, kbd, samp, pre {
+  font-family: 'Vazirmatn', 'JetBrains Mono', 'Shabnam', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: "tnum" 1, "ss01" 1 !important;
+  letter-spacing: 0.02em;
+}
+
+/* Contrast & Clarity Boosters for Text Legibility (Dark Mode default) */
+html:not(.light) .text-slate-400 {
+  color: #cbd5e1 !important; /* Bump slate-400 to legible crisp slate-300 in dark mode */
+}
+html:not(.light) .text-slate-500 {
+  color: #94a3b8 !important; /* Bump slate-500 from dark grey to legible slate-400 in dark mode */
+}
+html:not(.light) .text-slate-600 {
+  color: #cbd5e1 !important; /* Bump slate-600 to crisp slate-300 in dark mode */
+}
+
+/* ==========================================================================
+   Light Theme (حالت روشن) - Comprehensive, Crisp, Corporate Dashboard Styling
+   ========================================================================== */
+html.light,
+html.light body,
+.light,
+.light body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Base Text Hierarchies in Light Mode */
+html.light .text-slate-400,
+.light .text-slate-400,
+html.light .text-slate-500,
+.light .text-slate-500 {
+  color: #475569 !important;
+}
+html.light .text-slate-600,
+.light .text-slate-600 {
+  color: #334155 !important;
+}
+html.light .text-slate-300,
+.light .text-slate-300 {
+  color: #1e293b !important;
+}
+html.light .text-slate-200,
+.light .text-slate-200,
+html.light .text-slate-100,
+.light .text-slate-100 {
+  color: #0f172a !important;
+}
+
+/* Headings in Light Mode */
+html.light h1,
+html.light h2,
+html.light h3,
+html.light h4,
+html.light h5,
+html.light h6,
+.light h1,
+.light h2,
+.light h3,
+.light h4,
+.light h5,
+.light h6 {
+  color: #0f172a !important;
+}
+
+/* Semantic & Status Badge/Text Colors for High Contrast in Light Mode */
+html.light .text-emerald-300,
+html.light .text-emerald-400,
+.light .text-emerald-300,
+.light .text-emerald-400 {
+  color: #047857 !important;
+}
+html.light .text-amber-300,
+html.light .text-amber-400,
+.light .text-amber-300,
+.light .text-amber-400 {
+  color: #b45309 !important;
+}
+html.light .text-orange-300,
+html.light .text-orange-400,
+.light .text-orange-300,
+.light .text-orange-400 {
+  color: #c2410c !important;
+}
+html.light .text-sky-300,
+html.light .text-sky-400,
+.light .text-sky-300,
+.light .text-sky-400 {
+  color: #0284c7 !important;
+}
+html.light .text-blue-300,
+html.light .text-blue-400,
+.light .text-blue-300,
+.light .text-blue-400 {
+  color: #1d4ed8 !important;
+}
+html.light .text-indigo-300,
+html.light .text-indigo-400,
+.light .text-indigo-300,
+.light .text-indigo-400 {
+  color: #4338ca !important;
+}
+html.light .text-purple-300,
+html.light .text-purple-400,
+.light .text-purple-300,
+.light .text-purple-400 {
+  color: #6d28d9 !important;
+}
+html.light .text-rose-300,
+html.light .text-rose-400,
+.light .text-rose-300,
+.light .text-rose-400 {
+  color: #be123c !important;
+}
+
+/* Primary Card Surfaces, Modals, Popovers, and Containers */
+html.light [class*="bg-[#"]:not([class*="FFC20E"]):not([class*="003399"]):not([class*="22c55e"]):not([class*="ef4444"]):not([class*="blue-"]):not([class*="emerald-"]):not([class*="rose-"]):not([class*="amber-"]):not([class*="indigo-"]):not([class*="purple-"]):not([class*="from-"]):not([class*="to-"]),
+.light [class*="bg-[#"]:not([class*="FFC20E"]):not([class*="003399"]):not([class*="22c55e"]):not([class*="ef4444"]):not([class*="blue-"]):not([class*="emerald-"]):not([class*="rose-"]):not([class*="amber-"]):not([class*="indigo-"]):not([class*="purple-"]):not([class*="from-"]):not([class*="to-"]),
+html.light [class*="bg-slate-900"],
+.light [class*="bg-slate-900"],
+html.light [class*="bg-slate-950"],
+.light [class*="bg-slate-950"],
+html.light aside,
+.light aside,
+html.light aside > div,
+.light aside > div {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04) !important;
+}
+
+/* Master Admin User Card in Light Mode (Elegant Soft Amber Gold, Never Dark Brown) */
+html.light [class*="bg-amber-950"],
+.light [class*="bg-amber-950"] {
+  background-color: #fffbeb !important;
+  border-color: #fde047 !important;
+  color: #92400e !important;
+}
+html.light [class*="bg-amber-950"] .text-white,
+.light [class*="bg-amber-950"] .text-white {
+  color: #0f172a !important;
+}
+
+/* Inner Panels, Nested Metric Boxes, Filter Strips, and Sub-toolbars */
+html.light [class*="bg-[#101b33]"],
+.light [class*="bg-[#101b33]"],
+html.light [class*="bg-[#101e38]"],
+.light [class*="bg-[#101e38]"],
+html.light [class*="bg-[#091120]"],
+.light [class*="bg-[#091120]"],
+html.light [class*="bg-[#0a1120]"],
+.light [class*="bg-[#0a1120]"],
+html.light [class*="bg-[#0a1222]"],
+.light [class*="bg-[#0a1222]"],
+html.light [class*="bg-[#0c1424]"],
+.light [class*="bg-[#0c1424]"],
+html.light [class*="bg-[#070d18]"],
+.light [class*="bg-[#070d18]"],
+html.light [class*="bg-[#142036]"],
+.light [class*="bg-[#142036]"],
+html.light [class*="bg-[#162238]"],
+.light [class*="bg-[#162238]"],
+html.light [class*="bg-[#070b14]"],
+.light [class*="bg-[#070b14]"],
+html.light [class*="bg-[#09101f]"],
+.light [class*="bg-[#09101f]"],
+html.light [class*="bg-[#090f1d]"],
+.light [class*="bg-[#090f1d]"],
+html.light [class*="bg-slate-800"]:not([class*="h-1"]):not([class*="h-1.5"]):not([class*="rounded-full"]),
+.light [class*="bg-slate-800"]:not([class*="h-1"]):not([class*="h-1.5"]):not([class*="rounded-full"]) {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+/* Progress bar background tracks in Light Mode (must be visible grey, not invisible pale white) */
+html.light [class*="bg-slate-800"][class*="rounded-full"],
+.light [class*="bg-slate-800"][class*="rounded-full"],
+html.light [class*="bg-slate-800"][class*="h-1"],
+.light [class*="bg-slate-800"][class*="h-1"],
+html.light [class*="bg-slate-800"][class*="h-1.5"],
+.light [class*="bg-slate-800"][class*="h-1.5"] {
+  background-color: #e2e8f0 !important;
+}
+
+/* Secondary Action Buttons & Chips (e.g. خروجی اکسل, چاپ لیست, بک‌آپ, etc.) */
+html.light [class*="bg-[#142340]"],
+.light [class*="bg-[#142340]"],
+html.light [class*="bg-[#121d33]"],
+.light [class*="bg-[#121d33]"] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+html.light [class*="bg-[#142340]"]:hover,
+.light [class*="bg-[#142340]"]:hover,
+html.light [class*="bg-[#121d33]"]:hover,
+.light [class*="bg-[#121d33]"]:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Hover States on Dark Classes: Turn subtle light gray instead of jet black */
+html.light [class*="hover:bg-[#"]:hover:not([class*="FFC20E"]):not([class*="003399"]):not([class*="blue-"]):not([class*="emerald-"]):not([class*="rose-"]):not([class*="amber-"]),
+.light [class*="hover:bg-[#"]:hover:not([class*="FFC20E"]):not([class*="003399"]):not([class*="blue-"]):not([class*="emerald-"]):not([class*="rose-"]):not([class*="amber-"]),
+html.light [class*="hover:bg-slate-800"]:hover,
+.light [class*="hover:bg-slate-800"]:hover,
+html.light [class*="hover:bg-slate-700"]:hover,
+.light [class*="hover:bg-slate-700"]:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Date Navigator Box Inside Attendance Header */
+html.light [class*="bg-[#13223f]"],
+.light [class*="bg-[#13223f]"] {
+  background-color: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #1e3a8a !important;
+}
+html.light [class*="bg-[#13223f]"] .text-white,
+.light [class*="bg-[#13223f]"] .text-white {
+  color: #1e3a8a !important;
+}
+html.light [class*="bg-[#13223f]"] .text-blue-300,
+.light [class*="bg-[#13223f]"] .text-blue-300 {
+  color: #2563eb !important;
+}
+
+/* Header Gradient in Light Mode */
+html.light [class*="from-[#0d172c]"],
+.light [class*="from-[#0d172c]"],
+html.light [class*="from-[#070b14]"],
+.light [class*="from-[#070b14]"],
+html.light [class*="from-[#17233f]"],
+.light [class*="from-[#17233f]"] {
+  background-image: linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%) !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Borders in Light Mode */
+html.light [class*="border-[#"]:not([class*="FFC20E"]):not([class*="003399"]):not(.border-black):not([class*="border-black"]),
+.light [class*="border-[#"]:not([class*="FFC20E"]):not([class*="003399"]):not(.border-black):not([class*="border-black"]),
+html.light [class*="border-slate-800"],
+.light [class*="border-slate-800"],
+html.light [class*="border-slate-700"],
+.light [class*="border-slate-700"] {
+  border-color: #e2e8f0 !important;
+}
+
+/* Table Headers & Sticky Columns in Light Mode */
+html.light table,
+.light table {
+  background-color: #ffffff !important;
+}
+html.light table thead,
+.light table thead,
+html.light table thead th,
+.light table thead th,
+html.light table thead tr,
+.light table thead tr {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+html.light table tbody tr:nth-child(even),
+.light table tbody tr:nth-child(even) {
+  background-color: #f8fafc !important;
+}
+html.light table tbody tr:hover,
+.light table tbody tr:hover {
+  background-color: #edf2f7 !important;
+}
+html.light td.sticky.right-0,
+.light td.sticky.right-0 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+html.light tbody tr:nth-child(even) td.sticky.right-0,
+.light tbody tr:nth-child(even) td.sticky.right-0 {
+  background-color: #f8fafc !important;
+}
+html.light tbody tr:hover td.sticky.right-0,
+.light tbody tr:hover td.sticky.right-0 {
+  background-color: #edf2f7 !important;
+}
+
+/* Form Inputs, Selects, and Textareas in Light Mode */
+html.light input:not([type="checkbox"]):not([type="radio"]),
+.light input:not([type="checkbox"]):not([type="radio"]),
+html.light select,
+.light select,
+html.light textarea,
+.light textarea {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.light input:focus,
+.light input:focus,
+html.light select:focus,
+.light select:focus,
+html.light textarea:focus,
+.light textarea:focus {
+  border-color: #3b82f6 !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+}
+
+html.light input::placeholder,
+.light input::placeholder,
+html.light textarea::placeholder,
+.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Preserving High-Contrast White Text on Solid Buttons */
+html.light .bg-blue-600,
+.light .bg-blue-600,
+html.light .bg-blue-500,
+.light .bg-blue-500,
+html.light .bg-emerald-600,
+.light .bg-emerald-600,
+html.light .bg-emerald-500,
+.light .bg-emerald-500,
+html.light .bg-rose-600,
+.light .bg-rose-600,
+html.light .bg-rose-500,
+.light .bg-rose-500,
+html.light .bg-red-600,
+.light .bg-red-600,
+html.light .bg-red-700,
+.light .bg-red-700,
+html.light .bg-indigo-600,
+.light .bg-indigo-600,
+html.light .bg-indigo-500,
+.light .bg-indigo-500,
+html.light .bg-purple-600,
+.light .bg-purple-600,
+html.light .bg-purple-500,
+.light .bg-purple-500,
+html.light .bg-amber-600,
+.light .bg-amber-600,
+html.light .bg-orange-600,
+.light .bg-orange-600,
+html.light [class*="from-blue-"],
+.light [class*="from-blue-"],
+html.light [class*="from-emerald-"],
+.light [class*="from-emerald-"],
+html.light [class*="from-rose-"],
+.light [class*="from-rose-"],
+html.light [class*="from-indigo-"],
+.light [class*="from-indigo-"],
+html.light [class*="from-purple-"],
+.light [class*="from-purple-"],
+html.light [class*="from-amber-600"],
+.light [class*="from-amber-600"],
+html.light [class*="from-orange-600"],
+.light [class*="from-orange-600"],
+html.light [class*="from-teal-"],
+.light [class*="from-teal-"],
+html.light [class*="from-slate-600"],
+.light [class*="from-slate-600"] {
+  color: #ffffff !important;
+}
+
+/* White text safeguard: turn text-white dark unless it is inside a solid colored button/badge or gradient */
+html.light .text-white:not(button[class*="bg-"]):not(button[class*="from-"]):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-red-"]):not([class*="bg-purple-"]):not([class*="bg-indigo-"]):not([class*="bg-amber-6"]):not([class*="bg-orange-6"]):not([class*="from-"]):not([class*="from-"] *):not([class*="bg-gradient-"]):not([class*="bg-gradient-"] *):not([class*="bg-[#003399]"] *):not([class*="bg-[#FFC20E]"] *):not(.badge-solid):not(button.bg-blue-600 *):not(button.bg-emerald-600 *):not(button.bg-rose-600 *):not(button.bg-amber-600 *):not(.avatar *),
+.light .text-white:not(button[class*="bg-"]):not(button[class*="from-"]):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-red-"]):not([class*="bg-purple-"]):not([class*="bg-indigo-"]):not([class*="bg-amber-6"]):not([class*="bg-orange-6"]):not([class*="from-"]):not([class*="from-"] *):not([class*="bg-gradient-"]):not([class*="bg-gradient-"] *):not([class*="bg-[#003399]"] *):not([class*="bg-[#FFC20E]"] *):not(.badge-solid):not(button.bg-blue-600 *):not(button.bg-emerald-600 *):not(button.bg-rose-600 *):not(button.bg-amber-600 *):not(.avatar *) {
+  color: #0f172a !important;
+}
+
+/* Amber 500 button text: deep black */
+html.light .bg-amber-500,
+.light .bg-amber-500 {
+  color: #090e17 !important;
+}
+
+/* ==========================================================================
+   SPECIFIC LIGHT MODE OVERRIDES: VEHICLE CARDS, USER CARDS & DRIVER CARDS
+   ========================================================================== */
+
+/* 1. Vehicle Cards in Light Mode */
+html.light .vehicle-card-print,
+.light .vehicle-card-print {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05) !important;
+}
+html.light .vehicle-card-print:hover,
+.light .vehicle-card-print:hover {
+  border-color: #f59e0b !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Vehicle Code Badge (Top-right): Golden luxury badge with crisp amber typography */
+html.light .vehicle-card-print [class*="border-amber-500/35"],
+.light .vehicle-card-print [class*="border-amber-500/35"] {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.15) !important;
+}
+html.light .vehicle-card-print [class*="border-amber-500/35"] span,
+.light .vehicle-card-print [class*="border-amber-500/35"] span {
+  color: #92400e !important;
+}
+
+/* Vehicle Title and Models in Light Mode */
+html.light .vehicle-card-print h3,
+.light .vehicle-card-print h3 {
+  color: #0f172a !important;
+}
+
+/* Vehicle Sub-Boxes (Driver, Insurance, Mileage) in Light Mode */
+html.light .vehicle-card-print [class*="bg-[#0a1120]"],
+.light .vehicle-card-print [class*="bg-[#0a1120]"] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+html.light .vehicle-card-print [class*="bg-[#070d18]"],
+.light .vehicle-card-print [class*="bg-[#070d18]"] {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Vehicle Action Buttons in Light Mode */
+html.light .vehicle-card-print button[class*="bg-amber-500/20"],
+.light .vehicle-card-print button[class*="bg-amber-500/20"] {
+  background-color: #fef3c7 !important;
+  border-color: #fde047 !important;
+  color: #92400e !important;
+}
+html.light .vehicle-card-print button[class*="bg-amber-500/20"]:hover,
+.light .vehicle-card-print button[class*="bg-amber-500/20"]:hover {
+  background-color: #fde68a !important;
+  color: #78350f !important;
+}
+
+html.light .vehicle-card-print button[class*="bg-slate-800"],
+.light .vehicle-card-print button[class*="bg-slate-800"] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+html.light .vehicle-card-print button[class*="bg-slate-800"]:hover,
+.light .vehicle-card-print button[class*="bg-slate-800"]:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.light .vehicle-card-print button[class*="bg-sky-600/20"],
+.light .vehicle-card-print button[class*="bg-sky-600/20"] {
+  background-color: #e0f2fe !important;
+  border-color: #bae6fd !important;
+  color: #0369a1 !important;
+}
+html.light .vehicle-card-print button[class*="bg-sky-600/20"]:hover,
+.light .vehicle-card-print button[class*="bg-sky-600/20"]:hover {
+  background-color: #bae6fd !important;
+  color: #0c4a6e !important;
+}
+
+html.light .vehicle-card-print button[class*="bg-emerald-600/20"],
+.light .vehicle-card-print button[class*="bg-emerald-600/20"] {
+  background-color: #d1fae5 !important;
+  border-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+html.light .vehicle-card-print button[class*="bg-emerald-600/20"]:hover,
+.light .vehicle-card-print button[class*="bg-emerald-600/20"]:hover {
+  background-color: #a7f3d0 !important;
+  color: #064e3b !important;
+}
+
+/* 2. User Cards & Hub in Light Mode (Modal and Integrated View) */
+html.light [class*="bg-[#111c30]"],
+.light [class*="bg-[#111c30]"],
+html.light [class*="bg-[#0f192e]"],
+.light [class*="bg-[#0f192e]"],
+html.light [class*="bg-[#111b2e]"],
+.light [class*="bg-[#111b2e]"],
+html.light [class*="bg-[#10192b]"],
+.light [class*="bg-[#10192b]"],
+html.light [class*="bg-[#0d1628]"],
+.light [class*="bg-[#0d1628]"],
+html.light [class*="bg-[#111c34]"],
+.light [class*="bg-[#111c34]"] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* User Card Headings & Names */
+html.light [class*="bg-[#0f192e]"] .text-white,
+.light [class*="bg-[#0f192e]"] .text-white,
+html.light [class*="bg-[#111c30]"] .text-white,
+.light [class*="bg-[#111c30]"] .text-white,
+html.light [class*="bg-[#111c34]"] .text-white,
+.light [class*="bg-[#111c34]"] .text-white,
+html.light [class*="bg-[#10192b]"] .text-white,
+.light [class*="bg-[#10192b]"] .text-white,
+html.light [class*="bg-[#0d1628]"] .text-white,
+.light [class*="bg-[#0d1628]"] .text-white {
+  color: #0f172a !important;
+}
+
+/* Secondary Sub-bars, Inner Filter Strips & Headers in Light Mode */
+html.light [class*="bg-[#0a1222]"],
+.light [class*="bg-[#0a1222]"],
+html.light [class*="bg-[#0c1322]"],
+.light [class*="bg-[#0c1322]"],
+html.light [class*="bg-[#0b1325]"],
+.light [class*="bg-[#0b1325]"],
+html.light [class*="bg-[#0d1524]"],
+.light [class*="bg-[#0d1524]"],
+html.light [class*="bg-[#0d1527]"],
+.light [class*="bg-[#0d1527]"],
+html.light [class*="bg-[#0b1220]"],
+.light [class*="bg-[#0b1220]"],
+html.light [class*="bg-[#0e172a]"],
+.light [class*="bg-[#0e172a]"] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* User Avatar Square/Circle */
+html.light [class*="w-11"][class*="rounded-2xl"][class*="bg-slate-800"],
+.light [class*="w-11"][class*="rounded-2xl"][class*="bg-slate-800"] {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25) !important;
+}
+
+/* User Permissions Inactive Tags (must not blend into background) */
+html.light [class*="bg-slate-800"][class*="text-slate-500"],
+.light [class*="bg-slate-800"][class*="text-slate-500"],
+html.light [class*="bg-slate-800"][class*="text-slate-400"],
+.light [class*="bg-slate-800"][class*="text-slate-400"],
+html.light [class*="bg-slate-800"][class*="text-slate-300"],
+.light [class*="bg-slate-800"][class*="text-slate-300"] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+/* User Card Action Buttons */
+html.light button[class*="bg-slate-800"],
+.light button[class*="bg-slate-800"] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+html.light button[class*="bg-slate-800"]:hover,
+.light button[class*="bg-slate-800"]:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* 3. Driver Cards in Light Mode */
+html.light .driver-card-print,
+.light .driver-card-print {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05) !important;
+}
+html.light .driver-card-print:hover,
+.light .driver-card-print:hover {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08) !important;
+}
+html.light .driver-card-print h3,
+.light .driver-card-print h3 {
+  color: #0f172a !important;
+}
+html.light .driver-card-print [class*="bg-[#090f1d]"],
+.light .driver-card-print [class*="bg-[#090f1d]"] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+html.light .driver-card-print [class*="bg-[#0a1120]"],
+.light .driver-card-print [class*="bg-[#0a1120]"] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+html.light .driver-card-print [class*="from-slate-800"][class*="to-slate-900"],
+.light .driver-card-print [class*="from-slate-800"][class*="to-slate-900"] {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+  color: #1d4ed8 !important;
+}
+
+/* 4. Modals and Dialogs in Light Mode */
+html.light .fixed.inset-0 [class*="bg-[#0f172a]"],
+.light .fixed.inset-0 [class*="bg-[#0f172a]"],
+html.light .fixed.inset-0 [class*="bg-[#111b2e]"],
+.light .fixed.inset-0 [class*="bg-[#111b2e]"],
+html.light .fixed.inset-0 [class*="bg-[#0d1628]"],
+.light .fixed.inset-0 [class*="bg-[#0d1628]"] {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+html.light .fixed.inset-0 [class*="bg-[#0b1325]"],
+.light .fixed.inset-0 [class*="bg-[#0b1325]"],
+html.light .fixed.inset-0 [class*="bg-[#0a1120]"],
+.light .fixed.inset-0 [class*="bg-[#0a1120]"],
+html.light .fixed.inset-0 [class*="bg-[#0d1524]"],
+.light .fixed.inset-0 [class*="bg-[#0d1524]"],
+html.light .fixed.inset-0 [class*="bg-[#0d1527]"],
+.light .fixed.inset-0 [class*="bg-[#0d1527]"] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Footer in Light Mode */
+html.light footer,
+.light footer {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #64748b !important;
+}
+html.light footer .text-slate-200,
+.light footer .text-slate-200 {
+  color: #0f172a !important;
+}
+
+/* Modals & Backdrops in Light Mode */
+html.light .fixed.inset-0.bg-black\/80,
+.light .fixed.inset-0.bg-black\/80,
+html.light .fixed.inset-0.bg-black\/75,
+.light .fixed.inset-0.bg-black\/75,
+html.light .fixed.inset-0.bg-black\/70,
+.light .fixed.inset-0.bg-black\/70 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Micro-label size safeguards: ensure minimum readable size so nothing is blurry */
+.text-\[9px\] {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+.text-\[10px\] {
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+}
+.text-\[11px\] {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+/* Laser-Printer Monochrome Micro-Hatch & Stipple Dot Header Styles (Screen + Print) */
+.laser-hatch-header,
+#printable-a4-area thead tr,
+#printable-a4-area thead th,
+[data-printable-a4="true"] thead tr,
+[data-printable-a4="true"] thead th {
+  background-color: #ffffff !important;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #ffffff,
+    #ffffff 3.5px,
+    rgba(0, 0, 0, 0.13) 3.5px,
+    rgba(0, 0, 0, 0.13) 4.2px
+  ) !important;
+  color: #000000 !important;
+  border-bottom: 1.5px dashed #000000 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.laser-dot-header,
+.laser-section-header {
+  background-color: #ffffff !important;
+  background-image: radial-gradient(#000000 0.55px, transparent 0.55px) !important;
+  background-size: 4px 4px !important;
+  color: #000000 !important;
+  border-bottom: 1px dotted #000000 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+/* Official A4 Print Media Queries - Laser Printer & Archive Optimized */
+@page {
+  size: A4 portrait;
+  margin: 10mm 10mm 10mm 10mm; /* Standard official Iranian administrative margin (10mm) */
+}
+
+@page landscape {
+  size: A4 landscape;
+  margin: 8mm 10mm 8mm 10mm;
+}
+
+@page landscape-sheet {
+  size: A4 landscape;
+  margin: 8mm 10mm 8mm 10mm;
+}
+
+/* ==========================================================================
+   Screen Print Preview (پیش‌نمایش سند چاپی در حالت نمایش عادی روی مانیتور)
+   ========================================================================== */
+@media screen {
+  .print-modal-container {
+    background-color: rgba(10, 16, 31, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  html.light .print-modal-container,
+  .light .print-modal-container {
+    background-color: rgba(15, 23, 42, 0.65);
+  }
+
+  /* Paper sheet preview on screen: realistic A4 page simulation */
+  #printable-a4-area,
+  [data-printable-a4="true"],
+  .printable-document {
+    width: 210mm;
+    max-width: calc(100vw - 32px);
+    min-height: 297mm;
+    margin: 16px auto;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: 0 16px 45px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.12) !important;
+    border-radius: 4px;
+    box-sizing: border-box;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  /* Landscape sheet preview */
+  .print-landscape #printable-a4-area,
+  [data-print-orientation="landscape"] #printable-a4-area {
+    width: 297mm;
+    min-height: 210mm;
+  }
+
+  /* Paper sheet guide: subtle outline showing standard printable boundaries */
+  .print-sheet-guide {
+    outline: 1px dashed rgba(0, 0, 0, 0.15);
+    outline-offset: -8mm;
+  }
+}
+
+/* ==========================================================================
+   High-Precision Laser Print Media Query (@media print)
+   ========================================================================== */
+@media print {
+  /* 1. Global Reset: Pure white paper, crisp black text, 0 shadows, 0 blur */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Vazirmatn', 'Shabnam', Tahoma, sans-serif !important;
+    font-size: 9.5pt !important;
+    line-height: 1.35 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+
+  /* 2. Hide ALL application navigation, header, sidebar, footer, buttons outside print target */
+  .no-print,
+  header,
+  nav,
+  aside,
+  footer,
+  #root > div > header,
+  #root > div > footer,
+  #root > div > aside,
+  #root > div > nav,
+  button:not(.print-keep),
+  .custom-scrollbar::-webkit-scrollbar,
+  #modal-backdrop,
+  [data-print-ignore="true"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* 3. When a portaled A4 print modal is mounted on body, hide #root completely */
+  body:has(> .print-modal-container) #root,
+  body:has(> #printable-a4-area) #root {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Fallback if a print modal is mounted inside #root: hide sibling blocks */
+  body:has(#printable-a4-area) main > *:not(:has(#printable-a4-area)):not(:has([data-printable-a4="true"])):not(:has(.print-modal-container)),
+  body:has(.print-modal-container) main > *:not(:has(#printable-a4-area)):not(:has([data-printable-a4="true"])):not(:has(.print-modal-container)) {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* 4. Completely unconstrain all enclosing scroll/overflow containers to prevent clipping */
+  .print-modal-overlay,
+  .print-modal-container,
+  .print-modal-content,
+  .overflow-x-auto,
+  .overflow-y-auto,
+  .overflow-hidden,
+  [class*="overflow-"],
+  div:has(> #printable-a4-area),
+  div:has(> div > #printable-a4-area),
+  div:has(> div > div > #printable-a4-area),
+  div:has(> div > div > div > #printable-a4-area),
+  div:has(> div > div > div > div > #printable-a4-area),
+  div:has(> table),
+  div:has(> div > table) {
+    position: static !important;
+    inset: auto !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    max-height: none !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    color: #000000 !important;
+    display: block !important;
+  }
+
+  /* 5. Eliminate dark background classes from all elements during print - FORCE PURE WHITE */
+  [class*="bg-slate-"],
+  [class*="bg-gray-"],
+  [class*="bg-zinc-"],
+  [class*="bg-emerald-"],
+  [class*="bg-blue-"],
+  [class*="bg-amber-"],
+  [class*="bg-sky-"],
+  [class*="bg-rose-"],
+  [class*="bg-purple-"],
+  [class*="bg-indigo-"],
+  [class*="bg-[#"],
+  [class*="bg-black"],
+  [class*="from-"],
+  [class*="to-"],
+  [class*="via-"] {
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* 6. Crisp Black Text for Laser Printers */
+  [class*="text-slate-"],
+  [class*="text-gray-"],
+  [class*="text-zinc-"],
+  [class*="text-emerald-"],
+  [class*="text-blue-"],
+  [class*="text-sky-"],
+  [class*="text-amber-"],
+  [class*="text-rose-"],
+  [class*="text-purple-"],
+  [class*="text-white"],
+  h1, h2, h3, h4, h5, h6, p, span, div, strong, b, td, th {
+    color: #000000 !important;
+    text-shadow: none !important;
+  }
+
+  /* 7. Printable A4 Document Sheet: Pure White Background, 0 Shadows, Zero Margin Bleed */
+  #printable-a4-area,
+  [data-printable-a4="true"],
+  .printable-document {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  #printable-a4-area *:not(.laser-hatch-header):not(.laser-dot-header):not(.laser-section-header):not(th):not(thead tr),
+  [data-printable-a4="true"] *:not(.laser-hatch-header):not(.laser-dot-header):not(.laser-section-header):not(th):not(thead tr),
+  .printable-document *:not(.laser-hatch-header):not(.laser-dot-header):not(.laser-section-header):not(th):not(thead tr) {
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* 8. Table Architecture & Multi-Page Pagination without Clipping or Truncation */
+  table {
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Header repeats cleanly on every page */
+  thead {
+    display: table-header-group !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  tbody {
+    display: table-row-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Rows never slice in half across page breaks */
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    break-inside: avoid-page !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  th,
+  td {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Unclip any truncated table cells so names and data are never sliced */
+  .truncate,
+  table .truncate,
+  #printable-a4-area .truncate,
+  [data-printable-a4="true"] .truncate {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
+  /* Neutralize sticky headers and columns so they do not overlap content across pages */
+  .sticky,
+  [class*="sticky"],
+  th.sticky,
+  td.sticky {
+    position: static !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    box-shadow: none !important;
+  }
+
+  /* Table borders & crisp laser monochrome contrast */
+  #printable-a4-area table,
+  [data-printable-a4="true"] table {
+    border: 1px solid #000000 !important;
+  }
+
+  #printable-a4-area td,
+  [data-printable-a4="true"] td {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border-color: #000000 !important;
+    border-width: 1px !important;
+  }
+
+  #printable-a4-area th,
+  [data-printable-a4="true"] th,
+  .laser-hatch-header {
+    background-color: #ffffff !important;
+    background-image: repeating-linear-gradient(
+      -45deg,
+      #ffffff,
+      #ffffff 3.5px,
+      rgba(0, 0, 0, 0.15) 3.5px,
+      rgba(0, 0, 0, 0.15) 4.2px
+    ) !important;
+    color: #000000 !important;
+    border-color: #000000 !important;
+    border-width: 1px !important;
+    border-bottom: 1.5px dashed #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .laser-dot-header,
+  .laser-section-header {
+    background-color: #ffffff !important;
+    background-image: radial-gradient(#000000 0.6px, transparent 0.6px) !important;
+    background-size: 4px 4px !important;
+    color: #000000 !important;
+    border-bottom: 1px dotted #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Watermark opacity exception (faint diagonally) */
+  #printable-a4-area [class*="pointer-events-none"],
+  [data-printable-a4="true"] [class*="pointer-events-none"],
+  .watermark-layer,
+  .watermark-layer * {
+    opacity: 0.04 !important;
+    color: #000000 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  /* 9. Standalone Card Printing on White Paper */
+  .driver-card-print,
+  .vehicle-card-print,
+  .print-card-item {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border: 1.5px solid #000000 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .driver-card-print *,
+  .vehicle-card-print * {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border-color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Keep photos clean and unrasterized */
+  img {
+    filter: none !important;
+    -webkit-filter: none !important;
+    opacity: 1 !important;
+    max-width: 100% !important;
+  }
+
+  /* Single-page reports (e.g. Monthly Leave Calendar) */
+  .a4-single-page {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    max-height: 275mm !important;
+  }
+
+  .a4-single-page table {
+    height: auto !important;
+    table-layout: fixed !important;
+  }
+
+  .a4-single-page td {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* General Page break helpers */
+  .avoid-page-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  /* Support for Landscape sheets */
+  .print-landscape,
+  [data-print-orientation="landscape"] {
+    page: landscape !important;
+    break-after: page !important;
+  }
+}
+
+/* Leaflet Dark Map Tweaks */
+.leaflet-container {
+  font-family: inherit;
+  background-color: #0c1322 !important;
+  z-index: 1;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #111b2e !important;
+  color: #f8fafc !important;
+  border: 1px solid #1f2c45 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: inherit !important;
+}
+
+.leaflet-popup-tip {
+  background: #111b2e !important;
+  border: 1px solid #1f2c45 !important;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: #94a3b8 !important;
+  padding: 8px !important;
+  font-size: 16px !important;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+}
+
+/* Custom Marker Pulse Keyframes */
+@keyframes markerPulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 12px rgba(139, 92, 246, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+  }
+}
+
+.animate-marker-pulse {
+  animation: markerPulse 2s infinite;
+}
+
+/* Custom Dark Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0d1527;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #1e2d4a;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #2b3d63;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.15s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Attendance Status Change CSS Micro-Animations */
+@keyframes statusPop {
+  0% {
+    transform: scale(0.78);
+    opacity: 0.6;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes statusRipplePresent {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes statusRippleLeave {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.75);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(245, 158, 11, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes statusRippleWorkshop {
+  0% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.75);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(249, 115, 22, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+}
+
+@keyframes statusRippleMission {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.75);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+@keyframes statusRippleAbsent {
+  0% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.75);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(244, 63, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+  }
+}
+
+.animate-status-pop {
+  animation: statusPop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-status-ripple-present {
+  animation: statusRipplePresent 0.35s ease-out forwards;
+}
+
+.animate-status-ripple-leave {
+  animation: statusRippleLeave 0.35s ease-out forwards;
+}
+
+.animate-status-ripple-workshop {
+  animation: statusRippleWorkshop 0.35s ease-out forwards;
+}
+
+.animate-status-ripple-mission {
+  animation: statusRippleMission 0.35s ease-out forwards;
+}
+
+.animate-status-ripple-absent {
+  animation: statusRippleAbsent 0.35s ease-out forwards;
+}
+
+/* Tactile Matrix Cell Transition */
+.matrix-status-cell {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.18s ease-in-out,
+              border-color 0.2s ease-in-out,
+              box-shadow 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, box-shadow;
+}
+
+.matrix-status-cell:active {
+  transform: scale(0.86);
+}
+
+.matrix-status-cell:hover {
+  transform: scale(1.09);
+}
+
+/* Fast Smooth Attendance Status Switch Keyframes */
+@keyframes quickStatusSwitch {
+  0% {
+    transform: scale(0.86);
+    filter: brightness(1.25);
+  }
+  50% {
+    transform: scale(1.18);
+    filter: brightness(1.12);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes quickStatusFlash {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes statusCardPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.animate-status-switch {
+  animation: quickStatusSwitch 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-status-flash {
+  animation: quickStatusFlash 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-card-pulse {
+  animation: statusCardPulse 0.35s ease-out both;
+}
+
+/* =========================================================
+   Mobile Viewport & Modal Ergonomics
+   ========================================================= */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Prevent unwanted horizontal scrolls on mobile */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch-optimized scrollable containers */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Mobile Modal Helpers */
+.mobile-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  background-color: rgba(3, 7, 18, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  overflow-y: auto;
+}
+
+@media (min-width: 640px) {
+  .mobile-modal-overlay {
+    padding: 1.25rem;
+  }
+}
+
+.mobile-modal-card {
+  width: 100%;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
+}
+
+.mobile-modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
