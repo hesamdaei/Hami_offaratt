@@ -119,7 +119,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL');
-  const [accountStatusFilter, setAccountStatusFilter] = useState<AccountStatusFilter>('ALL');
+  const [accountStatusFilter, setAccountStatusFilter] = useState<AccountStatusFilter>('ACTIVE');
   const [vehicleFilter, setVehicleFilter] = useState<FilterVehicle>('ALL');
   const [shiftFilter, setShiftFilter] = useState<FilterShift>('ALL');
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
@@ -346,53 +346,115 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
   const activeDriversCount = useMemo(() => drivers.filter((d) => d.status !== 'inactive').length, [drivers]);
   const inactiveDriversCount = useMemo(() => drivers.filter((d) => d.status === 'inactive').length, [drivers]);
   const driversWithVehicleCount = useMemo(
-    () => drivers.filter((d) => Boolean(d.vehiclePlate && d.vehiclePlate.trim())).length,
+    () =>
+      drivers.filter(
+        (d) =>
+          d.status !== 'inactive' &&
+          Boolean(d.vehiclePlate && d.vehiclePlate.trim() && d.vehiclePlate !== 'بدون خودرو' && d.vehiclePlate !== 'NONE')
+      ).length,
     [drivers]
   );
   const driversWithoutVehicleCount = useMemo(
-    () => drivers.filter((d) => !d.vehiclePlate || !d.vehiclePlate.trim()).length,
+    () =>
+      drivers.filter(
+        (d) =>
+          d.status !== 'inactive' &&
+          (!d.vehiclePlate || !d.vehiclePlate.trim() || d.vehiclePlate === 'بدون خودرو' || d.vehiclePlate === 'NONE')
+      ).length,
     [drivers]
   );
   const activeStaffCount = useMemo(() => staffMembers.filter((s) => s.status !== 'inactive').length, [staffMembers]);
   const inactiveStaffCount = useMemo(() => staffMembers.filter((s) => s.status === 'inactive').length, [staffMembers]);
 
-  // Filtered Drivers (Drivers without vehicles stay visible in attendance until set to inactive)
+  // Filtered Drivers:
+  // قانون محوری: هر راننده‌ای که در لیست رانندگان غیرفعال نشده در تابلو مرخصی است
+  // ترتیب نمایش: اول رانندگان دارای خودرو، سپس رانندگان بدون خودرو
   const filteredDrivers = useMemo(() => {
-    return drivers.filter((driver) => {
-      const q = searchQuery.trim().toLowerCase();
-      const matchesSearch =
-        !q ||
-        driver.name.toLowerCase().includes(q) ||
-        (driver.code && driver.code.toLowerCase().includes(q)) ||
-        (driver.personnelCode && driver.personnelCode.toLowerCase().includes(q)) ||
-        (driver.vehiclePlate && driver.vehiclePlate.toLowerCase().includes(q)) ||
-        (driver.phone && driver.phone.includes(q)) ||
-        ((!driver.vehiclePlate || !driver.vehiclePlate.trim()) && ('بدون خودرو'.includes(q) || 'ذخیره'.includes(q) || 'کمکی'.includes(q)));
+    return drivers
+      .filter((driver) => {
+        const q = searchQuery.trim().toLowerCase();
+        const hasVehicle = Boolean(
+          driver.vehiclePlate &&
+          driver.vehiclePlate.trim() &&
+          driver.vehiclePlate !== 'بدون خودرو' &&
+          driver.vehiclePlate !== 'NONE'
+        );
 
-      if (!matchesSearch) return false;
+        const matchesSearch =
+          !q ||
+          driver.name.toLowerCase().includes(q) ||
+          (driver.code && driver.code.toLowerCase().includes(q)) ||
+          (driver.personnelCode && driver.personnelCode.toLowerCase().includes(q)) ||
+          (driver.vehiclePlate && driver.vehiclePlate.toLowerCase().includes(q)) ||
+          (driver.phone && driver.phone.includes(q)) ||
+          (!hasVehicle && ('بدون خودرو'.includes(q) || 'ذخیره'.includes(q) || 'کمکی'.includes(q)));
 
-      // Account Status Filter (active / inactive) - only inactive hides drivers from attendance
-      if (accountStatusFilter === 'ACTIVE' && driver.status === 'inactive') return false;
-      if (accountStatusFilter === 'INACTIVE' && driver.status !== 'inactive') return false;
+        if (!matchesSearch) return false;
 
-      // Optional Vehicle Assignment Filter (defaults to ALL so unassigned drivers are never excluded)
-      const hasVehicle = Boolean(driver.vehiclePlate && driver.vehiclePlate.trim());
-      if (vehicleFilter === 'WITH_VEHICLE' && !hasVehicle) return false;
-      if (vehicleFilter === 'WITHOUT_VEHICLE' && hasVehicle) return false;
+        // Account Status Filter:
+        // اگر کاربر صراحتاً فیلتر «غیرفعال» را انتخاب نکرده باشد، تمامی رانندگان غیرفعال‌نشده در تابلو نمایش داده می‌شوند
+        if (accountStatusFilter === 'INACTIVE') {
+          if (driver.status !== 'inactive') return false;
+        } else {
+          // در حالت ACTIVE و ALL، کلیه رانندگانی که غیرفعال نشده‌اند در تابلو حضور دارند
+          if (driver.status === 'inactive') return false;
+        }
 
-      const isBeforeStart = isDateBeforeStart(driver.createdAt, selectedYear, selectedMonth, selectedDay);
-      const st = getStatus(driverRecords, driver.id, activeDateKey);
+        // Optional Vehicle Assignment Filter (defaults to ALL so unassigned drivers are never excluded)
+        if (vehicleFilter === 'WITH_VEHICLE' && !hasVehicle) return false;
+        if (vehicleFilter === 'WITHOUT_VEHICLE' && hasVehicle) return false;
 
-      if (statusFilter === 'PRESENT') {
-        if (isBeforeStart || isFutureActiveDate || st !== 'none') return false;
-      }
-      if (statusFilter === 'LEAVE' && st !== 'leave') return false;
-      if (statusFilter === 'WORKSHOP' && st !== 'workshop') return false;
-      if (statusFilter === 'ABSENT' && st !== 'absent') return false;
+        const isBeforeStart = isDateBeforeStart(driver.createdAt, selectedYear, selectedMonth, selectedDay);
+        const st = getStatus(driverRecords, driver.id, activeDateKey);
 
-      return true;
-    });
-  }, [drivers, driverRecords, activeDateKey, searchQuery, statusFilter, accountStatusFilter, vehicleFilter, selectedYear, selectedMonth, selectedDay, isFutureActiveDate]);
+        if (statusFilter === 'PRESENT') {
+          if (isBeforeStart || isFutureActiveDate || st !== 'none') return false;
+        }
+        if (statusFilter === 'LEAVE' && st !== 'leave') return false;
+        if (statusFilter === 'WORKSHOP' && st !== 'workshop') return false;
+        if (statusFilter === 'ABSENT' && st !== 'absent') return false;
+
+        return true;
+      })
+      .sort((a, b) => {
+        // ۱. ترتیب اصلی: اول رانندگان دارای خودرو، سپس رانندگان بدون خودرو
+        const hasCarA = Boolean(
+          a.vehiclePlate &&
+          a.vehiclePlate.trim() &&
+          a.vehiclePlate !== 'بدون خودرو' &&
+          a.vehiclePlate !== 'NONE'
+        );
+        const hasCarB = Boolean(
+          b.vehiclePlate &&
+          b.vehiclePlate.trim() &&
+          b.vehiclePlate !== 'بدون خودرو' &&
+          b.vehiclePlate !== 'NONE'
+        );
+
+        if (hasCarA && !hasCarB) return -1;
+        if (!hasCarA && hasCarB) return 1;
+
+        // ۲. مرتب‌سازی فرعی درون هر گروه: بر اساس کد پرسنلی راننده، سپس نام
+        const codeA = parseInt(a.code || a.personnelCode || '9999', 10);
+        const codeB = parseInt(b.code || b.personnelCode || '9999', 10);
+        if (!isNaN(codeA) && !isNaN(codeB) && codeA !== codeB) {
+          return codeA - codeB;
+        }
+        return a.name.localeCompare(b.name, 'fa');
+      });
+  }, [
+    drivers,
+    driverRecords,
+    activeDateKey,
+    searchQuery,
+    statusFilter,
+    accountStatusFilter,
+    vehicleFilter,
+    selectedYear,
+    selectedMonth,
+    selectedDay,
+    isFutureActiveDate,
+  ]);
 
   // Filtered Staff Members
   const filteredStaff = useMemo(() => {
@@ -1431,7 +1493,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                           <div className="bg-[#091120] border border-[#1a2947] rounded-lg p-2 mb-3 flex items-center justify-between gap-2">
                             <div>
                               <div className="text-[10px] text-slate-400 mb-0.5">وضعیت خودرو / پلاک:</div>
-                              {driver.vehiclePlate ? (
+                              {driver.vehiclePlate && driver.vehiclePlate.trim() && driver.vehiclePlate !== 'بدون خودرو' && driver.vehiclePlate !== 'NONE' ? (
                                 <div className="scale-85 origin-right">
                                   <IranianPlate plateNumber={driver.vehiclePlate} size="sm" />
                                 </div>
@@ -1966,13 +2028,25 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                                   غیرفعال
                                 </span>
                               )}
-                              {activeBoard === 'DRIVERS' && !(person as Driver).vehiclePlate && (
-                                <span
-                                  className="text-[8.5px] px-1 py-0.2 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30"
-                                  title="راننده بدون خودروی تحویلی (نیروی ذخیره)"
-                                >
-                                  بدون خودرو
-                                </span>
+                              {activeBoard === 'DRIVERS' && (
+                                (person as Driver).vehiclePlate &&
+                                (person as Driver).vehiclePlate?.trim() &&
+                                (person as Driver).vehiclePlate !== 'بدون خودرو' &&
+                                (person as Driver).vehiclePlate !== 'NONE' ? (
+                                  <span
+                                    className="text-[8.5px] px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/30"
+                                    title={`دارای خودرو: ${(person as Driver).vehiclePlate}`}
+                                  >
+                                    دارای خودرو
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="text-[8.5px] px-1 py-0.2 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30"
+                                    title="راننده بدون خودروی تحویلی (نیروی ذخیره)"
+                                  >
+                                    بدون خودرو
+                                  </span>
+                                )
                               )}
                             </div>
                             {'role' in person && (

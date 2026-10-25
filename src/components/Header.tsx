@@ -46,6 +46,7 @@ import { getFleetInsuranceAlerts } from '../utils/insuranceAlerts';
 
 export type ActiveAppTab =
   | 'ATTENDANCE'
+  | 'VEHICLE_ASSIGNMENT'
   | 'DRIVERS'
   | 'STAFF'
   | 'OIL_SERVICE'
@@ -175,6 +176,12 @@ export const Header: FC<HeaderProps> = ({
     return getFleetInsuranceAlerts(vehicles, 7);
   }, [vehicles]);
 
+  const unassignedVehiclesCount = useMemo(() => {
+    return vehicles.filter(
+      (v) => !v.driverName || v.driverName === 'بدون راننده' || v.driverName === 'NONE'
+    ).length;
+  }, [vehicles]);
+
   // Navigation modules definition
   const navModules: NavItemConfig[] = [
     {
@@ -183,6 +190,13 @@ export const Header: FC<HeaderProps> = ({
       shortTitle: 'حضور و غیاب',
       icon: CalendarDays,
       badge: totalDrivers > 0 ? toFaDigits(totalDrivers) : undefined,
+    },
+    {
+      id: 'VEHICLE_ASSIGNMENT',
+      title: 'تخصیص و واگذاری ناوگان به راننده',
+      shortTitle: 'تخصیص خودرو',
+      icon: Truck,
+      badge: unassignedVehiclesCount > 0 ? `${toFaDigits(unassignedVehiclesCount)} آزاد` : undefined,
     },
     {
       id: 'DRIVERS',
@@ -230,6 +244,8 @@ export const Header: FC<HeaderProps> = ({
     switch (item.id) {
       case 'ATTENDANCE':
         return canViewModule(currentUser, 'attendance');
+      case 'VEHICLE_ASSIGNMENT':
+        return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
       case 'DRIVERS':
         return canViewModule(currentUser, 'drivers');
       case 'STAFF':

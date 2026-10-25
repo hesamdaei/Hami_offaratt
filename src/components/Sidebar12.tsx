@@ -4,6 +4,7 @@ import {
   Users,
   UserCheck,
   Droplet,
+  Truck,
   BookOpen,
   PanelRight,
   PanelLeft,
@@ -107,6 +108,12 @@ export const Sidebar12: FC<Sidebar12Props> = ({
     items: NavItemConfig[];
   }
 
+  const unassignedVehiclesCount = useMemo(() => {
+    return vehicles.filter(
+      (v) => !v.driverName || v.driverName === 'بدون راننده' || v.driverName === 'NONE'
+    ).length;
+  }, [vehicles]);
+
   const navGroups: NavGroup[] = [
     {
       title: 'عملیات دیسپچ',
@@ -118,6 +125,14 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           icon: CalendarDays,
           badge: todayActiveCount > 0 ? `${toFaDigits(todayActiveCount)} حاضر` : undefined,
           badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+        },
+        {
+          id: 'VEHICLE_ASSIGNMENT',
+          label: 'تخصیص خودرو و راننده',
+          subLabel: 'واگذاری و انتساب ناوگان',
+          icon: Truck,
+          badge: unassignedVehiclesCount > 0 ? `${toFaDigits(unassignedVehiclesCount)} آزاد` : undefined,
+          badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
         },
       ],
     },
@@ -195,6 +210,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
         switch (item.id) {
           case 'ATTENDANCE':
             return canViewModule(currentUser, 'attendance');
+          case 'VEHICLE_ASSIGNMENT':
+            return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
           case 'DRIVERS':
             return canViewModule(currentUser, 'drivers');
           case 'STAFF':

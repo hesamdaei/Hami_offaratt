@@ -5,6 +5,77 @@
     <script>
       // Suppress benign Vite HMR WebSocket errors in sandbox iframe environment (as per platform constraints)
       (function() {
+        // 1. Intercept window.WebSocket for Vite HMR so it stays connected cleanly and never errors
+        var OriginalWebSocket = window.WebSocket;
+        if (OriginalWebSocket) {
+          function FakeHmrWebSocket(url, protocols) {
+            var self = this;
+            this.url = url;
+            this.protocol = Array.isArray(protocols) ? protocols[0] : (protocols || 'vite-hmr');
+            this.readyState = 1; // WebSocket.OPEN
+            this.binaryType = 'blob';
+            this.bufferedAmount = 0;
+            this.extensions = '';
+
+            var listeners = {};
+            this.addEventListener = function(type, fn) {
+              if (!listeners[type]) listeners[type] = [];
+              listeners[type].push(fn);
+            };
+            this.removeEventListener = function(type, fn) {
+              if (!listeners[type]) return;
+              listeners[type] = listeners[type].filter(function(l) { return l !== fn; });
+            };
+            this.dispatchEvent = function(evt) {
+              var list = listeners[evt.type] || [];
+              for (var i = 0; i < list.length; i++) {
+                try { list[i].call(self, evt); } catch (_) {}
+              }
+              var onHandler = self['on' + evt.type];
+              if (typeof onHandler === 'function') {
+                try { onHandler.call(self, evt); } catch (_) {}
+              }
+              return true;
+            };
+            this.send = function() {};
+            this.close = function(code, reason) {
+              self.readyState = 3; // CLOSED
+              setTimeout(function() {
+                self.dispatchEvent({ type: 'close', wasClean: true, code: code || 1000, reason: reason || '' });
+              }, 0);
+            };
+
+            setTimeout(function() {
+              self.dispatchEvent({ type: 'open' });
+            }, 5);
+          }
+
+          FakeHmrWebSocket.prototype.CONNECTING = 0;
+          FakeHmrWebSocket.prototype.OPEN = 1;
+          FakeHmrWebSocket.prototype.CLOSING = 2;
+          FakeHmrWebSocket.prototype.CLOSED = 3;
+
+          window.WebSocket = function(url, protocols) {
+            var isHmr = false;
+            if (typeof url === 'string' && (url.indexOf('vite-hmr') !== -1 || url.indexOf('@vite') !== -1)) {
+              isHmr = true;
+            }
+            if (protocols === 'vite-hmr' || (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1)) {
+              isHmr = true;
+            }
+            if (isHmr) {
+              return new FakeHmrWebSocket(url, protocols);
+            }
+            return new OriginalWebSocket(url, protocols);
+          };
+          window.WebSocket.prototype = OriginalWebSocket.prototype;
+          window.WebSocket.CONNECTING = 0;
+          window.WebSocket.OPEN = 1;
+          window.WebSocket.CLOSING = 2;
+          window.WebSocket.CLOSED = 3;
+        }
+
+        // 2. Fallback console and event error suppression
         function isViteHmrError(args) {
           if (!args || !args.length) return false;
           var combined = '';

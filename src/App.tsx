@@ -26,6 +26,7 @@ import { DECODED_BACKUP } from './utils/backupDecoder';
 import { exportToExcel } from './utils/excelExport';
 import { Header, ActiveAppTab } from './components/Header';
 import { AttendanceManagementHubView } from './components/AttendanceManagementHubView';
+import { VehicleAssignmentHubView } from './components/VehicleAssignmentHubView';
 import { DriversDirectoryView } from './components/DriversDirectoryView';
 import { StaffDirectoryView } from './components/StaffDirectoryView';
 import { OilServiceManagementView } from './components/OilServiceManagementView';
@@ -357,6 +358,8 @@ export const App: FC = () => {
       switch (activeTab) {
         case 'ATTENDANCE':
           return canViewModule(currentUser, 'attendance');
+        case 'VEHICLE_ASSIGNMENT':
+          return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
         case 'DRIVERS':
           return canViewModule(currentUser, 'drivers');
         case 'STAFF':
@@ -415,6 +418,53 @@ export const App: FC = () => {
       // ignore
     }
   }, []);
+
+  // 1. Auto-sync: Ensure every active driver in driverDirectory is present in drivers list (for Attendance Board)
+  useEffect(() => {
+    const existingNames = new Set(drivers.map((d) => d.name));
+    const missingActiveDrivers: Driver[] = [];
+
+    driverDirectory.forEach((dirDriver) => {
+      const isDirActive = dirDriver.status !== 'inactive' && dirDriver.status !== 'INACTIVE';
+      if (isDirActive && !existingNames.has(dirDriver.name)) {
+        const assignedVehicle = vehicles.find((v) => v.driverName === dirDriver.name);
+        const plate = assignedVehicle?.plateNumber || dirDriver.assignedVehicles?.[0] || '';
+        missingActiveDrivers.push({
+          id: dirDriver.id || `drv-sync-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          name: dirDriver.name,
+          code: dirDriver.code || dirDriver.personnelCode || '',
+          personnelCode: dirDriver.personnelCode || dirDriver.code || '',
+          phone: dirDriver.phone || '',
+          status: 'active',
+          vehiclePlate: plate,
+          createdAt: dirDriver.joinedDate || formatPersianDateKey(today.jy, today.jm, today.jd),
+        });
+      }
+    });
+
+    if (missingActiveDrivers.length > 0) {
+      setDrivers((prev) => [...prev, ...missingActiveDrivers]);
+    }
+  }, [driverDirectory, vehicles, drivers, today]);
+
+  // 2. Auto-sync: Synchronize vehiclePlate in drivers list whenever vehicles list changes
+  useEffect(() => {
+    setDrivers((prevDrivers) => {
+      let changed = false;
+      const updated = prevDrivers.map((d) => {
+        const assignedVehicle = vehicles.find(
+          (v) => v.driverName && v.driverName === d.name && v.driverName !== 'بدون راننده'
+        );
+        const expectedPlate = assignedVehicle ? assignedVehicle.plateNumber : '';
+        if (expectedPlate && d.vehiclePlate !== expectedPlate) {
+          changed = true;
+          return { ...d, vehiclePlate: expectedPlate };
+        }
+        return d;
+      });
+      return changed ? updated : prevDrivers;
+    });
+  }, [vehicles]);
 
   // Initial load from Central Network Database on startup
   useEffect(() => {
@@ -1131,7 +1181,7 @@ export const App: FC = () => {
     showToast(`اطلاعات خودروی "${updated.plateNumber || updated.code}" با موفقیت به‌روزرسانی شد.`, 'success');
   };
 
-  // Centralized Bidirectional Assignment: Driver <-> Vehicle
+  // Centralized Bidirectional Assignment: Driver <-> Vehicle (Fully Synced with Attendance Board)
   const handleAssignDriverToVehicle = (vehicleId: string, driverNameOrNone: string, driverPhone?: string) => {
     const targetVehicle = vehicles.find((v) => v.id === vehicleId);
     if (!targetVehicle) return;
@@ -1148,7 +1198,7 @@ export const App: FC = () => {
       };
       setVehicles((prev) => prev.map((v) => (v.id === vehicleId ? updatedVehicle : v)));
 
-      // 2. Remove this vehicle plate from any driver's assignedVehicles list
+      // 2. Remove this vehicle plate from any driver's assignedVehicles list in driverDirectory
       if (targetVehicle.plateNumber) {
         setDriverDirectory((prev) =>
           prev.map((d) => ({
@@ -1158,7 +1208,20 @@ export const App: FC = () => {
         );
       }
 
-      // 3. Audit log & toast
+      // 3. CRITICAL: Remove vehiclePlate from drivers list for Attendance Board
+      setDrivers((prev) =>
+        prev.map((d) => {
+          if (
+            (targetVehicle.plateNumber && d.vehiclePlate === targetVehicle.plateNumber) ||
+            (oldDriverName && d.name === oldDriverName)
+          ) {
+            return { ...d, vehiclePlate: '' };
+          }
+          return d;
+        })
+      );
+
+      // 4. Audit log & toast
       if (currentUser) {
         recordAuditLog(currentUser, {
           action: 'VEHICLE_UNASSIGN_DRIVER',
@@ -1173,9 +1236,9 @@ export const App: FC = () => {
       showToast(`خودرو کد ${toFaDigits(targetVehicle.code)} از راننده قبلی لغو انتساب شد (فاقد راننده).`, 'info');
     } else {
       // Find driver info from directory or drivers list
-      const matchedDriver = driverDirectory.find(
-        (d) => d.name === driverNameOrNone || d.phone === driverPhone
-      ) || drivers.find((d) => d.name === driverNameOrNone);
+      const matchedDriver =
+        driverDirectory.find((d) => d.name === driverNameOrNone || d.phone === driverPhone) ||
+        drivers.find((d) => d.name === driverNameOrNone);
 
       const assignedPhone = matchedDriver?.phone || driverPhone || targetVehicle.driverPhone || '';
 
@@ -1215,7 +1278,20 @@ export const App: FC = () => {
         })
       );
 
-      // 4. Audit log & toast
+      // 4. CRITICAL: Update drivers array for Attendance Board
+      setDrivers((prev) =>
+        prev.map((d) => {
+          if (d.name === driverNameOrNone || (matchedDriver && d.id === matchedDriver.id)) {
+            return { ...d, vehiclePlate: targetVehicle.plateNumber };
+          }
+          if (targetVehicle.plateNumber && d.vehiclePlate === targetVehicle.plateNumber) {
+            return { ...d, vehiclePlate: '' };
+          }
+          return d;
+        })
+      );
+
+      // 5. Audit log & toast
       if (currentUser) {
         recordAuditLog(currentUser, {
           action: 'VEHICLE_ASSIGN_DRIVER',
@@ -1232,16 +1308,16 @@ export const App: FC = () => {
   };
 
   const handleAssignVehicleToDriver = (driverId: string, vehiclePlateOrNone: string) => {
-    const driver = driverDirectory.find((d) => d.id === driverId);
+    const driver = driverDirectory.find((d) => d.id === driverId) || drivers.find((d) => d.id === driverId);
     if (!driver) return;
 
     const isUnassigning = !vehiclePlateOrNone || vehiclePlateOrNone === 'NONE' || vehiclePlateOrNone === 'بدون خودرو';
 
     if (isUnassigning) {
       // 1. Remove assigned vehicles from driver
-      const oldPlates = driver.assignedVehicles || [];
+      const oldPlates = (driver as DriverDirectoryItem).assignedVehicles || [(driver as Driver).vehiclePlate].filter(Boolean) as string[];
       setDriverDirectory((prev) =>
-        prev.map((d) => (d.id === driverId ? { ...d, assignedVehicles: [] } : d))
+        prev.map((d) => (d.id === driverId || d.name === driver.name ? { ...d, assignedVehicles: [] } : d))
       );
 
       // 2. Unassign vehicles that were assigned to this driver
@@ -1254,13 +1330,18 @@ export const App: FC = () => {
         })
       );
 
+      // 3. Update drivers array for Attendance Board
+      setDrivers((prev) =>
+        prev.map((d) => (d.id === driverId || d.name === driver.name ? { ...d, vehiclePlate: '' } : d))
+      );
+
       showToast(`خودروی اختصاصی از راننده «${driver.name}» لغو انتساب شد.`, 'info');
     } else {
       const targetVehicle = vehicles.find((v) => v.plateNumber === vehiclePlateOrNone);
       if (!targetVehicle) return;
 
       // Assign vehicle to driver
-      handleAssignDriverToVehicle(targetVehicle.id, driver.name, driver.phone);
+      handleAssignDriverToVehicle(targetVehicle.id, driver.name, (driver as any).phone);
     }
   };
 
@@ -1521,6 +1602,31 @@ export const App: FC = () => {
                 onToggleStaffActive={handleToggleStaffActive}
                 onOpenBackup={() => setIsBackupModalOpen(true)}
                 onShowToast={showToast}
+              />
+            </div>
+          )}
+
+          {/* Module: Dedicated Fleet & Driver Vehicle Assignment Hub */}
+          {activeTab === 'VEHICLE_ASSIGNMENT' && (
+            <div className="animate-in fade-in duration-150">
+              <VehicleAssignmentHubView
+                vehicles={vehicles}
+                drivers={drivers}
+                driverDirectory={driverDirectory}
+                onAssignDriverToVehicle={handleAssignDriverToVehicle}
+                onAssignVehicleToDriver={handleAssignVehicleToDriver}
+                onUpdateVehicle={handleUpdateVehicle}
+                showToast={showToast}
+                onOpenBaleForDriver={(d) =>
+                  handleOpenBale({
+                    name: d.name,
+                    phone: d.phone,
+                    vehicleCode: d.vehicleCode,
+                    plateNumber: d.plateNumber,
+                    vehicleType: d.vehicleType,
+                  })
+                }
+                theme={theme}
               />
             </div>
           )}
