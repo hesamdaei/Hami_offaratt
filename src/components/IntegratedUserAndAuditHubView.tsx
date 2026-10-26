@@ -130,6 +130,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   // Edit User Modal
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
   const [editRoleTitle, setEditRoleTitle] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
@@ -226,12 +227,13 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
 
     setAuditLogs(getAuditLogs());
     setIsCreateUserOpen(false);
-    onShowToast(`کاربر جدید «${cleanFullName}» با موفقیت افزوده شد.`, 'success');
+    onShowToast(`کاربر جدید «${cleanFullName}» با نام کاربری «${cleanUsername}» با موفقیت افزوده شد.`, 'success');
   };
 
   const handleOpenEditUser = (user: AppUser) => {
     setEditingUser(user);
     setEditFullName(user.fullName);
+    setEditUsername(user.username);
     setEditRoleTitle(user.roleTitle);
     setEditPassword('');
     setEditPhoneNumber(user.phoneNumber || '');
@@ -250,8 +252,23 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       return;
     }
 
+    const cleanEditUsername = editUsername.trim().toLowerCase();
+    if (!cleanEditUsername) {
+      onShowToast('نام کاربری نمی‌تواند خالی باشد.', 'error');
+      return;
+    }
+
+    const usernameConflict = users.some(
+      (u) => u.id !== editingUser.id && u.username.toLowerCase() === cleanEditUsername
+    );
+    if (usernameConflict) {
+      onShowToast('این نام کاربری قبلاً توسط کاربر دیگری در سامانه ثبت شده است.', 'error');
+      return;
+    }
+
     const oldValues = {
       fullName: editingUser.fullName,
+      username: editingUser.username,
       roleTitle: editingUser.roleTitle,
       isActive: editingUser.isActive,
     };
@@ -261,6 +278,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
         return {
           ...u,
           fullName: cleanFullName,
+          username: cleanEditUsername,
           roleTitle: editRoleTitle.trim() || u.roleTitle,
           password: editPassword.trim() ? editPassword.trim() : u.password,
           phoneNumber: editPhoneNumber.trim() || undefined,
@@ -287,12 +305,12 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       action: 'USER_UPDATE',
       module: 'USERS',
       title: 'ویرایش مشخصات و دسترسی‌های کاربر',
-      description: `مشخصات کاربر «${editingUser.fullName}» (${editingUser.username}) توسط «${currentUser?.fullName || 'مدیر'}» به‌روزرسانی شد.`,
+      description: `مشخصات کاربر «${cleanFullName}» (نام کاربری: ${cleanEditUsername}) توسط «${currentUser?.fullName || 'مدیر'}» به‌روزرسانی شد.`,
       targetId: editingUser.id,
-      targetName: editingUser.fullName,
+      targetName: cleanFullName,
       severity: 'WARNING',
       previousValue: JSON.stringify(oldValues),
-      newValue: JSON.stringify({ fullName: cleanFullName, roleTitle: editRoleTitle }),
+      newValue: JSON.stringify({ fullName: cleanFullName, username: cleanEditUsername, roleTitle: editRoleTitle }),
     });
 
     setAuditLogs(getAuditLogs());
@@ -1348,15 +1366,22 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">نام کاربری انگلیسی (یکتا) *</label>
+                  <label className="block text-amber-300 font-bold mb-1 flex items-center justify-between">
+                    <span>نام کاربری ورود (قابل ویرایش) *</span>
+                    <span className="text-[10px] text-slate-400 font-mono">انگلیسی</span>
+                  </label>
                   <input
                     type="text"
                     required
+                    dir="ltr"
                     value={newUsername}
-                    onChange={(e) => setNewUsername(e.target.value)}
+                    onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
                     placeholder="مثال: ali_rezaei"
-                    className="w-full bg-[#0a1222] border border-[#1e2f52] rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full bg-[#0a1222] border border-amber-500/40 rounded-xl px-3 py-2 text-amber-200 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-mono"
                   />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    نام کاربری ورود آزادانه و دلخواه قابل تنظیم و ویرایش است.
+                  </span>
                 </div>
 
                 <div>
@@ -1559,6 +1584,21 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                     value={editFullName}
                     onChange={(e) => setEditFullName(e.target.value)}
                     className="w-full bg-[#0a1222] border border-[#1e2f52] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-amber-300 font-bold mb-1 flex items-center justify-between">
+                    <span>نام کاربری (قابل ویرایش) *</span>
+                    <span className="text-[10px] text-slate-400 font-mono">لاتین</span>
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    required
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
+                    className="w-full bg-[#0a1222] border border-amber-500/50 rounded-xl px-3 py-2 text-amber-200 focus:outline-none focus:border-amber-400 font-mono"
                   />
                 </div>
 

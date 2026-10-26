@@ -100,28 +100,47 @@ export const StaffDossierPrintModal: FC<StaffDossierPrintModalProps> = ({
                   </div>
                   <div>
                     <h1 className="text-base sm:text-lg font-black text-black">
-                      سامانه مدیریت منابع انسانی و امور اداری
+                      سامانه جامع مدیریت منابع انسانی و امور پرسنلی «حامی»
                     </h1>
                     <p className="text-[11px] text-black font-bold">
-                      شناسنامه شغلی، سجلی و خلاصه سوابق استخدامی پرسنل
+                      شناسنامه شغلی، سجلی و خلاصه پرونده رسمی پرسنل کادری و دفتر
                     </p>
                   </div>
                 </div>
 
-                <div className="text-left font-mono text-[11px] space-y-0.5 text-black border border-black px-2.5 py-1.5 rounded bg-white">
-                  <div><strong>تاریخ استعلام:</strong> {toFaDigits(todayStr)}</div>
-                  <div><strong>کد پرسنلی:</strong> {toFaDigits(member.code)}</div>
-                  <div><strong>وضعیت استخدام:</strong> {member.status !== 'inactive' ? 'شاغل فعال' : 'غیرفعال'}</div>
+                <div className="flex items-center gap-3">
+                  {/* Official 3x4 Personnel Photo Frame */}
+                  <div className="w-20 h-24 border-2 border-black rounded bg-white flex flex-col items-center justify-center overflow-hidden shrink-0 text-center p-0.5 shadow-xs">
+                    {(member.photoUrl || member.documents?.avatarPhoto) ? (
+                      <img
+                        src={member.photoUrl || member.documents?.avatarPhoto}
+                        alt={member.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full border border-dashed border-black/60 flex flex-col items-center justify-center p-1 text-[9px] text-black/70 font-bold">
+                        <span>محل الصاق</span>
+                        <span>عکس پرسنلی</span>
+                        <span className="font-mono text-[8px]">۳ × ۴</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-left font-mono text-[11px] space-y-0.5 text-black border border-black px-2.5 py-1.5 rounded bg-white">
+                    <div><strong>تاریخ استعلام:</strong> {toFaDigits(todayStr)}</div>
+                    <div><strong>کد پرسنلی:</strong> {toFaDigits(member.code)}</div>
+                    <div><strong>وضعیت:</strong> {member.status !== 'inactive' ? 'شاغل فعال' : 'غیرفعال'}</div>
+                  </div>
                 </div>
               </div>
 
-              {/* Personal Identification & Job Specs Box */}
+              {/* Personal Identification & Cadre Specs Box */}
               <div className="border border-black bg-white">
                 <div className="laser-hatch-header px-3 py-1.5 text-xs font-black">
-                  ۱. مشخصات فردی و اطلاعات شغلی
+                  ۱. مشخصات سجلی، فردی و اطلاعات تکمیلی پرسنل کادری و دفتر
                 </div>
                 <div className="p-3 space-y-2">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px]">
                     <div className="border-b border-dotted border-black pb-1">
                       <span className="font-bold">نام و نام خانوادگی:</span> {member.name}
                     </div>
@@ -129,30 +148,86 @@ export const StaffDossierPrintModal: FC<StaffDossierPrintModalProps> = ({
                       <span className="font-bold">کد پرسنلی:</span> <span className="font-mono">{toFaDigits(member.code)}</span>
                     </div>
                     <div className="border-b border-dotted border-black pb-1">
-                      <span className="font-bold">کد ملی:</span> <span className="font-mono">{toFaDigits(member.nationalId || 'ثبت در پرونده')}</span>
+                      <span className="font-bold">کد ملی:</span> <span className="font-mono">{toFaDigits(member.nationalId || '—')}</span>
                     </div>
+                    <div className="border-b border-dotted border-black pb-1">
+                      <span className="font-bold">نام پدر:</span> {member.fatherName || '—'}
+                    </div>
+
+                    <div className="border-b border-dotted border-black pb-1">
+                      <span className="font-bold">تاریخ تولد:</span> <span className="font-mono">{toFaDigits(member.birthDate || '—')}</span>
+                    </div>
+                    <div className="border-b border-dotted border-black pb-1">
+                      <span className="font-bold">وضعیت نظام وظیفه:</span> {member.militaryStatus || 'پایان خدمت'}
+                    </div>
+                    <div className="border-b border-dotted border-black pb-1">
+                      <span className="font-bold">مدرک تحصیلی:</span> {member.education || '—'}
+                    </div>
+                    <div className="border-b border-dotted border-black pb-1">
+                      <span className="font-bold">وضعیت تأهل:</span> {member.maritalStatus === 'single' ? 'مجرد' : `متأهل (${toFaDigits(member.childrenCount || 0)} فرزند)`}
+                    </div>
+
                     <div className="border-b border-dotted border-black pb-1">
                       <span className="font-bold">واحد سازمانی:</span> {member.department}
                     </div>
                     <div className="border-b border-dotted border-black pb-1">
-                      <span className="font-bold">سمت و عنوان شغلی:</span> {member.role}
+                      <span className="font-bold">سمت شغلی:</span> {member.role}
                     </div>
                     <div className="border-b border-dotted border-black pb-1">
-                      <span className="font-bold">تاریخ شروع همکاری:</span> <span className="font-mono">{toFaDigits(member.hireDate || '۱۴۰۲/۰۱/۱۵')}</span>
+                      <span className="font-bold">نوع قرارداد:</span> {
+                        member.contractType === 'PERMANENT' ? 'استخدام رسمی قطعی' :
+                        member.contractType === 'CONTRACT' ? 'قراردادی سالانه' :
+                        member.contractType === 'TEMPORARY' ? 'پاره‌وقت / پروژه‌ای' : 'آزمایشی'
+                      }
                     </div>
                     <div className="border-b border-dotted border-black pb-1">
-                      <span className="font-bold">شماره تماس مستقیم:</span> <span className="font-mono">{toFaDigits(member.phone || '—')}</span>
+                      <span className="font-bold">تاریخ استخدام:</span> <span className="font-mono">{toFaDigits(member.hireDate || '—')}</span>
+                    </div>
+
+                    <div className="border-b border-dotted border-black pb-1">
+                      <span className="font-bold">پایان قرارداد:</span> <span className="font-mono">{toFaDigits(member.contractEndDate || 'پایان سال جاری')}</span>
                     </div>
                     <div className="border-b border-dotted border-black pb-1">
-                      <span className="font-bold">تماس اضطراری:</span> <span className="font-mono">{toFaDigits(member.emergencyPhone || '—')}</span> ({member.emergencyName || member.emergencyRelation || 'بستگان درجه یک'})
+                      <span className="font-bold">شیفت سازمانی:</span> {member.shift === 'night' ? 'شیفت شب' : 'شیفت اداری / روز'}
                     </div>
                     <div className="border-b border-dotted border-black pb-1">
-                      <span className="font-bold">شیفت سازمانی:</span> {member.shift === 'night' ? 'شیفت شب' : 'شیفت روز'}
+                      <span className="font-bold">ساعت کار مقرر:</span> <span className="font-mono">{toFaDigits(member.entryTime || '۰۸:۰۰')} تا {toFaDigits(member.exitTime || '۱۶:۰۰')}</span>
+                    </div>
+                    <div className="border-b border-dotted border-black pb-1">
+                      <span className="font-bold">گروه خونی:</span> {member.bloodType || 'A+'}
                     </div>
                   </div>
+
+                  {/* Financial & Insurance line */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11px] pt-1 border-t border-dashed border-black">
+                    <div>
+                      <span className="font-bold">شماره بیمه:</span> <span className="font-mono">{toFaDigits(member.insuranceNumber || '—')}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold">بانک عامل:</span> {member.bankName || 'بانک ملت'}
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="font-bold">شماره شبا (IBAN):</span> <span className="font-mono tracking-wider">{member.bankAccount || 'IR—'}</span>
+                    </div>
+                  </div>
+
+                  {/* Address and Contacts */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] pt-1 border-t border-dashed border-black">
+                    <div>
+                      <span className="font-bold">تلفن همراه:</span> <span className="font-mono">{toFaDigits(member.phone || '—')}</span>
+                      {member.officePhone && <span className="mr-2 text-black/80 font-mono">(داخلی: {toFaDigits(member.officePhone)})</span>}
+                    </div>
+                    <div>
+                      <span className="font-bold">تماس اضطراری:</span> <span className="font-mono">{toFaDigits(member.emergencyPhone || '—')}</span> ({member.emergencyName || 'رابط'} - {member.emergencyRelation || 'بستگان'})
+                    </div>
+                    <div>
+                      <span className="font-bold">کد پستی:</span> <span className="font-mono">{toFaDigits(member.postalCode || '—')}</span>
+                    </div>
+                  </div>
+
                   {member.address && (
-                    <div className="text-[11px] border-t border-dashed border-black pt-1.5">
-                      <span className="font-bold">نشانی سکونت:</span> {member.address}
+                    <div className="text-[11px] border-t border-dashed border-black pt-1">
+                      <span className="font-bold">نشانی محل سکونت:</span> {member.address}
                     </div>
                   )}
                 </div>

@@ -65,6 +65,7 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
   // Edit User State
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editFullName, setEditFullName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
   const [editRoleTitle, setEditRoleTitle] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editPermissions, setEditPermissions] = useState<UserPermissions>({
@@ -120,7 +121,7 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
     const updated = [...users, newUser];
     setUsers(updated);
     saveStoredUsers(updated);
-    onShowToast(`کاربر جدید «${cleanFullName}» با موفقیت افزوده شد.`, 'success');
+    onShowToast(`کاربر جدید «${cleanFullName}» با نام کاربری «${cleanUsername}» با موفقیت افزوده شد.`, 'success');
 
     // Reset Form
     setNewFullName('');
@@ -143,8 +144,9 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
   const startEditing = (user: AppUser) => {
     setEditingUserId(user.id);
     setEditFullName(user.fullName);
+    setEditUsername(user.username);
     setEditRoleTitle(user.roleTitle);
-    setEditPassword(user.password);
+    setEditPassword(user.password || '');
     setEditPermissions({ ...user.permissions, networkSettings: isMasterAdmin(user) });
   };
 
@@ -152,12 +154,27 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
     const targetUser = users.find((u) => u.id === userId);
     if (!targetUser) return;
 
+    const cleanEditUsername = editUsername.trim().toLowerCase();
+    if (!cleanEditUsername) {
+      onShowToast('نام کاربری نمی‌تواند خالی باشد.', 'error');
+      return;
+    }
+
+    const usernameConflict = users.some(
+      (u) => u.id !== userId && u.username.toLowerCase() === cleanEditUsername
+    );
+    if (usernameConflict) {
+      onShowToast('این نام کاربری توسط کاربر دیگری استفاده شده است.', 'error');
+      return;
+    }
+
     const isTargetMaster = isMasterAdmin(targetUser);
 
     const updatedUsers = users.map((u) => {
       if (u.id === userId) {
         const updated: AppUser = {
           ...u,
+          username: cleanEditUsername,
           fullName: editFullName.trim() || u.fullName,
           roleTitle: editRoleTitle.trim() || u.roleTitle,
           password: editPassword.trim() || u.password,
@@ -332,7 +349,7 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                             <div>
                               <label className="text-[11px] text-slate-400 block mb-1">
                                 نام و نام خانوادگی
@@ -342,6 +359,19 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                                 value={editFullName}
                                 onChange={(e) => setEditFullName(e.target.value)}
                                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-amber-400 font-bold block mb-1 flex items-center justify-between">
+                                <span>نام کاربری (قابل ویرایش)</span>
+                                <span className="text-[10px] text-slate-500 font-normal">انگلیسی</span>
+                              </label>
+                              <input
+                                type="text"
+                                dir="ltr"
+                                value={editUsername}
+                                onChange={(e) => setEditUsername(e.target.value)}
+                                className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-mono focus:border-amber-400 focus:outline-none"
                               />
                             </div>
                             <div>
@@ -718,18 +748,22 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-xs text-slate-300 block mb-1 font-bold">
-                      نام کاربری (انگلیسی) *
+                    <label className="text-xs text-amber-300 block mb-1 font-bold flex items-center justify-between">
+                      <span>نام کاربری (قابل ویرایش) *</span>
+                      <span className="text-[10px] text-slate-400 font-normal">لاتین / دلخواه</span>
                     </label>
                     <input
                       type="text"
                       dir="ltr"
                       value={newUsername}
-                      onChange={(e) => setNewUsername(e.target.value)}
+                      onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
                       placeholder="e.g. operator2"
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                      className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-amber-200 font-mono focus:border-amber-400 focus:outline-none"
                     />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      نام کاربری آزادانه توسط مدیر قابل تغییر و تعریف است.
+                    </span>
                   </div>
 
                   <div>

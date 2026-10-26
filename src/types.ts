@@ -44,8 +44,11 @@ export interface StaffMember {
   department: string; // واحد سازمانی (دیسپچ، اداری و مالی، انبار و لجستیک، فنی، انتظامات، پشتیبانی)
   role: string; // سمت شغلی
   phone?: string;
+  officePhone?: string; // تلفن داخلی دفتر
   shift: 'day' | 'night' | 'morning' | 'evening'; // شیفت کاری اصلی: روز و شب
   nationalId?: string;
+  photoUrl?: string; // عکس پرسنلی ۳×۴ (آپلود مستقیم یا پیوند)
+  gender?: 'male' | 'female'; // جنسیت
   notes?: string;
   entryTime?: string; // ساعت ورود
   exitTime?: string; // ساعت خروج
@@ -53,24 +56,28 @@ export interface StaffMember {
   missionsCountToday?: number;
   avatarColor?: string;
 
-  // پرونده جامع پرسنلی (Employee Dossier Details)
+  // پرونده جامع پرسنلی و کادری (Comprehensive Staff & Cadre Dossier)
   birthDate?: string; // تاریخ تولد
   fatherName?: string; // نام پدر
-  education?: string; // مدرک تحصیلی
+  militaryStatus?: string; // وضعیت نظام وظیفه (کارت پایان خدمت، معافیت و...)
+  education?: string; // مدرک و رشته تحصیلی
   maritalStatus?: 'single' | 'married'; // وضعیت تأهل
   childrenCount?: number; // تعداد فرزندان
   address?: string; // نشانی محل سکونت
+  postalCode?: string; // کد پستی ۱۰ رقمی
   emergencyName?: string; // نام رابط در شرایط اضطراری
   emergencyPhone?: string; // تلفن تماس اضطراری
   emergencyRelation?: string; // نسبت رابط اضطراری
   contractType?: StaffContractType; // نوع همکاری / قرارداد
   hireDate?: string; // تاریخ استخدام / شروع به کار
+  contractEndDate?: string; // تاریخ پایان قرارداد
   createdAt?: string; // تاریخ ثبت در سامانه
   insuranceNumber?: string; // شماره بیمه تأمین اجتماعی
   bankName?: string; // نام بانک
   bankAccount?: string; // شماره شبا یا شماره حساب
   bankCardNumber?: string; // شماره کارت بانکی
   baseSalary?: string; // پایه حقوق ماهانه
+  taxCode?: string; // کد یا پرونده مالیاتی
   rating?: number; // امتیاز ارزیابی عملکرد (۱ تا ۵)
   totalMissions?: number; // کل مأموریت‌ها و وظایف ثبت شده
   documents?: StaffDocuments; // مدارک و ضمائم پرونده

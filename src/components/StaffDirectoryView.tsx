@@ -1,4 +1,4 @@
-import { FC, useState, useMemo, FormEvent } from 'react';
+import { FC, useState, useMemo, FormEvent, useRef } from 'react';
 import {
   Users,
   Search,
@@ -31,14 +31,55 @@ import {
   ToggleRight,
   Eye,
   IdCard,
+  KeyRound,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { StaffMember, StaffContractType } from '../types';
+import { AppUser, UserPermissions } from '../types/auth';
+import { getStoredUsers, saveStoredUsers } from '../utils/authService';
 import { STAFF_DOC_SLOTS, STAFF_DEPARTMENTS } from '../utils/staffSeedData';
 import { toFaDigits } from '../utils/jalaali';
 import { DocumentUploaderModal } from './DocumentUploaderModal';
 import { PersianDatePicker } from './PersianDatePicker';
 import { StaffDossierPrintModal } from './StaffDossierPrintModal';
 import * as XLSX from 'xlsx';
+
+const compressImageFile = (file: File, maxW = 360, maxH = 480, quality = 0.85): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxW || height > maxH) {
+          if (width / height > maxW / maxH) {
+            height = Math.round((height * maxW) / width);
+            width = maxW;
+          } else {
+            width = Math.round((width * maxH) / height);
+            height = maxH;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          resolve(e.target?.result as string);
+        }
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 
 interface StaffDirectoryViewProps {
   staffMembers: StaffMember[];
@@ -75,40 +116,60 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   // Register / Edit Modal & Tab
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
-  const [activeTab, setActiveTab] = useState<'PERSONAL' | 'JOB' | 'FINANCIAL' | 'EMERGENCY'>('PERSONAL');
+  const [activeTab, setActiveTab] = useState<'PERSONAL' | 'JOB' | 'CONTACT' | 'FINANCIAL' | 'ACCOUNT'>('PERSONAL');
+
+  // Quick User Account Creation Modal
+  const [accountModalStaff, setAccountModalStaff] = useState<StaffMember | null>(null);
+  const [accountUsername, setAccountUsername] = useState('');
+  const [accountPassword, setAccountPassword] = useState('123456');
+  const [accountRoleTitle, setAccountRoleTitle] = useState('');
+  const [accountPreset, setAccountPreset] = useState<'DISPATCH' | 'OPERATOR' | 'ADMIN' | 'FLEET' | 'VIEWER'>('OPERATOR');
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
+    photoUrl: '',
     name: '',
     code: '',
-    department: 'دیسپچ و کنترل عملیات',
+    department: 'مدیریت و دفتر مرکزی',
     role: '',
     phone: '',
+    officePhone: '',
     shift: 'day' as 'day' | 'night' | 'morning' | 'evening',
     nationalId: '',
     fatherName: '',
     birthDate: '',
+    gender: 'male' as 'male' | 'female',
+    militaryStatus: 'کارت پایان خدمت',
     education: '',
     maritalStatus: 'married' as 'single' | 'married',
     childrenCount: 0,
     address: '',
+    postalCode: '',
     emergencyName: '',
     emergencyPhone: '',
     emergencyRelation: '',
     contractType: 'PERMANENT' as StaffContractType,
     hireDate: '',
+    contractEndDate: '',
     insuranceNumber: '',
     bankName: 'بانک ملت',
     bankAccount: 'IR',
     bankCardNumber: '',
     baseSalary: '',
+    taxCode: '',
     rating: 5.0,
     bloodType: 'A+',
-    entryTime: '20:00',
-    exitTime: '06:00',
+    entryTime: '08:00',
+    exitTime: '16:00',
     status: 'active' as 'active' | 'inactive',
     notes: '',
     performanceNotes: '',
+    createAppUser: false,
+    appUsername: '',
+    appPassword: '123',
+    appUserRole: 'اپراتور سیستم',
   });
 
   // Filtered staff calculation
@@ -154,36 +215,47 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   const handleOpenAdd = () => {
     setEditingStaff(null);
     setFormData({
+      photoUrl: '',
       name: '',
       code: `EMP-${100 + staffMembers.length + 1}`,
-      department: 'دیسپچ و کنترل عملیات',
+      department: 'مدیریت و دفتر مرکزی',
       role: '',
       phone: '',
-      shift: 'night',
+      officePhone: '',
+      shift: 'day',
       nationalId: '',
       fatherName: '',
       birthDate: '1370/01/01',
+      gender: 'male',
+      militaryStatus: 'کارت پایان خدمت',
       education: 'کارشناسی',
       maritalStatus: 'married',
       childrenCount: 0,
       address: '',
+      postalCode: '',
       emergencyName: '',
       emergencyPhone: '',
       emergencyRelation: 'همسر',
       contractType: 'PERMANENT',
       hireDate: '1403/01/01',
+      contractEndDate: '1404/12/29',
       insuranceNumber: '',
       bankName: 'بانک ملت',
       bankAccount: 'IR',
       bankCardNumber: '',
       baseSalary: '۲۸,۰۰۰,۰۰۰ تومان',
+      taxCode: '',
       rating: 5.0,
       bloodType: 'A+',
-      entryTime: '20:00',
-      exitTime: '06:00',
+      entryTime: '08:00',
+      exitTime: '16:00',
       status: 'active',
       notes: '',
       performanceNotes: '',
+      createAppUser: false,
+      appUsername: `emp_${100 + staffMembers.length + 1}`,
+      appPassword: '123',
+      appUserRole: 'اپراتور شیفت',
     });
     setActiveTab('PERSONAL');
     setIsModalOpen(true);
@@ -193,39 +265,122 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   const handleOpenEdit = (s: StaffMember) => {
     setEditingStaff(s);
     setFormData({
+      photoUrl: s.photoUrl || s.documents?.avatarPhoto || '',
       name: s.name,
       code: s.code,
       department: s.department,
       role: s.role,
       phone: s.phone || '',
+      officePhone: s.officePhone || '',
       shift: s.shift,
       nationalId: s.nationalId || '',
       fatherName: s.fatherName || '',
       birthDate: s.birthDate || '',
+      gender: s.gender || 'male',
+      militaryStatus: s.militaryStatus || 'کارت پایان خدمت',
       education: s.education || '',
       maritalStatus: s.maritalStatus || 'married',
       childrenCount: s.childrenCount || 0,
       address: s.address || '',
+      postalCode: s.postalCode || '',
       emergencyName: s.emergencyName || '',
       emergencyPhone: s.emergencyPhone || '',
       emergencyRelation: s.emergencyRelation || '',
       contractType: s.contractType || 'PERMANENT',
       hireDate: s.hireDate || '',
+      contractEndDate: s.contractEndDate || '',
       insuranceNumber: s.insuranceNumber || '',
       bankName: s.bankName || 'بانک ملت',
       bankAccount: s.bankAccount || 'IR',
       bankCardNumber: s.bankCardNumber || '',
       baseSalary: s.baseSalary || '',
+      taxCode: s.taxCode || '',
       rating: s.rating || 5.0,
       bloodType: s.bloodType || 'A+',
-      entryTime: s.entryTime || '20:00',
-      exitTime: s.exitTime || '06:00',
+      entryTime: s.entryTime || '08:00',
+      exitTime: s.exitTime || '16:00',
       status: s.status || 'active',
       notes: s.notes || '',
       performanceNotes: s.performanceNotes || '',
+      createAppUser: false,
+      appUsername: s.code ? `user_${s.code.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '',
+      appPassword: '123',
+      appUserRole: s.role || 'کاربر سیستم',
     });
     setActiveTab('PERSONAL');
     setIsModalOpen(true);
+  };
+
+  // Quick User Account Creation from Staff
+  const handleOpenCreateUserAccount = (staff: StaffMember) => {
+    setAccountModalStaff(staff);
+    const suggestedUsername = staff.code
+      ? `emp_${staff.code.toLowerCase().replace(/[^a-z0-9]/g, '')}`
+      : `staff_${staff.id.slice(-4)}`;
+    setAccountUsername(suggestedUsername);
+    setAccountPassword('123456');
+    setAccountRoleTitle(staff.role || 'کاربر سیستم');
+    if (staff.department.includes('دیسپچ')) setAccountPreset('DISPATCH');
+    else if (staff.department.includes('فنی')) setAccountPreset('FLEET');
+    else if (staff.department.includes('مدیریت') || staff.department.includes('اداری')) setAccountPreset('ADMIN');
+    else setAccountPreset('OPERATOR');
+  };
+
+  const handleConfirmCreateAccount = (e: FormEvent) => {
+    e.preventDefault();
+    if (!accountModalStaff) return;
+    const cleanUsername = accountUsername.trim().toLowerCase();
+    if (!cleanUsername) {
+      onShowToast?.('لطفاً نام کاربری را وارد نمایید.', 'error');
+      return;
+    }
+    if (!accountPassword.trim()) {
+      onShowToast?.('لطفاً رمز عبور را وارد نمایید.', 'error');
+      return;
+    }
+    const currentUsers = getStoredUsers();
+    if (currentUsers.some((u) => u.username.toLowerCase() === cleanUsername)) {
+      onShowToast?.('این نام کاربری قبلاً در سامانه ثبت شده است. لطفاً نام دیگری انتخاب کنید.', 'error');
+      return;
+    }
+
+    let permissions: UserPermissions = {
+      attendance: 'full',
+      drivers: 'view',
+      staff: 'view',
+      oilService: 'none',
+      regulations: 'view',
+      backupRestore: false,
+      userManagement: false,
+      networkSettings: false,
+    };
+    if (accountPreset === 'DISPATCH') {
+      permissions = { attendance: 'full', drivers: 'full', staff: 'view', oilService: 'view', regulations: 'full', backupRestore: false, userManagement: false, networkSettings: false };
+    } else if (accountPreset === 'ADMIN') {
+      permissions = { attendance: 'full', drivers: 'full', staff: 'full', oilService: 'full', regulations: 'full', backupRestore: true, userManagement: true, networkSettings: false };
+    } else if (accountPreset === 'FLEET') {
+      permissions = { attendance: 'view', drivers: 'full', staff: 'none', oilService: 'full', regulations: 'full', backupRestore: false, userManagement: false, networkSettings: false };
+    } else if (accountPreset === 'VIEWER') {
+      permissions = { attendance: 'view', drivers: 'view', staff: 'view', oilService: 'view', regulations: 'view', backupRestore: false, userManagement: false, networkSettings: false };
+    }
+
+    const newUser: AppUser = {
+      id: `usr-${Date.now()}`,
+      username: cleanUsername,
+      password: accountPassword.trim(),
+      fullName: accountModalStaff.name,
+      roleTitle: accountRoleTitle.trim() || accountModalStaff.role,
+      phoneNumber: accountModalStaff.phone,
+      isMasterAdmin: false,
+      isActive: true,
+      permissions,
+      createdAt: new Date().toLocaleDateString('fa-IR'),
+      avatarColor: accountModalStaff.avatarColor || 'from-blue-600 to-indigo-700',
+    };
+
+    saveStoredUsers([...currentUsers, newUser]);
+    setAccountModalStaff(null);
+    onShowToast?.(`حساب کاربری ورود به برنامه با نام کاربری «${cleanUsername}» برای ${accountModalStaff.name} با موفقیت ایجاد شد.`, 'success');
   };
 
   // Submit Add / Edit Form
@@ -239,29 +394,36 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
     if (editingStaff) {
       const updated: StaffMember = {
         ...editingStaff,
+        photoUrl: formData.photoUrl.trim() || editingStaff.photoUrl,
         name: formData.name.trim(),
         code: formData.code.trim() || editingStaff.code,
         department: formData.department,
         role: formData.role.trim() || 'کارشناس',
         phone: formData.phone.trim(),
+        officePhone: formData.officePhone.trim(),
         shift: formData.shift,
         nationalId: formData.nationalId.trim(),
         fatherName: formData.fatherName.trim(),
         birthDate: formData.birthDate.trim(),
+        gender: formData.gender,
+        militaryStatus: formData.militaryStatus.trim(),
         education: formData.education.trim(),
         maritalStatus: formData.maritalStatus,
         childrenCount: Number(formData.childrenCount) || 0,
         address: formData.address.trim(),
+        postalCode: formData.postalCode.trim(),
         emergencyName: formData.emergencyName.trim(),
         emergencyPhone: formData.emergencyPhone.trim(),
         emergencyRelation: formData.emergencyRelation.trim(),
         contractType: formData.contractType,
         hireDate: formData.hireDate.trim(),
+        contractEndDate: formData.contractEndDate.trim(),
         insuranceNumber: formData.insuranceNumber.trim(),
         bankName: formData.bankName.trim(),
         bankAccount: formData.bankAccount.trim(),
         bankCardNumber: formData.bankCardNumber.trim(),
         baseSalary: formData.baseSalary.trim(),
+        taxCode: formData.taxCode.trim(),
         rating: Number(formData.rating) || 5.0,
         bloodType: formData.bloodType.trim(),
         entryTime: formData.entryTime.trim(),
@@ -269,6 +431,10 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
         status: formData.status,
         notes: formData.notes.trim(),
         performanceNotes: formData.performanceNotes.trim(),
+        documents: {
+          ...(editingStaff.documents || {}),
+          avatarPhoto: formData.photoUrl.trim() || editingStaff.documents?.avatarPhoto,
+        },
       };
       onUpdateStaffMember(updated);
       onShowToast?.(`پرونده کارمند «${updated.name}» با موفقیت به‌روزرسانی شد.`, 'success');
@@ -278,29 +444,36 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
     } else {
       const newStaff: StaffMember = {
         id: `staff-${Date.now()}`,
+        photoUrl: formData.photoUrl.trim() || undefined,
         name: formData.name.trim(),
         code: formData.code.trim() || `EMP-${100 + staffMembers.length + 1}`,
         department: formData.department,
         role: formData.role.trim() || 'کارمند عملیات',
         phone: formData.phone.trim(),
+        officePhone: formData.officePhone.trim() || undefined,
         shift: formData.shift,
         nationalId: formData.nationalId.trim(),
         fatherName: formData.fatherName.trim(),
         birthDate: formData.birthDate.trim(),
+        gender: formData.gender,
+        militaryStatus: formData.militaryStatus.trim(),
         education: formData.education.trim(),
         maritalStatus: formData.maritalStatus,
         childrenCount: Number(formData.childrenCount) || 0,
         address: formData.address.trim(),
+        postalCode: formData.postalCode.trim() || undefined,
         emergencyName: formData.emergencyName.trim(),
         emergencyPhone: formData.emergencyPhone.trim(),
         emergencyRelation: formData.emergencyRelation.trim(),
         contractType: formData.contractType,
         hireDate: formData.hireDate.trim(),
+        contractEndDate: formData.contractEndDate.trim() || undefined,
         insuranceNumber: formData.insuranceNumber.trim(),
         bankName: formData.bankName.trim(),
         bankAccount: formData.bankAccount.trim(),
         bankCardNumber: formData.bankCardNumber.trim(),
         baseSalary: formData.baseSalary.trim(),
+        taxCode: formData.taxCode.trim() || undefined,
         rating: Number(formData.rating) || 5.0,
         bloodType: formData.bloodType.trim(),
         entryTime: formData.entryTime.trim(),
@@ -311,7 +484,41 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
         notes: formData.notes.trim(),
         performanceNotes: formData.performanceNotes.trim(),
         avatarColor: 'from-blue-600 to-indigo-700',
+        documents: formData.photoUrl ? { avatarPhoto: formData.photoUrl } : undefined,
       };
+
+      // Also create app user if checked and valid username
+      if (formData.createAppUser && formData.appUsername.trim()) {
+        const cleanUser = formData.appUsername.trim().toLowerCase();
+        const currentUsers = getStoredUsers();
+        if (!currentUsers.some((u) => u.username.toLowerCase() === cleanUser)) {
+          const newUser: AppUser = {
+            id: `usr-${Date.now()}`,
+            username: cleanUser,
+            password: formData.appPassword.trim() || '123',
+            fullName: newStaff.name,
+            roleTitle: formData.appUserRole.trim() || newStaff.role,
+            phoneNumber: newStaff.phone,
+            isMasterAdmin: false,
+            isActive: true,
+            permissions: {
+              attendance: 'full',
+              drivers: 'view',
+              staff: 'view',
+              oilService: 'none',
+              regulations: 'view',
+              backupRestore: false,
+              userManagement: false,
+              networkSettings: false,
+            },
+            createdAt: new Date().toLocaleDateString('fa-IR'),
+            avatarColor: 'from-blue-600 to-indigo-700',
+          };
+          saveStoredUsers([...currentUsers, newUser]);
+          onShowToast?.(`حساب ورود با نام کاربری «${cleanUser}» نیز همزمان ایجاد شد.`, 'info');
+        }
+      }
+
       onAddStaffMember(newStaff);
       onShowToast?.(`پرونده جدید برای «${newStaff.name}» با موفقیت افتتاح شد.`, 'success');
     }
@@ -585,15 +792,15 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                 {/* Header: Photo, Name, Dept, Shift, Rating */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    {/* Avatar photo or stylized initials */}
+                    {/* 3x4 Portrait photo or stylized initials */}
                     <div
                       onClick={() => setViewingDocsStaff(s)}
-                      className="w-11 h-11 rounded-xl bg-[#0a101f] border border-[#1f2c45] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-indigo-500 transition-colors relative"
-                      title="کلیک برای مشاهده یا بارگذاری مدارک و عکس پرسنلی"
+                      className="w-12 h-14 rounded-xl bg-[#0a101f] border border-[#1f2c45] flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-indigo-500 transition-colors relative shadow-inner"
+                      title="کلیک برای مشاهده یا بارگذاری عکس پرسنلی و مدارک"
                     >
-                      {s.documents?.avatarPhoto ? (
+                      {(s.photoUrl || s.documents?.avatarPhoto) ? (
                         <img
-                          src={s.documents.avatarPhoto}
+                          src={s.photoUrl || s.documents?.avatarPhoto}
                           alt={s.name}
                           className="w-full h-full object-cover"
                         />
@@ -607,7 +814,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                         </div>
                       )}
                       {docsCount > 0 && (
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border border-[#0a101f] rounded-full" />
+                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border border-[#0a101f] rounded-full" />
                       )}
                     </div>
 
@@ -726,6 +933,16 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                   </button>
 
                   <div className="flex items-center gap-1.5">
+                    {/* Create Login User Button */}
+                    <button
+                      onClick={() => handleOpenCreateUserAccount(s)}
+                      className="px-2 py-1 rounded-lg bg-emerald-600/15 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs flex items-center gap-1 transition-colors"
+                      title="ساخت کاربری ورود به برنامه (با نام کاربری قابل ویرایش)"
+                    >
+                      <KeyRound className="w-3 h-3 text-emerald-400" />
+                      <span>کاربری ورود</span>
+                    </button>
+
                     {/* View Dossier Button */}
                     <button
                       onClick={() => setViewingDossier(s)}
@@ -815,11 +1032,12 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                         <div className="flex items-center gap-2">
                           <div
                             onClick={() => setViewingDocsStaff(s)}
-                            className="w-7 h-7 rounded-lg bg-[#0a101f] border border-[#1f2c45] overflow-hidden shrink-0 cursor-pointer"
+                            className="w-8 h-9 rounded-lg bg-[#0a101f] border border-[#1f2c45] overflow-hidden shrink-0 cursor-pointer hover:border-indigo-500 transition-colors"
+                            title="کلیک برای عکس پرسنلی و مدارک"
                           >
-                            {s.documents?.avatarPhoto ? (
+                            {(s.photoUrl || s.documents?.avatarPhoto) ? (
                               <img
-                                src={s.documents.avatarPhoto}
+                                src={s.photoUrl || s.documents?.avatarPhoto}
                                 alt={s.name}
                                 className="w-full h-full object-cover"
                               />
@@ -881,6 +1099,13 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                       </td>
                       <td className="py-3 px-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenCreateUserAccount(s)}
+                            title="ساخت کاربری برای ورود به برنامه با نام کاربری دلخواه و قابل ویرایش"
+                            className="p-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg transition-colors"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => setViewingDossier(s)}
                             title="مشاهده شناسنامه جامع"
@@ -975,12 +1200,12 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     onClick={() => {
                       setViewingDocsStaff(viewingDossier);
                     }}
-                    className="w-16 h-16 rounded-2xl bg-[#0a101f] border-2 border-indigo-500/40 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-lg"
-                    title="مشاهده یا ویرایش عکس پرسنلی"
+                    className="w-16 h-20 rounded-xl bg-[#0a101f] border-2 border-indigo-500/50 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-lg hover:border-indigo-400 transition-colors relative"
+                    title="مشاهده یا ویرایش عکس پرسنلی و مدارک"
                   >
-                    {viewingDossier.documents?.avatarPhoto ? (
+                    {(viewingDossier.photoUrl || viewingDossier.documents?.avatarPhoto) ? (
                       <img
-                        src={viewingDossier.documents.avatarPhoto}
+                        src={viewingDossier.photoUrl || viewingDossier.documents?.avatarPhoto}
                         alt={viewingDossier.name}
                         className="w-full h-full object-cover"
                       />
@@ -1017,6 +1242,8 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                       <span>کد پرسنلی: {toFaDigits(viewingDossier.code)}</span>
                       <span>•</span>
                       <span>کدملی: {toFaDigits(viewingDossier.nationalId || '---')}</span>
+                      <span>•</span>
+                      <span>نظام وظیفه: {viewingDossier.militaryStatus || 'پایان خدمت'}</span>
                     </div>
                   </div>
                 </div>
@@ -1043,7 +1270,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs border-b border-[#1f2c45] pb-2">
                   <FileText className="w-4 h-4" />
-                  <span>۱. مشخصات فردی و سجلی</span>
+                  <span>۱. مشخصات فردی، سجلی و عکس پرسنلی</span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                   <div className="p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
@@ -1069,20 +1296,34 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     </div>
                   </div>
                   <div className="p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
+                    <div className="text-slate-400 text-[11px]">وضعیت نظام وظیفه</div>
+                    <div className="font-semibold text-slate-200 mt-1">{viewingDossier.militaryStatus || 'کارت پایان خدمت'}</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
                     <div className="text-slate-400 text-[11px]">گروه خونی</div>
                     <div className="font-semibold text-rose-300 mt-1 font-mono">
                       {viewingDossier.bloodType || 'A+'}
                     </div>
                   </div>
                   <div className="p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
-                    <div className="text-slate-400 text-[11px]">شماره تماس مستقیم</div>
+                    <div className="text-slate-400 text-[11px]">تلفن همراه</div>
                     <div className="font-semibold text-blue-300 mt-1 font-mono">
                       {toFaDigits(viewingDossier.phone || '---')}
                     </div>
                   </div>
-                  <div className="col-span-2 p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
+                  <div className="p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
+                    <div className="text-slate-400 text-[11px]">تلفن داخلی دفتر</div>
+                    <div className="font-semibold text-slate-200 mt-1 font-mono">
+                      {toFaDigits(viewingDossier.officePhone || '---')}
+                    </div>
+                  </div>
+                  <div className="col-span-2 md:col-span-3 p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
                     <div className="text-slate-400 text-[11px]">نشانی محل سکونت</div>
                     <div className="font-semibold text-slate-200 mt-1">{viewingDossier.address || 'تهران'}</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
+                    <div className="text-slate-400 text-[11px]">کد پستی</div>
+                    <div className="font-semibold text-slate-200 mt-1 font-mono">{toFaDigits(viewingDossier.postalCode || '---')}</div>
                   </div>
                 </div>
               </div>
@@ -1110,6 +1351,12 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     <div className="text-slate-400 text-[11px]">تاریخ شروع به کار</div>
                     <div className="font-semibold text-slate-200 mt-1 font-mono">
                       {toFaDigits(viewingDossier.hireDate || '---')}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
+                    <div className="text-slate-400 text-[11px]">پایان اعتبار قرارداد</div>
+                    <div className="font-semibold text-slate-200 mt-1 font-mono">
+                      {toFaDigits(viewingDossier.contractEndDate || 'پایان سال')}
                     </div>
                   </div>
                   <div className="p-3 rounded-xl bg-[#0a101f] border border-[#1f2c45]">
@@ -1256,6 +1503,18 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
+                  onClick={() => {
+                    const target = viewingDossier;
+                    setViewingDossier(null);
+                    handleOpenCreateUserAccount(target);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>ساخت کاربری ورود</span>
+                </button>
+                <button
                   onClick={() => {
                     handleOpenEdit(viewingDossier);
                     setViewingDossier(null);
@@ -1291,9 +1550,9 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-sm">
-                    {editingStaff ? `ویرایش پرونده کارمند: ${editingStaff.name}` : 'افتتاح پرونده کارمند جدید'}
+                    {editingStaff ? `ویرایش پرونده پرسنل: ${editingStaff.name}` : 'افتتاح پرونده پرسنلی کادری و دفتر'}
                   </h3>
-                  <p className="text-[11px] text-slate-400">ثبت و نگهداری اطلاعات جامع پرسنلی در پایگاه داده</p>
+                  <p className="text-[11px] text-slate-400">ثبت اطلاعات جامع هویتی، شغلی، عکس ۳×۴ و کاربری ورود به سامانه</p>
                 </div>
               </div>
               <button
@@ -1305,62 +1564,190 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
             </div>
 
             {/* Navigation Tabs */}
-            <div className="flex items-center border-b border-[#1f2c45] bg-[#0a101f] px-6">
+            <div className="flex items-center border-b border-[#1f2c45] bg-[#0a101f] px-3 overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={() => setActiveTab('PERSONAL')}
-                className={`py-3 px-4 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                className={`py-3 px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   activeTab === 'PERSONAL'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>۱. فردی و شناسنامه‌ای</span>
+                <span>۱. فردی و عکس ۳×۴</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('JOB')}
-                className={`py-3 px-4 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                className={`py-3 px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   activeTab === 'JOB'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <Briefcase className="w-3.5 h-3.5" />
-                <span>۲. شغلی و سازمانی</span>
+                <span>۲. شغلی و احکام کادری</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('CONTACT')}
+                className={`py-3 px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'CONTACT'
+                    ? 'border-indigo-500 text-indigo-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Phone className="w-3.5 h-3.5" />
+                <span>۳. تماس و نشانی</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('FINANCIAL')}
-                className={`py-3 px-4 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                className={`py-3 px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   activeTab === 'FINANCIAL'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <CreditCard className="w-3.5 h-3.5" />
-                <span>۳. مالی و بیمه</span>
+                <span>۴. مالی، بیمه و مالیات</span>
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('EMERGENCY')}
-                className={`py-3 px-4 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-                  activeTab === 'EMERGENCY'
+                onClick={() => setActiveTab('ACCOUNT')}
+                className={`py-3 px-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'ACCOUNT'
                     ? 'border-indigo-500 text-indigo-400'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <HeartPulse className="w-3.5 h-3.5" />
-                <span>۴. سلامت و اضطراری</span>
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>۵. کاربری ورود و ارزیابی</span>
               </button>
             </div>
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* Tab 1: Personal */}
+              {/* Tab 1: Personal & 3x4 Photo */}
               {activeTab === 'PERSONAL' && (
-                <div className="space-y-4 animate-in fade-in duration-100">
+                <div className="space-y-5 animate-in fade-in duration-100">
+                  {/* Photo Uploader Box */}
+                  <div className="p-4 rounded-xl bg-[#0a101f] border border-[#1f2c45] flex flex-col sm:flex-row items-center gap-4">
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setIsUploadingPhoto(true);
+                          try {
+                            const base64 = await compressImageFile(file, 360, 480, 0.85);
+                            setFormData((prev) => ({ ...prev, photoUrl: base64 }));
+                            onShowToast?.('عکس پرسنلی ۳×۴ با موفقیت بارگذاری شد.', 'success');
+                          } catch {
+                            onShowToast?.('خطا در پردازش تصویر', 'error');
+                          } finally {
+                            setIsUploadingPhoto(false);
+                          }
+                        }
+                      }}
+                    />
+
+                    {/* Photo Preview Container (3x4 aspect ratio: 96px x 128px) */}
+                    <div className="relative group w-24 h-32 rounded-xl bg-[#111b2e] border-2 border-dashed border-indigo-500/40 overflow-hidden flex flex-col items-center justify-center shrink-0 shadow-md">
+                      {formData.photoUrl ? (
+                        <>
+                          <img
+                            src={formData.photoUrl}
+                            alt="عکس پرسنلی"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
+                            <button
+                              type="button"
+                              onClick={() => photoInputRef.current?.click()}
+                              className="px-2 py-1 bg-indigo-600 rounded text-[10px] text-white font-medium"
+                            >
+                              تغییر
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFormData((prev) => ({ ...prev, photoUrl: '' }))}
+                              className="px-2 py-1 bg-rose-600 rounded text-[10px] text-white font-medium"
+                            >
+                              حذف
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center p-2 flex flex-col items-center">
+                          <ImageIcon className="w-7 h-7 text-indigo-400/70 mb-1" />
+                          <span className="text-[10px] text-slate-400 font-medium">عکس ۳×۴ پرسنلی</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Uploader Controls */}
+                    <div className="flex-1 space-y-2 text-center sm:text-right">
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5 justify-center sm:justify-start">
+                          <Camera className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>عکس پرسنلی رسمی ۳×۴ کارمند</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          برای نمایش در پرونده اداری، کارت شناسایی و چاپ رسمی شناسنامه پرسنل حامی
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start pt-1">
+                        <button
+                          type="button"
+                          disabled={isUploadingPhoto}
+                          onClick={() => photoInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{isUploadingPhoto ? 'در حال بهینه‌سازی...' : 'بارگذاری عکس از دستگاه'}</span>
+                        </button>
+
+                        {formData.photoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData((prev) => ({ ...prev, photoUrl: '' }))}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 text-xs transition-colors border border-slate-700 hover:border-rose-500/30"
+                          >
+                            حذف تصویر
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Sample Preset Avatars for quick selection */}
+                      <div className="flex items-center gap-1.5 pt-1 justify-center sm:justify-start">
+                        <span className="text-[10px] text-slate-500">انتخاب سریع پرتره:</span>
+                        {[
+                          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=180&h=240&fit=crop&crop=face',
+                          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=180&h=240&fit=crop&crop=face',
+                          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=180&h=240&fit=crop&crop=face',
+                          'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=180&h=240&fit=crop&crop=face',
+                        ].map((url, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setFormData((prev) => ({ ...prev, photoUrl: url }))}
+                            className="w-7 h-7 rounded-full overflow-hidden border border-slate-700 hover:border-indigo-400 transition-all hover:scale-110"
+                            title={`پرتره آماده شماره ${i + 1}`}
+                          >
+                            <img src={url} alt={`نمونه ${i + 1}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Personal Fields Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -1377,13 +1764,25 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">کد پرسنلی</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">جنسیت</label>
+                      <select
+                        value={formData.gender}
+                        onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' })}
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="male">مرد</option>
+                        <option value="female">زن</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">نام پدر</label>
                       <input
                         type="text"
-                        value={formData.code}
-                        onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                        placeholder="مثلاً: EMP-101"
-                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                        value={formData.fatherName}
+                        onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
+                        placeholder="نام پدر"
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                       />
                     </div>
 
@@ -1400,28 +1799,6 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">شماره همراه</label>
-                      <input
-                        type="text"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="09120000000"
-                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">نام پدر</label>
-                      <input
-                        type="text"
-                        value={formData.fatherName}
-                        onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
-                        placeholder="نام پدر"
-                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div>
                       <PersianDatePicker
                         label="تاریخ تولد"
                         value={formData.birthDate}
@@ -1433,18 +1810,34 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">مدرک تحصیلی</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">وضعیت نظام وظیفه</label>
+                      <select
+                        value={formData.militaryStatus}
+                        onChange={(e) => setFormData({ ...formData, militaryStatus: e.target.value })}
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="کارت پایان خدمت">کارت پایان خدمت</option>
+                        <option value="معافیت دائم پزشکی">معافیت دائم پزشکی</option>
+                        <option value="معافیت دائم کفالت">معافیت دائم کفالت</option>
+                        <option value="معافیت تحصیلی">معافیت تحصیلی</option>
+                        <option value="مشمول در حال خدمت">مشمول در حال خدمت</option>
+                        <option value="عدم شمول / بانوان">عدم شمول / بانوان</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">مدرک و رشته تحصیلی</label>
                       <input
                         type="text"
                         value={formData.education}
                         onChange={(e) => setFormData({ ...formData, education: e.target.value })}
-                        placeholder="دیپلم / کارشناسی مدیریت / مهندسی ..."
+                        placeholder="دیپلم / کارشناسی مدیریت / مهندسی کامپیوتر..."
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">وضعیت تأهل</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">وضعیت تأهل و عائله‌مندی</label>
                       <div className="grid grid-cols-2 gap-2">
                         <select
                           value={formData.maritalStatus}
@@ -1465,26 +1858,44 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">نشانی محل سکونت</label>
-                      <input
-                        type="text"
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        placeholder="تهران، خیابان، پلاک، واحد..."
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">گروه خونی</label>
+                      <select
+                        value={formData.bloodType}
+                        onChange={(e) => setFormData({ ...formData, bloodType: e.target.value })}
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                      />
+                      >
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Tab 2: Job & Org */}
+              {/* Tab 2: Job & Office Cadre */}
               {activeTab === 'JOB' && (
                 <div className="space-y-4 animate-in fade-in duration-100">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">واحد سازمانی</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">کد پرسنلی کادری</label>
+                      <input
+                        type="text"
+                        value={formData.code}
+                        onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                        placeholder="مثلاً: EMP-101"
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">واحد سازمانی و اداری</label>
                       <select
                         value={formData.department}
                         onChange={(e) => setFormData({ ...formData, department: e.target.value })}
@@ -1499,12 +1910,12 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">سمت شغلی</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">سمت شغلی و رده اداری</label>
                       <input
                         type="text"
                         value={formData.role}
                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                        placeholder="مثلاً: سرپرست شیفت شب، کارشناس دیسپچ، حسابدار..."
+                        placeholder="مثلاً: کارشناس ارشد دیسپچ، مدیر دفتر، حسابدار..."
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -1516,8 +1927,10 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                         onChange={(e) => setFormData({ ...formData, shift: e.target.value as any })}
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                       >
-                        <option value="day">شیفت روز (۰۷:۰۰ الی ۱۹:۰۰ ☀️)</option>
+                        <option value="day">شیفت روز (۰۸:۰۰ الی ۱۶:۳۰ ☀️)</option>
                         <option value="night">شیفت شب (۱۹:۰۰ الی ۰۷:۰۰ 🌙)</option>
+                        <option value="morning">شیفت صبحگاهی (۰۶:۰۰ الی ۱۴:۰۰ 🌅)</option>
+                        <option value="evening">شیفت عصرگاهی (۱۴:۰۰ الی ۲۲:۰۰ 🌆)</option>
                       </select>
                     </div>
 
@@ -1541,7 +1954,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                         type="text"
                         value={formData.entryTime}
                         onChange={(e) => setFormData({ ...formData, entryTime: e.target.value })}
-                        placeholder="20:00"
+                        placeholder="08:00"
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
@@ -1552,19 +1965,30 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                         type="text"
                         value={formData.exitTime}
                         onChange={(e) => setFormData({ ...formData, exitTime: e.target.value })}
-                        placeholder="06:00"
+                        placeholder="16:30"
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
 
                     <div>
                       <PersianDatePicker
-                        label="تاریخ شروع به کار"
+                        label="تاریخ شروع به کار (استخدام)"
                         value={formData.hireDate}
                         onChange={(val) => setFormData({ ...formData, hireDate: val })}
                         placeholder="انتخاب تاریخ استخدام..."
                         minYear={1370}
                         maxYear={1415}
+                      />
+                    </div>
+
+                    <div>
+                      <PersianDatePicker
+                        label="تاریخ خاتمه قرارداد جاری"
+                        value={formData.contractEndDate}
+                        onChange={(val) => setFormData({ ...formData, contractEndDate: val })}
+                        placeholder="انتخاب تاریخ پایان قرارداد..."
+                        minYear={1400}
+                        maxYear={1420}
                       />
                     </div>
 
@@ -1575,15 +1999,112 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                         onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                       >
-                        <option value="active">فعال و مجاز برای شیفت</option>
-                        <option value="inactive">غیرفعال / تعلیق</option>
+                        <option value="active">فعال و مجاز برای شیفت کاری</option>
+                        <option value="inactive">غیرفعال / تعلیق اداری</option>
                       </select>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Tab 3: Financial */}
+              {/* Tab 3: Contact & Address */}
+              {activeTab === 'CONTACT' && (
+                <div className="space-y-4 animate-in fade-in duration-100">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">شماره تلفن همراه</label>
+                      <input
+                        type="text"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="09120000000"
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                        شماره تلفن دفتر / داخلی مستقیم
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.officePhone}
+                        onChange={(e) => setFormData({ ...formData, officePhone: e.target.value })}
+                        placeholder="021-88000000 داخلی 104"
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">کد پستی ده‌رقمی</label>
+                      <input
+                        type="text"
+                        value={formData.postalCode}
+                        onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                        placeholder="1998765432"
+                        maxLength={10}
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">نشانی کامل محل سکونت</label>
+                      <input
+                        type="text"
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        placeholder="تهران، خیابان، کوچه، پلاک، طبقه، واحد..."
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Emergency Contact Group */}
+                  <div className="p-3.5 rounded-xl bg-[#0a101f] border border-[#1f2c45] space-y-3">
+                    <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                      <HeartPulse className="w-3.5 h-3.5" />
+                      <span>مشخصات رابط در شرایط بحران و اضطرار</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">نام و نام خانوادگی رابط</label>
+                        <input
+                          type="text"
+                          value={formData.emergencyName}
+                          onChange={(e) => setFormData({ ...formData, emergencyName: e.target.value })}
+                          placeholder="نام فرد رابط"
+                          className="w-full bg-[#111b2e] border border-[#1f2c45] rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">شماره تماس رابط</label>
+                        <input
+                          type="text"
+                          value={formData.emergencyPhone}
+                          onChange={(e) => setFormData({ ...formData, emergencyPhone: e.target.value })}
+                          placeholder="09120000000"
+                          className="w-full bg-[#111b2e] border border-[#1f2c45] rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">نسبت با کارمند</label>
+                        <input
+                          type="text"
+                          value={formData.emergencyRelation}
+                          onChange={(e) => setFormData({ ...formData, emergencyRelation: e.target.value })}
+                          placeholder="همسر / پدر / برادر..."
+                          className="w-full bg-[#111b2e] border border-[#1f2c45] rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 4: Financial, Insurance & Tax */}
               {activeTab === 'FINANCIAL' && (
                 <div className="space-y-4 animate-in fade-in duration-100">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1601,12 +2122,25 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     </div>
 
                     <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                        کد کلاسه مالیاتی / شماره اقتصادی پرسنل
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.taxCode}
+                        onChange={(e) => setFormData({ ...formData, taxCode: e.target.value })}
+                        placeholder="مثلاً: TAX-405-9921"
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1.5">پایه حقوق و دستمزد ماهانه</label>
                       <input
                         type="text"
                         value={formData.baseSalary}
                         onChange={(e) => setFormData({ ...formData, baseSalary: e.target.value })}
-                        placeholder="مثلاً: ۲۹,۰۰۰,۰۰۰ تومان"
+                        placeholder="مثلاً: ۲۸,۰۰۰,۰۰۰ تومان"
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -1617,7 +2151,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                         type="text"
                         value={formData.bankName}
                         onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                        placeholder="بانک ملت / ملی / پاسارگاد..."
+                        placeholder="بانک ملت / ملی / پاسارگاد / تجارت..."
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -1633,7 +2167,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                       />
                     </div>
 
-                    <div className="md:col-span-2">
+                    <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1.5">شماره شبا (IBAN)</label>
                       <input
                         type="text"
@@ -1647,61 +2181,96 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                 </div>
               )}
 
-              {/* Tab 4: Emergency & Health */}
-              {activeTab === 'EMERGENCY' && (
+              {/* Tab 5: Login Account Creation & Evaluation */}
+              {activeTab === 'ACCOUNT' && (
                 <div className="space-y-4 animate-in fade-in duration-100">
+                  {/* App User Account Integration Box */}
+                  <div className="p-4 rounded-xl bg-[#0a101f] border border-indigo-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={formData.createAppUser}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData((prev) => ({
+                              ...prev,
+                              createAppUser: checked,
+                              appUsername:
+                                prev.appUsername ||
+                                (prev.code ? prev.code.toLowerCase().replace(/[^a-z0-9]/g, '') : `user${Math.floor(100 + Math.random() * 900)}`),
+                            }));
+                          }}
+                          className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-[#111b2e]"
+                        />
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                          ایجاد حساب کاربری ورود به برنامه (حامی) برای این کارمند
+                        </span>
+                      </label>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                        نام کاربری قابل ویرایش
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400">
+                      با فعال‌سازی این بخش، پرسنل می‌تواند با نام کاربری و رمز عبور اختصاصی وارد سامانه مدیریت تردد و ترابری حامی شود.
+                    </p>
+
+                    {formData.createAppUser && (
+                      <div className="p-3 rounded-lg bg-[#111b2e] border border-[#1f2c45] space-y-3 mt-2 animate-in fade-in duration-150">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-semibold text-slate-300">
+                                نام کاربری ورود <span className="text-indigo-400 font-normal">(کاملاً قابل ویرایش)</span>
+                              </label>
+                              <span className="text-[10px] text-emerald-400">حروف انگلیسی و ارقام</span>
+                            </div>
+                            <input
+                              type="text"
+                              required={formData.createAppUser}
+                              value={formData.appUsername}
+                              onChange={(e) => setFormData({ ...formData, appUsername: e.target.value.toLowerCase().replace(/\s+/g, '') })}
+                              placeholder="مثلاً: ahmadi یا hesam.d"
+                              className="w-full bg-[#0a101f] border border-indigo-500/40 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-400 font-mono text-left"
+                              dir="ltr"
+                            />
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              نام کاربری دلخواه خود را تایپ کنید؛ این شناسه برای ورود به برنامه استفاده خواهد شد.
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">رمز عبور ورود</label>
+                            <input
+                              type="text"
+                              required={formData.createAppUser}
+                              value={formData.appPassword}
+                              onChange={(e) => setFormData({ ...formData, appPassword: e.target.value })}
+                              placeholder="رمز عبور مثلاً 123456"
+                              className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono text-left"
+                              dir="ltr"
+                            />
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-semibold text-slate-300 mb-1">عنوان نقش کاربری در سامانه</label>
+                            <input
+                              type="text"
+                              value={formData.appUserRole}
+                              onChange={(e) => setFormData({ ...formData, appUserRole: e.target.value })}
+                              placeholder="اپراتور دیسپچ / کارشناس ثبت تردد / مدیر سیستم..."
+                              className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Evaluation & Supervisor Notes */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">نام و نام خانوادگی رابط اضطراری</label>
-                      <input
-                        type="text"
-                        value={formData.emergencyName}
-                        onChange={(e) => setFormData({ ...formData, emergencyName: e.target.value })}
-                        placeholder="نام فرد رابط در شرایط بحرانی"
-                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">شماره تماس اضطراری</label>
-                      <input
-                        type="text"
-                        value={formData.emergencyPhone}
-                        onChange={(e) => setFormData({ ...formData, emergencyPhone: e.target.value })}
-                        placeholder="09120000000"
-                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">نسبت با کارمند</label>
-                      <input
-                        type="text"
-                        value={formData.emergencyRelation}
-                        onChange={(e) => setFormData({ ...formData, emergencyRelation: e.target.value })}
-                        placeholder="همسر / پدر / برادر..."
-                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">گروه خونی</label>
-                      <select
-                        value={formData.bloodType}
-                        onChange={(e) => setFormData({ ...formData, bloodType: e.target.value })}
-                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="A+">A+</option>
-                        <option value="A-">A-</option>
-                        <option value="B+">B+</option>
-                        <option value="B-">B-</option>
-                        <option value="AB+">AB+</option>
-                        <option value="AB-">AB-</option>
-                        <option value="O+">O+</option>
-                        <option value="O-">O-</option>
-                      </select>
-                    </div>
-
                     <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1.5">امتیاز ارزیابی عملکرد (۱ تا ۵)</label>
                       <input
@@ -1715,13 +2284,24 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                       />
                     </div>
 
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">یادداشت‌های محرمانه سرپرست</label>
+                      <input
+                        type="text"
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="سوابق، ملاحظات حفاظتی، تقدیرنامه‌ها..."
+                        className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">یادداشت ارزیابی و سوابق سرپرست</label>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">شرح سوابق ارزیابی و صلاحیت شغلی</label>
                       <textarea
                         rows={3}
                         value={formData.performanceNotes}
                         onChange={(e) => setFormData({ ...formData, performanceNotes: e.target.value })}
-                        placeholder="توضیحات پیرامون شرح وظایف، عملکرد، تشویقی‌ها یا تذکرات..."
+                        placeholder="توضیحات پیرامون شرح وظایف کادری، تعهدات اداری، سوابق آموزشی و تشویقی‌ها..."
                         className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 leading-relaxed"
                       />
                     </div>
@@ -1732,7 +2312,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
               {/* Modal Actions */}
               <div className="flex items-center justify-between pt-4 border-t border-[#1f2c45]">
                 <div className="text-[11px] text-slate-400">
-                  اطلاعات مستقیماً در پرونده کارمند ثبت و ذخیره می‌شود.
+                  اطلاعات پرسنل به همراه عکس ۳×۴ در پرونده اداری حامی ثبت و محافظت می‌شود.
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1749,6 +2329,131 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     {editingStaff ? 'ذخیره تغییرات پرونده' : 'تأیید و ثبت پرونده پرسنلی'}
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 7.5 QUICK USER LOGIN ACCOUNT CREATION MODAL */}
+      {/* ======================================================== */}
+      {accountModalStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-[#111b2e] border border-[#1f2c45] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1f2c45] bg-[#0d1524]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">ساخت حساب کاربری ورود به سامانه</h3>
+                  <p className="text-[11px] text-slate-400">
+                    برای پرسنل: {accountModalStaff.name} ({accountModalStaff.department})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccountModalStaff(null)}
+                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Account Creation Form */}
+            <form onSubmit={handleConfirmCreateAccount} className="p-6 space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-200">
+                    نام کاربری ورود (Username) <span className="text-emerald-400 font-normal">*(کاملاً قابل ویرایش)*</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">حروف انگلیسی و ارقام</span>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={accountUsername}
+                  onChange={(e) => setAccountUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                  placeholder="مثلاً: ahmadi یا hesam.d"
+                  className="w-full bg-[#0a101f] border border-emerald-500/40 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400 font-mono text-left tracking-wide"
+                  dir="ltr"
+                  autoFocus
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  نام کاربری برای ورود به برنامه کاملاً قابل ویرایش است. کاربر با این نام کاربری وارد سامانه حامی خواهد شد.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1.5">رمز عبور اختصاصی</label>
+                <input
+                  type="text"
+                  required
+                  value={accountPassword}
+                  onChange={(e) => setAccountPassword(e.target.value)}
+                  placeholder="رمز عبور..."
+                  className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono text-left"
+                  dir="ltr"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-1.5">عنوان نقش کاربری در سامانه</label>
+                <input
+                  type="text"
+                  value={accountRoleTitle}
+                  onChange={(e) => setAccountRoleTitle(e.target.value)}
+                  placeholder="مثلاً: کارشناس دیسپچ، سرپرست انبار، حسابدار..."
+                  className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Preset selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-200 mb-2">قالب سطح دسترسی پیش‌فرض</label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    { id: 'OPERATOR', label: 'اپراتور استاندارد', desc: 'حضور و غیاب + مشاهده رانندگان' },
+                    { id: 'DISPATCH', label: 'دیسپچ و ترابری', desc: 'دسترسی کامل رانندگان و تردد' },
+                    { id: 'FLEET', label: 'فنی و سرویس روغن', desc: 'مدیریت ناوگان و سرویس‌ها' },
+                    { id: 'ADMIN', label: 'مدیر اداری / کادر', desc: 'دسترسی کامل اداری و پرسنل' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setAccountPreset(preset.id as any)}
+                      className={`p-2.5 rounded-xl border text-right transition-all ${
+                        accountPreset === preset.id
+                          ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-sm'
+                          : 'bg-[#0a101f] border-[#1f2c45] text-slate-400 hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="font-semibold text-xs text-slate-200">{preset.label}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{preset.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Form Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t border-[#1f2c45]">
+                <button
+                  type="button"
+                  onClick={() => setAccountModalStaff(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-900/30 transition-colors flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>تأیید و ساخت کاربری</span>
+                </button>
               </div>
             </form>
           </div>
