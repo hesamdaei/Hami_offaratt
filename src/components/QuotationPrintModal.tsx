@@ -122,7 +122,7 @@ export const QuotationPrintModal: FC<QuotationPrintModalProps> = ({
                   </div>
                   <div>
                     <h1 className="text-base sm:text-lg font-black text-black">
-                      سامانه حمل و نقل و لجستیک حامی بار
+                      سامانه حمل و نقل و لجستیک حامی
                     </h1>
                     <p className="text-[11px] text-black font-bold">
                       پیش‌فاکتور رسمی برآورد کرایه حمل، بارگیری و خدمات ویژه

@@ -213,10 +213,10 @@ export const Sidebar12: FC<Sidebar12Props> = ({
               </div>
               <div className="truncate">
                 <div className="text-xs font-black text-slate-900 dark:text-white truncate">
-                  منوی عملیات سامانه
+                  حامی
                 </div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                  دسترسی سریع بخش‌ها
+                  منوی عملیات سامانه
                 </div>
               </div>
             </div>

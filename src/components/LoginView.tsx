@@ -177,10 +177,10 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </div>
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center justify-center gap-2">
-              <span>سامانه یکپارچه مدیریت ناوگان و پرسنل</span>
+              <span>حامی</span>
             </h1>
             <p className="text-xs text-slate-400 mt-1 font-medium">
-              احراز هویت و ورود به پنل عملیاتی و اداری
+              سامانه یکپارچه مدیریت ناوگان و پرسنل
             </p>
           </div>
 
@@ -463,7 +463,7 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
         {/* Footer info */}
         <div className="text-center mt-4 text-[11px] text-slate-400">
-          <span>سامانه مدیریت ناوگان و پرسنل | اتصال یکپارچه با پیام‌رسان بله</span>
+          <span>حامی | سامانه مدیریت ناوگان و پرسنل</span>
         </div>
       </div>
     </div>

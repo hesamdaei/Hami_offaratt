@@ -57,7 +57,7 @@ export const DriverRegulationsA4PrintModal: FC<DriverRegulationsA4PrintModalProp
   const today = useMemo(() => getTodayJalaali(), []);
   const todayFormatted = `${today.jy}/${String(today.jm).padStart(2, '0')}/${String(today.jd).padStart(2, '0')}`;
 
-  // Custom Company Name (Strictly NO Hami Bar, fully customizable by user)
+  // Custom Company Name (Strictly NO Hami, fully customizable by user)
   const [companyName, setCompanyName] = useState<string>(
     'شرکت خدمات حمل و نقل و ترابری جاده‌ای (سهامی خاص)'
   );
@@ -91,7 +91,7 @@ export const DriverRegulationsA4PrintModal: FC<DriverRegulationsA4PrintModalProp
     return vehicles.find((v) => v.id === selectedDriverId);
   }, [vehicles, selectedDriverId]);
 
-  // Active driver details (sanitized, zero reference to Hami Bar)
+  // Active driver details (sanitized, zero reference to Hami)
   const driverName = selectedVehicle ? selectedVehicle.driverName : customDriverName;
   const vehicleCode = selectedVehicle ? String(selectedVehicle.code) : '';
   const plateNumber = selectedVehicle ? selectedVehicle.plateNumber : customPlate;
@@ -103,7 +103,7 @@ export const DriverRegulationsA4PrintModal: FC<DriverRegulationsA4PrintModalProp
     customLicenseNo ||
     (selectedVehicle ? `LIC-${selectedVehicle.code * 45 + 10000}` : '');
 
-  // Sanitized affidavit text (strips any leftover mentions of Hami Bar)
+  // Sanitized affidavit text (strips any leftover mentions of Hami)
   const cleanAffidavitText = useMemo(() => {
     return affidavitText
       .replace(/شرکت حمل و نقل سراسری حامی بار/g, companyName)
@@ -169,7 +169,7 @@ export const DriverRegulationsA4PrintModal: FC<DriverRegulationsA4PrintModalProp
                   ابعاد استاندارد ۲۱۰ × ۲۹۷ mm
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/20">
-                  بدون نام حامی بار (سربرگ رسمی سفارشی)
+                  بدون نام حامی (سربرگ رسمی سفارشی)
                 </span>
               </h3>
               <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-1">
@@ -375,7 +375,7 @@ export const DriverRegulationsA4PrintModal: FC<DriverRegulationsA4PrintModalProp
                     
                     {/* Right: Neutral Majestic Transport Emblem & Company Title */}
                     <div className="flex items-center gap-3">
-                      {/* Stylized Vector Transportation Crest Emblem (Free of Hami Bar) */}
+                      {/* Stylized Vector Transportation Crest Emblem (Free of Hami) */}
                       <div className="w-13 h-13 sm:w-14 sm:h-14 border-2 border-slate-900 rounded-xl flex flex-col items-center justify-center p-1 bg-slate-100 shrink-0 shadow-xs">
                         <svg
                           viewBox="0 0 100 100"
@@ -775,7 +775,7 @@ export const DriverRegulationsA4PrintModal: FC<DriverRegulationsA4PrintModalProp
                 </div>
               </div>
 
-              {/* Official A4 Footer Note (Strictly NO Hami Bar) */}
+              {/* Official A4 Footer Note (Strictly NO Hami) */}
               <div className="mt-2 text-center text-[7pt] text-slate-600 font-mono border-t border-slate-300 pt-1 flex items-center justify-between avoid-page-break">
                 <span>سامانه جامع مدیریت ناوگان و حمل‌ونقل جاده‌ای — نسخه رسمی مصوب هیئت مدیره و کمیسیون انضباطی</span>
                 <span>قطع استاندارد A4 (۲۱۰ × ۲۹۷ میلی‌متر)</span>

@@ -355,7 +355,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'پرونده پرسنل حامی بار');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'پرونده پرسنل حامی');
     XLSX.writeFile(workbook, `پرونده_پرسنل_حامی_بار_${Date.now()}.xlsx`);
     onShowToast?.('فایل اکسل پرونده پرسنل با موفقیت استخراج شد.', 'success');
   };
@@ -1252,7 +1252,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
             {/* Modal Footer */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#1f2c45] bg-[#0d1524]">
               <div className="text-xs text-slate-400">
-                سیستم جامع پرونده پرسنل و کارکنان صداقت بار • نسخه ۱۴۰۵
+                سیستم جامع پرونده پرسنل و کارکنان حامی • نسخه ۱۴۰۵
               </div>
               <div className="flex items-center gap-2">
                 <button

@@ -334,7 +334,7 @@ export function createDefaultTrackings(orders?: OrderItem[]): Record<string, Car
     const speed = preset.initialStatus === 'IN_TRANSIT' ? 52 : 0;
     const etaMin = speed > 0 ? Math.round((remainingDist / speed) * 60) : 0;
 
-    const customerName = existingOrder?.customerName || 'مشتری حامی بار';
+    const customerName = existingOrder?.customerName || 'مشتری حامی';
     const customerPhone = existingOrder?.customerPhone || '09121112233';
     const driverName = existingOrder?.assignedDriverName || 'رضا مرادی';
     const driverPhone = '09129876543';
@@ -529,7 +529,7 @@ export function initializeTrackingForOrder(order: OrderItem): CargoTrackingItem 
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     customerCompany: order.customerCompany,
-    driverName: order.assignedDriverName || 'راننده معین حامی بار',
+    driverName: order.assignedDriverName || 'راننده معین حامی',
     driverPhone: '09121002030',
     vehiclePlate: order.assignedVehiclePlate || '۴۲ ع ۱۲۳ - ایران ۷۷',
     vehicleType: order.requestedVehicleType || 'خاور مسقف',

@@ -53,7 +53,7 @@ export const PWAInstallButton: FC<PWAInstallButtonProps> = ({
             />
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="font-bold text-white text-sm">نصب اپلیکیشن حامی بار روی گوشی</h4>
+                <h4 className="font-bold text-white text-sm">نصب اپلیکیشن حامی روی گوشی</h4>
                 <span className="text-[10px] bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">
                   نسخه موبایل PWA
                 </span>
@@ -148,7 +148,7 @@ export const PWAInstallButton: FC<PWAInstallButtonProps> = ({
                 <div>
                   <strong className="text-white block">مرحله سوم:</strong>
                   <span className="text-slate-300">
-                    روی گزینه <strong className="text-blue-400">Add (افزودن)</strong> کلیک کنید تا آیکون زرین حامی بار روی صفحه گوشی شما قرار گیرد و مثل یک اپلیکیشن بومی باز شود.
+                    روی گزینه <strong className="text-blue-400">Add (افزودن)</strong> کلیک کنید تا آیکون زرین حامی روی صفحه گوشی شما قرار گیرد و مثل یک اپلیکیشن بومی باز شود.
                   </span>
                 </div>
               </div>

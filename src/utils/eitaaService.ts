@@ -175,7 +175,7 @@ export function fillEitaaTemplate(
   templateStr: string,
   ctx: EitaaTemplateContext
 ): string {
-  const defaultCompanyName = 'صداقت بار';
+  const defaultCompanyName = 'حامی';
   const defaultDispatcherName = 'دیسپچ مرکزی';
   const today = getTodayJalaali().fullFa;
 

@@ -201,7 +201,7 @@ export const EitaaMessengerModal: FC<EitaaMessengerModalProps> = ({
       settlementAmount: settlementAmount,
       notes: customNote || (selectedTemplate.id === 'oil_service_alert' ? 'کیلومتر سرویس قبلی تکمیل شده است' : 'طبق دستورالعمل سازمانی اقدام فرمایید'),
       dispatcherName: currentDispatcherName,
-      companyName: 'صداقت بار',
+      companyName: 'حامی',
     };
 
     const generated = fillEitaaTemplate(selectedTemplate.template, ctx);
@@ -323,7 +323,7 @@ export const EitaaMessengerModal: FC<EitaaMessengerModalProps> = ({
 
   // Handler: Native Share
   const handleNativeShare = async () => {
-    const success = await shareViaWebShare(`پیام صداقت بار به ${selectedDriver?.name || ''}`, messageBody);
+    const success = await shareViaWebShare(`پیام حامی به ${selectedDriver?.name || ''}`, messageBody);
     if (success) {
       setStatusFeedback({
         type: 'success',

@@ -105,7 +105,7 @@ export const InvoicePrintModal: FC<InvoicePrintModalProps> = ({
                   </div>
                   <div>
                     <h1 className="text-base sm:text-lg font-black text-black">
-                      شرکت حمل و نقل و لجستیک حامی بار
+                      شرکت حمل و نقل و لجستیک حامی
                     </h1>
                     <p className="text-[11px] text-black font-bold">
                       صورتحساب رسمی فروش خدمات حمل کالا و جابجایی جاده‌ای
@@ -137,7 +137,7 @@ export const InvoicePrintModal: FC<InvoicePrintModalProps> = ({
                     <span>مشخصات ارائه‌دهنده خدمت (فروشنده):</span>
                   </div>
                   <div className="p-3 space-y-1 text-[11px] text-black">
-                    <div className="border-b border-dotted border-black pb-0.5"><strong>نام شخص حقوقی:</strong> شرکت لجستیک و حمل‌ونقل حامی بار</div>
+                    <div className="border-b border-dotted border-black pb-0.5"><strong>نام شخص حقوقی:</strong> شرکت لجستیک و حمل‌ونقل حامی</div>
                     <div className="border-b border-dotted border-black pb-0.5"><strong>شناسه ملی / کد اقتصادی:</strong> <span className="font-mono">{toFaDigits('۱۴۰۱۰۹۸۷۶۵۴')}</span></div>
                     <div className="border-b border-dotted border-black pb-0.5"><strong>تلفن پشتیبانی و مالی:</strong> <span className="font-mono">{toFaDigits('۰۲۱-۸۸۹۹۰۰۱۱')}</span></div>
                     <div><strong>نشانی:</strong> تهران، بزرگراه فتح، کیلومتر ۶، مجتمع ترابری حامی</div>
@@ -292,7 +292,7 @@ export const InvoicePrintModal: FC<InvoicePrintModalProps> = ({
               {/* Official Signatures & Stamps */}
               <div className="grid grid-cols-2 gap-4 pt-4 border-t-2 border-dashed border-black text-center text-[10px] text-black avoid-page-break">
                 <div className="border border-black min-h-[70px] flex flex-col justify-between bg-white">
-                  <span className="laser-dot-header py-1 font-bold">مهر و امضای امور مالی شرکت حامی بار</span>
+                  <span className="laser-dot-header py-1 font-bold">مهر و امضای امور مالی شرکت حامی</span>
                   <span className="pb-2 font-mono font-black">تأییدیه سیستم یکپارچه مالی و حسابداری</span>
                 </div>
                 <div className="border border-black min-h-[70px] flex flex-col justify-between bg-white">

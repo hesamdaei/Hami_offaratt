@@ -313,7 +313,7 @@ export const DocumentUploaderModal: FC<DocumentUploaderModalProps> = ({
       svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
         <rect width="100%" height="100%" fill="#0e172a" rx="16"/>
         <rect x="20" y="20" width="560" height="360" fill="#1e293b" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6,6" rx="12"/>
-        <text x="300" y="80" fill="#38bdf8" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle">سامانه جامع بایگانی لجستیک حامی بار</text>
+        <text x="300" y="80" fill="#38bdf8" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle">سامانه جامع بایگانی لجستیک حامی</text>
         <text x="300" y="125" fill="#f8fafc" font-family="sans-serif" font-size="24" font-weight="bold" text-anchor="middle">${label}</text>
         <line x1="80" y1="155" x2="520" y2="155" stroke="#475569" stroke-width="1.5"/>
         <text x="300" y="200" fill="#94a3b8" font-family="sans-serif" font-size="14" text-anchor="middle">شناسه تایید دیجیتال: HAMI-${Date.now().toString().slice(-6)}</text>

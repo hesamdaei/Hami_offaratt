@@ -159,7 +159,7 @@ const REGION_TEMPLATES: LocationTemplate[] = [
     heading: 260,
     locationTitle: 'بزرگراه فتح، نرسیده به سه راه شهریار',
     waybill: {
-      origin: 'انبار مرکزی حامی بار (فتح)',
+      origin: 'انبار مرکزی حامی (فتح)',
       destination: 'شهرک صنعتی کاسپین (قزوین)',
       cargoDescription: 'لوازم خانگی و صوتی تصویری',
       cargoWeightTon: 4.8,
@@ -197,7 +197,7 @@ const REGION_TEMPLATES: LocationTemplate[] = [
     lng: 51.2950,
     speed: 0,
     heading: 90,
-    locationTitle: 'پارکینگ مرکزی حامی بار، لاین آماده اعزام',
+    locationTitle: 'پارکینگ مرکزی حامی، لاین آماده اعزام',
   },
   // 4. Azadegan Ringway
   {
@@ -248,7 +248,7 @@ const REGION_TEMPLATES: LocationTemplate[] = [
     heading: 275,
     locationTitle: 'جاده مخصوص کرج، کیلومتر ۱۱',
     waybill: {
-      origin: 'ایستگاه مرکزی حامی بار',
+      origin: 'ایستگاه مرکزی حامی',
       destination: 'کارخانه داروسازی البرز (کرج)',
       cargoDescription: 'دارو و ملزومات پزشکی (یخچالی)',
       cargoWeightTon: 2.8,
@@ -275,7 +275,7 @@ const REGION_TEMPLATES: LocationTemplate[] = [
     lng: 51.2910,
     speed: 0,
     heading: 180,
-    locationTitle: 'تعمیرگاه مرکزی حامی بار، چال سرویس شماره ۲',
+    locationTitle: 'تعمیرگاه مرکزی حامی، چال سرویس شماره ۲',
   },
   // 9. Central Parking Offline
   {
@@ -284,7 +284,7 @@ const REGION_TEMPLATES: LocationTemplate[] = [
     lng: 51.2980,
     speed: 0,
     heading: 90,
-    locationTitle: 'پارکینگ خودروهای سنگین حامی بار (بخش شرقی)',
+    locationTitle: 'پارکینگ خودروهای سنگین حامی (بخش شرقی)',
   },
   // 10. Hemmat Highway
   {
@@ -385,7 +385,7 @@ const REGION_TEMPLATES: LocationTemplate[] = [
     locationTitle: 'منطقه صنعتی گرمدره، سردخانه آریا',
     waybill: {
       origin: 'سردخانه آریا گرمدره',
-      destination: 'انبار مرکزی حامی بار',
+      destination: 'انبار مرکزی حامی',
       cargoDescription: 'گوشت و پروتئین منجمد',
       cargoWeightTon: 3.5,
       receiverCompany: 'پخش پروتئین حامی',
@@ -422,7 +422,7 @@ const REGION_TEMPLATES: LocationTemplate[] = [
     lng: 51.2930,
     speed: 0,
     heading: 270,
-    locationTitle: 'تعمیرگاه تخصصی دیزل حامی بار، بخش جلوبندی',
+    locationTitle: 'تعمیرگاه تخصصی دیزل حامی، بخش جلوبندی',
   },
   // 18. Central Parking Bay 4
   {
@@ -506,7 +506,7 @@ export function generateLiveGpsVehicles(vehicles: VehicleItem[]): LiveGpsVehicle
       waybill: (gpsStatus === 'WITH_WAYBILL' || gpsStatus === 'STARTED_IN_TRANSIT' || gpsStatus === 'LOADING_UNLOADING')
         ? {
             ...(template.waybill || {
-              origin: 'انبار مرکزی حامی بار (فتح)',
+              origin: 'انبار مرکزی حامی (فتح)',
               destination: 'کرج، شهرک صنعتی سیمین دشت',
               cargoDescription: 'قطعات صنعتی و اقلام عمومی',
               cargoWeightTon: Number((3.2 + (v.code % 30) * 0.1).toFixed(1)),

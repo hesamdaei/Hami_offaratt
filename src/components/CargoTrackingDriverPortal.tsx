@@ -187,7 +187,7 @@ export const CargoTrackingDriverPortal: FC<CargoTrackingDriverPortalProps> = ({
     if (!tracking) return;
     const url = generateCustomerShareUrl(selectedOrderNo);
     const text = encodeURIComponent(
-      `سلام ${tracking.customerName} عزیز،\nبار شما (${tracking.cargoDescription}) توسط خودرو ${tracking.vehicleType} بارگیری شد.\nموقعیت زنده کامیون روی نقشه حامی بار:\n${url}`
+      `سلام ${tracking.customerName} عزیز،\nبار شما (${tracking.cargoDescription}) توسط خودرو ${tracking.vehicleType} بارگیری شد.\nموقعیت زنده کامیون روی نقشه حامی:\n${url}`
     );
     window.open(`https://wa.me/98${tracking.customerPhone.replace(/^0/, '')}?text=${text}`, '_blank');
   };
@@ -226,7 +226,7 @@ export const CargoTrackingDriverPortal: FC<CargoTrackingDriverPortalProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              ارسال خودکار موقعیت مکانی لحظه‌ای به مشتری و دیسپچینگ حامی بار
+              ارسال خودکار موقعیت مکانی لحظه‌ای به مشتری و دیسپچینگ حامی
             </p>
           </div>
         </div>

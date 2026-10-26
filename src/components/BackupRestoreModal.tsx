@@ -146,8 +146,8 @@ export const BackupRestoreModal: FC<BackupRestoreModalProps> = ({
     const aux = getAuxiliaryData();
     return {
       version: 4,
-      appName: 'سامانه یکپارچه مدیریت ترابری و لجستیک حامی بار',
-      system: 'HamiBar Logistics Enterprise Suite',
+      appName: 'سامانه یکپارچه مدیریت ترابری و لجستیک حامی',
+      system: 'Hami Logistics Enterprise Suite',
       exportedAt: new Date().toISOString(),
       exportDateJalali: today.fullFa,
       stats: {
@@ -258,8 +258,8 @@ export const BackupRestoreModal: FC<BackupRestoreModalProps> = ({
 
         const validBackup: FullBackupData = {
           version: parsed.version || 3,
-          appName: parsed.appName || 'سامانه حامی بار',
-          system: parsed.system || 'HamiBar',
+          appName: parsed.appName || 'سامانه حامی',
+          system: parsed.system || 'Hami',
           exportedAt: parsed.exportedAt || new Date().toISOString(),
           exportDateJalali: parsed.exportDateJalali || 'نامشخص',
           stats: {
@@ -444,7 +444,7 @@ export const BackupRestoreModal: FC<BackupRestoreModalProps> = ({
                     {JSON.stringify(
                       {
                         version: 4,
-                        appName: 'سامانه حامی بار',
+                        appName: 'سامانه حامی',
                         exportedAt: new Date().toISOString(),
                         stats: {
                           totalDrivers: drivers.length,
@@ -724,7 +724,7 @@ export const BackupRestoreModal: FC<BackupRestoreModalProps> = ({
         <div className="px-6 py-3 bg-[#0a1224] border-t border-[#182642] flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>پشتیبان‌گیری یکپارچه حامی بار</span>
+            <span>پشتیبان‌گیری یکپارچه حامی</span>
           </div>
           <button
             onClick={onClose}

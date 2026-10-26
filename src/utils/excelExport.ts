@@ -40,7 +40,7 @@ export function exportToExcel(
   ];
 
   const data: (string | number)[][] = [
-    [`سامانه حامی بار - تابلوی وضعیت و مرخصی رانندگان (${monthName} ${toFaDigits(year)})`],
+    [`سامانه حامی - تابلوی وضعیت و مرخصی رانندگان (${monthName} ${toFaDigits(year)})`],
     [],
     row1,
     row2,
@@ -125,7 +125,7 @@ export function exportToExcel(
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, `${monthName} ${year}`);
 
-  const fileName = `HamiBar_Attendance_${year}_${month}.xlsx`;
+  const fileName = `Hami_Attendance_${year}_${month}.xlsx`;
   XLSX.writeFile(workbook, fileName);
 }
 
@@ -153,7 +153,7 @@ export function exportStaffToExcel(
   ];
 
   const data: (string | number)[][] = [
-    [`سامانه حامی بار - تابلوی حضور و غیاب پرسنل و کادر ستادی (${monthName} ${toFaDigits(year)})`],
+    [`سامانه حامی - تابلوی حضور و غیاب پرسنل و کادر ستادی (${monthName} ${toFaDigits(year)})`],
     [],
     row1,
   ];
@@ -224,7 +224,7 @@ export function exportStaffToExcel(
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, `پرسنل ${monthName} ${year}`);
 
-  const fileName = `HamiBar_Staff_Attendance_${year}_${month}.xlsx`;
+  const fileName = `Hami_Staff_Attendance_${year}_${month}.xlsx`;
   XLSX.writeFile(workbook, fileName);
 }
 

@@ -518,7 +518,7 @@ export const LiveFleetMapView: FC<LiveFleetMapViewProps> = ({
     setNewWaybillNumber(
       selectedVehicle.waybill?.waybillNumber || `BL-1403/${Math.floor(8000 + Math.random() * 1999)}`
     );
-    setNewOrigin(selectedVehicle.waybill?.origin || 'انبار مرکزی حامی بار (فتح)');
+    setNewOrigin(selectedVehicle.waybill?.origin || 'انبار مرکزی حامی (فتح)');
     setNewDestination(selectedVehicle.waybill?.destination || 'شهرک صنعتی کاسپین (قزوین)');
     setNewCargo(selectedVehicle.waybill?.cargoDescription || 'لوازم خانگی و صوتی تصویری');
     setIsStatusEditModalOpen(true);
@@ -545,7 +545,7 @@ export const LiveFleetMapView: FC<LiveFleetMapViewProps> = ({
           waybill: hasBill
             ? {
                 waybillNumber: newWaybillNumber,
-                origin: newOrigin || 'انبار مرکزی حامی بار (فتح)',
+                origin: newOrigin || 'انبار مرکزی حامی (فتح)',
                 destination: newDestination || 'تهران / مقصد باربری',
                 cargoDescription: newCargo || 'کالای عمومی و تجاری',
                 cargoWeightTon: v.waybill?.cargoWeightTon || 4.2,
@@ -587,7 +587,7 @@ export const LiveFleetMapView: FC<LiveFleetMapViewProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-sm sm:text-base font-black text-white">
-                  مرکز مانیتورینگ بلادرنگ و تلمتری ناوگان حامی بار
+                  مرکز مانیتورینگ بلادرنگ و تلمتری ناوگان حامی
                 </h1>
                 <span className="flex items-center gap-1 bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1806,7 +1806,7 @@ export const LiveFleetMapView: FC<LiveFleetMapViewProps> = ({
                         type="text"
                         value={newOrigin}
                         onChange={(e) => setNewOrigin(e.target.value)}
-                        placeholder="انبار مرکزی حامی بار (فتح)"
+                        placeholder="انبار مرکزی حامی (فتح)"
                         className="w-full bg-[#142036] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
                       />
                     </div>

@@ -316,7 +316,7 @@ export const CargoTrackingCustomerPortal: FC<CargoTrackingCustomerPortalProps> =
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                شبکه هوشمند حمل و نقل اثاثیه و بارهای تجاری حامی بار
+                شبکه هوشمند حمل و نقل اثاثیه و بارهای تجاری حامی
               </p>
             </div>
           </div>
@@ -625,7 +625,7 @@ export const CargoTrackingCustomerPortal: FC<CargoTrackingCustomerPortalProps> =
                   <Headphones className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-bold text-white text-[11px]">مرکز پاسخگویی حامی بار</div>
+                  <div className="font-bold text-white text-[11px]">مرکز پاسخگویی حامی</div>
                   <div className="text-[10px] text-slate-400">پشتیبانی ۲۴ ساعته سفر</div>
                 </div>
               </div>

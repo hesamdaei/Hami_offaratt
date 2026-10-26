@@ -106,7 +106,7 @@ export interface VehicleItem {
   currentMission?: VehicleMission;
   maintenanceNotes?: string;
 
-  // مشخصات شناسنامه فنی خودرو (مطابق سیستم صداقت بار ۱۴۰۵)
+  // مشخصات شناسنامه فنی خودرو (مطابق سیستم حامی ۱۴۰۵)
   modelYear?: string | number; // سال ساخت
   capacityTons?: string | number; // ظرفیت بارگیری / تناژ
   chassisNumber?: string; // شماره شاسی
@@ -345,7 +345,7 @@ export const LEGACY_SEED_VEHICLES: VehicleItem[] = RAW_SEED_VEHICLES.map((v, ind
   const documentDate = isCode1 ? '1392/07/16' : '1395/04/10';
   const driverCode = isCode1 ? '3588' : isNoDriver ? '' : `${3500 + v.code}`;
   const location = isMaintenance ? 'تعمیرگاه مرکزی' : isMission ? 'در مسیر مقصد' : 'پارکینگ مرکزی شرکت';
-  const group = 'گروه لجستیک صداقت بار';
+  const group = 'گروه لجستیک حامی';
 
   const lastStatusDate = '1405/06/12';
   const lastStatusTime = isCode1 ? '19:20' : `1${(index % 8) + 1}:${String(index * 7 % 60).padStart(2, '0')}`;

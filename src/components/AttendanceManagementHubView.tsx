@@ -971,7 +971,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
             {toFaDigits(currentStats.total)}
             <span className="text-xs text-slate-400 font-normal mr-1">نفر</span>
           </div>
-          <div className="text-[10px] text-slate-400 mt-1">ناوگان رسمی و ستاد حامی‌بار</div>
+          <div className="text-[10px] text-slate-400 mt-1">ناوگان رسمی و ستاد حامی</div>
         </div>
 
         {/* KPI 2: Present on Shift */}
@@ -2426,7 +2426,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
           <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl p-5 shadow-lg">
             <h3 className="font-bold text-white text-sm mb-3 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              {activeBoard === 'DRIVERS' ? 'پایش آماده‌به‌کاری ناوگان حامی‌بار' : 'تفکیک پرسنل در واحدهای عملیاتی'}
+              {activeBoard === 'DRIVERS' ? 'پایش آماده‌به‌کاری ناوگان حامی' : 'تفکیک پرسنل در واحدهای عملیاتی'}
             </h3>
 
             {activeBoard === 'STAFF' ? (
@@ -2732,7 +2732,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                   rows={2}
                   value={newStaffForm.notes || ''}
                   onChange={(e) => setNewStaffForm({ ...newStaffForm, notes: e.target.value })}
-                  placeholder="توضیحات و وظایف اصلی در شرکت حامی‌بار..."
+                  placeholder="توضیحات و وظایف اصلی در شرکت حامی..."
                   className="w-full bg-[#0a1222] border border-[#1f2f50] rounded-lg p-2 text-white focus:outline-none"
                 />
               </div>

@@ -108,7 +108,7 @@ export const WaybillPrintModal: FC<WaybillPrintModalProps> = ({
                   </div>
                   <div>
                     <h1 className="text-base sm:text-lg font-black text-black">
-                      سامانه حمل و نقل و لجستیک حامی بار
+                      سامانه حمل و نقل و لجستیک حامی
                     </h1>
                     <p className="text-[11px] text-black font-bold">
                       بارنامه رسمی و الکترونیکی حمل بار جاده‌ای سراسری کشور
@@ -260,7 +260,7 @@ export const WaybillPrintModal: FC<WaybillPrintModalProps> = ({
                   <span className="pb-2 text-black">........................</span>
                 </div>
                 <div className="border border-black min-h-[70px] flex flex-col justify-between bg-white">
-                  <span className="laser-dot-header py-1 font-bold">مهر و امضای شرکت حامی بار</span>
+                  <span className="laser-dot-header py-1 font-bold">مهر و امضای شرکت حامی</span>
                   <span className="pb-2 font-mono font-black">تأییدیه الکترونیکی صادر شد</span>
                 </div>
               </div>

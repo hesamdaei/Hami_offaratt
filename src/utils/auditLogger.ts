@@ -263,7 +263,7 @@ export function exportAuditLogsToExcel(logs: AuditLogItem[]): void {
   ]);
 
   const worksheetData = [
-    [`گزارش جامع وقایع و لاگ تغییرات سامانه حامی بار (تاریخ استخراج: ${toFaDigits(dateStr)})`],
+    [`گزارش جامع وقایع و لاگ تغییرات سامانه حامی (تاریخ استخراج: ${toFaDigits(dateStr)})`],
     [],
     headers,
     ...rows,
@@ -273,7 +273,7 @@ export function exportAuditLogsToExcel(logs: AuditLogItem[]): void {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'لاگ_تغییرات');
 
-  const fileName = `HamiBar_Audit_Logs_${dateStr}.xlsx`;
+  const fileName = `Hami_Audit_Logs_${dateStr}.xlsx`;
   XLSX.writeFile(workbook, fileName);
 }
 

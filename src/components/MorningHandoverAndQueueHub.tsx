@@ -227,7 +227,7 @@ export const MorningHandoverAndQueueHub: FC<MorningHandoverAndQueueHubProps> = (
                   میز تحویل خودرو و صف نوبت‌دهی صبحگاهی ناوگان
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-bold">
-                  دستورالعمل دیسپچ حامی بار
+                  دستورالعمل دیسپچ حامی
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">

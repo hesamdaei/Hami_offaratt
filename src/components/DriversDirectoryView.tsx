@@ -225,7 +225,7 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'رانندگان حامی بار');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'رانندگان حامی');
     XLSX.writeFile(workbook, `لیست_رانندگان_حامی_بار_${Date.now()}.xlsx`);
   };
 

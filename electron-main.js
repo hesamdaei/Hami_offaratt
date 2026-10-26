@@ -14,7 +14,7 @@ function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
-    title: 'سامانه جامع دیسپچ و ترابری حامی‌بار (HamiBar Standalone)',
+    title: 'حامی (Hami)',
     backgroundColor: '#090d16',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

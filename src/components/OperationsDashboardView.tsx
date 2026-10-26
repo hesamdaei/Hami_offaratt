@@ -118,7 +118,7 @@ export const OperationsDashboardView: FC<OperationsDashboardViewProps> = ({
             <div className="text-2xl font-black text-amber-400 mt-1">
               {toFaDigits(stats.inRepair)} <span className="text-xs text-slate-400 font-normal">دستگاه</span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">در تعمیرگاه مرکزی حامی بار</div>
+            <div className="text-[11px] text-slate-400 mt-1">در تعمیرگاه مرکزی حامی</div>
           </div>
           <div className="p-3 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
             <Wrench className="w-6 h-6" />

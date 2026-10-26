@@ -40,7 +40,7 @@ export const ResetConfirmModal: FC<ResetConfirmModalProps> = ({
         {/* Content */}
         <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            لطفاً مشخص فرمایید مایل به بازگردانی رانندگان نمونه اولیه (حامی بار) هستید یا می‌خواهید کلیه اطلاعات کاملاً خالی شود:
+            لطفاً مشخص فرمایید مایل به بازگردانی رانندگان نمونه اولیه (حامی) هستید یا می‌خواهید کلیه اطلاعات کاملاً خالی شود:
           </p>
 
           <div className="space-y-3 pt-2">

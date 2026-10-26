@@ -173,7 +173,7 @@ export const PrintSettingsModal: FC<PrintSettingsModalProps> = ({
                   type="text"
                   value={settings.text}
                   onChange={(e) => setSettings((s) => ({ ...s, text: e.target.value }))}
-                  placeholder="مثال: شرکت حمل و نقل حامی بار / محرمانه / ابلاغیه رسمی"
+                  placeholder="مثال: شرکت حمل و نقل حامی / محرمانه / ابلاغیه رسمی"
                   className="w-full bg-[#070b14] border border-slate-700 rounded-xl px-3 py-2 text-white font-bold outline-none focus:border-amber-400 text-xs transition"
                   disabled={!settings.enabled}
                 />

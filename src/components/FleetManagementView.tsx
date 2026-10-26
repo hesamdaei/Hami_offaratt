@@ -285,7 +285,7 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'ناوگان حامی بار');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'ناوگان حامی');
     XLSX.writeFile(workbook, `گزارش_ناوگان_حامی_بار_${Date.now()}.xlsx`);
   };
 
@@ -383,7 +383,7 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
               }`}
             >
               <History className="w-4 h-4 text-amber-400" />
-              <span>سوابق ناوگان و تغییرات وضعیت (صداقت بار)</span>
+              <span>سوابق ناوگان و تغییرات وضعیت (حامی)</span>
               <span className="px-1.5 py-0.2 rounded-full bg-amber-900/60 text-amber-200 text-[10px] font-mono">
                 {toFaDigits(allFleetHistory.length)}
               </span>
@@ -675,7 +675,7 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
                           {/* Legacy Vehicle Status & Dossier Modal */}
                           <button
                             onClick={() => setStatusVehicle(v)}
-                            title="مشاهده وضعیت، زمان واگذاری و شناسنامه ماشین (صداقت بار)"
+                            title="مشاهده وضعیت، زمان واگذاری و شناسنامه ماشین (حامی)"
                             className="p-1.5 rounded-lg bg-sky-500/15 text-sky-400 hover:bg-sky-500/25 border border-sky-500/30 transition-colors"
                           >
                             <Layers className="w-3.5 h-3.5" />
@@ -1085,7 +1085,7 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
               </div>
 
               <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-300 text-[11px] leading-relaxed">
-                سامانه حامی بار امکان تخصیص چندین خودرو به یک راننده یا اختصاص رانندگان چرخشی را پشتیبانی می‌کند.
+                سامانه حامی امکان تخصیص چندین خودرو به یک راننده یا اختصاص رانندگان چرخشی را پشتیبانی می‌کند.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#1f2c45]">

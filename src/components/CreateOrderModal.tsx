@@ -566,7 +566,7 @@ export const CreateOrderModal: FC<CreateOrderModalProps> = ({
               <div className="bg-amber-950/50 border border-amber-500/40 rounded-xl p-2.5 flex items-start gap-2 text-xs text-amber-200">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <span>
-                  <strong>دستورالعمل بند ۲ دفتر حامی بار:</strong> مبدا یا مقصد این بار در حومه یا حومه ویژه است؛ دریافت بیعانه از مشتری الزامی می‌باشد.
+                  <strong>دستورالعمل بند ۲ دفتر حامی:</strong> مبدا یا مقصد این بار در حومه یا حومه ویژه است؛ دریافت بیعانه از مشتری الزامی می‌باشد.
                 </span>
               </div>
             )}

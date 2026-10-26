@@ -106,7 +106,7 @@ export const DriverCardPrintModal: FC<DriverCardPrintModalProps> = ({
                   </div>
                   <div>
                     <h1 className="text-base sm:text-lg font-black text-black">
-                      شرکت حمل و نقل و لجستیک حامی بار
+                      شرکت حمل و نقل و لجستیک حامی
                     </h1>
                     <p className="text-[11px] text-black font-bold">
                       کارت شناسایی، هویت و صلاحیت تردد رانندگان ناوگان باری
@@ -261,7 +261,7 @@ export const DriverCardPrintModal: FC<DriverCardPrintModalProps> = ({
                     ۲. راننده محترم موظف است در تمامی مأموریت‌های باربری بین‌شهری و درون‌شهری اصل مدارک هویتی، گواهینامه و کارت هوشمند را همراه داشته باشد.
                   </p>
                   <p className="text-black">
-                    ۳. در صورت مفقودی کارت، مراتب فوراً به واحد منابع انسانی و دیسپاچینگ حامی بار اطلاع داده شود.
+                    ۳. در صورت مفقودی کارت، مراتب فوراً به واحد منابع انسانی و دیسپاچینگ حامی اطلاع داده شود.
                   </p>
                 </div>
 

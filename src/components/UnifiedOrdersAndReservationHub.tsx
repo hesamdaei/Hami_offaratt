@@ -201,7 +201,7 @@ export const UnifiedOrdersAndReservationHub: FC<UnifiedOrdersAndReservationHubPr
   const [assignedDriverName, setAssignedDriverName] = useState('');
   const [assignedVehicleCode, setAssignedVehicleCode] = useState<number | undefined>(undefined);
   const [dispatcherName, setDispatcherName] = useState('دیسپچ مرکزی');
-  const [coordinatorName, setCoordinatorName] = useState('واحد دیسپچینگ حامی بار');
+  const [coordinatorName, setCoordinatorName] = useState('واحد دیسپچینگ حامی');
   const [printableNotes, setPrintableNotes] = useState('');
   const [coordinationNotes, setCoordinationNotes] = useState('');
 
@@ -443,7 +443,7 @@ export const UnifiedOrdersAndReservationHub: FC<UnifiedOrdersAndReservationHubPr
       referralCode: referralCode || undefined,
       orderCategoryType,
       customerType,
-      customerName: customerName || 'مشتری حامی بار',
+      customerName: customerName || 'مشتری حامی',
       customerPhone: customerPhone || '09120000000',
       customerCompany: customerCompany || undefined,
       nationalCode: nationalCode || undefined,
@@ -466,7 +466,7 @@ export const UnifiedOrdersAndReservationHub: FC<UnifiedOrdersAndReservationHubPr
       cargoDescription: cargoSummary,
       cargoWeightTon: 3.5,
       packageCount: selectedOrderItems.length,
-      requestedVehicleType: 'خاور مسقف موکت‌کاری شده حامی بار',
+      requestedVehicleType: 'خاور مسقف موکت‌کاری شده حامی',
       estimatedFareRial: calculatedGrandTotalRial,
       advancePaymentRial,
       remainingPaymentRial: remainingBalanceRial,
@@ -503,7 +503,7 @@ export const UnifiedOrdersAndReservationHub: FC<UnifiedOrdersAndReservationHubPr
         cargoPackageCount: selectedOrderItems.length,
         declaredValueRial: 500000000,
         insuranceAmountRial: 150000,
-        driverName: assignedDriverName || 'راننده دیسپچ حامی بار',
+        driverName: assignedDriverName || 'راننده دیسپچ حامی',
         driverPhone: '09121234567',
         vehiclePlate: selectedVehicle?.plate || 'ایران ۲۲ - ۱۲۳ع۴۵',
         vehicleCode: assignedVehicleCode,
@@ -636,7 +636,7 @@ export const UnifiedOrdersAndReservationHub: FC<UnifiedOrdersAndReservationHubPr
             <Plus className="w-4 h-4 text-emerald-400" />
             <span>ثبت سفارش و رزرواسیون جدید</span>
             <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">
-              حامی بار
+              حامی
             </span>
           </button>
 
@@ -948,7 +948,7 @@ export const UnifiedOrdersAndReservationHub: FC<UnifiedOrdersAndReservationHubPr
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    شرکت حامی بار
+                    شرکت حامی
                   </button>
                   <button
                     type="button"
@@ -1054,7 +1054,7 @@ export const UnifiedOrdersAndReservationHub: FC<UnifiedOrdersAndReservationHubPr
                   className="w-full bg-[#111b2e] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-500"
                 >
                   <option value="تماس تلفنی مستقیم">تماس تلفنی مستقیم ۱۷۸۰</option>
-                  <option value="اینستاگرام حامی بار">اینستاگرام حامی بار</option>
+                  <option value="اینستاگرام حامی">اینستاگرام حامی</option>
                   <option value="سایت و گوگل">جستجوی گوگل / وب‌سایت</option>
                   <option value="دیوار و شیپور">آگهی دیوار / شیپور</option>
                   <option value="معرف و مشتری قبلی">معرف و مشتری قبلی</option>
@@ -1396,7 +1396,7 @@ export const UnifiedOrdersAndReservationHub: FC<UnifiedOrdersAndReservationHubPr
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-black text-white">کاتالوگ خدمات و تعرفه‌های حامی بار</span>
+                  <span className="text-xs font-black text-white">کاتالوگ خدمات و تعرفه‌های حامی</span>
                 </div>
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-2" />

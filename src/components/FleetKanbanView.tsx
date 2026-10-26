@@ -623,7 +623,7 @@ export const FleetKanbanView: FC<FleetKanbanViewProps> = ({
                           <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs space-y-0.5">
                             <div className="flex items-center gap-1.5 font-bold text-[11px]">
                               <Wrench className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                              <span>تعمیرگاه مرکزی حامی بار</span>
+                              <span>تعمیرگاه مرکزی حامی</span>
                             </div>
                             <div className="text-[10px] text-amber-300/80 truncate">
                               {v.maintenanceNotes || 'سرویس دوره‌ای روغن و لنت ترمز'}

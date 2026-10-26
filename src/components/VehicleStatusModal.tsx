@@ -263,7 +263,7 @@ export const VehicleStatusModal: FC<VehicleStatusModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-white text-base">
-                  وضعیت ماشین و شناسنامه ناوگان (صداقت بار ۱۴۰۵)
+                  وضعیت ماشین و شناسنامه ناوگان (حامی ۱۴۰۵)
                 </h3>
                 <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-mono text-xs font-bold">
                   کد وسیله: {toFaDigits(vehicle.code)}
@@ -718,7 +718,7 @@ export const VehicleStatusModal: FC<VehicleStatusModalProps> = ({
                         <label className="block text-slate-400 mb-0.5">گروه</label>
                         <input
                           type="text"
-                          value={formData.group || 'گروه صداقت بار'}
+                          value={formData.group || 'گروه حامی'}
                           onChange={(e) => setFormData({ ...formData, group: e.target.value })}
                           className="w-full bg-[#0a101f] border border-[#223555] text-slate-100 rounded-lg px-2.5 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
                         />

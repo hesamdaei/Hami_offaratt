@@ -143,7 +143,7 @@ export const ConvertToWaybillOrInvoiceModal: FC<
       }
     });
 
-    // Sort strictly by Dispatch SOP (دستورالعمل دیسپچ و صف نوبت حامی بار):
+    // Sort strictly by Dispatch SOP (دستورالعمل دیسپچ و صف نوبت حامی):
     // 1. IN_QUEUE vehicles first sorted ascending by queueNumber (1, 2, 3...)
     // 2. Active vehicles with drivers
     list.sort((a, b) => {
@@ -170,7 +170,7 @@ export const ConvertToWaybillOrInvoiceModal: FC<
     );
   }, [activeVehicles, order]);
 
-  // Priority candidate following Dispatch SOP (دستورالعمل دیسپچ حامی بار):
+  // Priority candidate following Dispatch SOP (دستورالعمل دیسپچ حامی):
   // 1. If order itself already has an assigned driver and vehicle in fleet, prioritize that.
   // 2. If not, pick top driver in morning queue (IN_QUEUE with lowest queueNumber).
   // 3. Fallback to first fleet driver with an assigned vehicle.
@@ -301,7 +301,7 @@ export const ConvertToWaybillOrInvoiceModal: FC<
   const [driverValidationError, setDriverValidationError] = useState<string | null>(null);
   const [sopFeedbackMessage, setSopFeedbackMessage] = useState<string | null>(null);
 
-  // Quick Action: Apply Dispatch SOP priority (دستورالعمل دیسپچ حامی بار)
+  // Quick Action: Apply Dispatch SOP priority (دستورالعمل دیسپچ حامی)
   const handleApplyDispatchSOP = () => {
     if (!sopPriorityCandidate) {
       setDriverValidationError('هیچ خودروی فعالی با راننده اختصاص‌یافته در ناوگان یافت نشد.');
@@ -451,7 +451,7 @@ export const ConvertToWaybillOrInvoiceModal: FC<
     'BANK_TRANSFER' | 'CASH' | 'CHEQUE' | 'POS'
   >(order.invoice?.paymentMethod || 'BANK_TRANSFER');
   const [invoiceNotes, setInvoiceNotes] = useState<string>(
-    order.invoice?.notes || 'صورتحساب رسمی حامی بار صادر شد.'
+    order.invoice?.notes || 'صورتحساب رسمی حامی صادر شد.'
   );
 
   // Dynamic calculated invoice total
@@ -661,7 +661,7 @@ export const ConvertToWaybillOrInvoiceModal: FC<
                   </span>
                 </div>
 
-                {/* بنر و دکمه اختصاصی دستورالعمل دیسپچ حامی بار */}
+                {/* بنر و دکمه اختصاصی دستورالعمل دیسپچ حامی */}
                 <div className="bg-gradient-to-r from-amber-950/70 via-[#131f36] to-amber-950/50 border border-amber-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2.5 shadow-md">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
@@ -670,7 +670,7 @@ export const ConvertToWaybillOrInvoiceModal: FC<
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-black text-amber-300">
-                          دستورالعمل دیسپچ و نوبت‌دهی حامی بار
+                          دستورالعمل دیسپچ و نوبت‌دهی حامی
                         </span>
                         <span className="text-[10px] bg-amber-500/20 text-amber-200 px-2 py-0.2 rounded-full border border-amber-500/30 font-bold">
                           بند ۱ و ۲۴ آیین‌نامه
@@ -815,7 +815,7 @@ export const ConvertToWaybillOrInvoiceModal: FC<
 
                     <div className="text-[10px] font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                       <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      <span>تأیید ناوگان حامی بار (آماده صدور)</span>
+                      <span>تأیید ناوگان حامی (آماده صدور)</span>
                     </div>
                   </div>
                 ) : (

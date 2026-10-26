@@ -15,9 +15,9 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'favicon.png', 'apple-touch-icon.png', 'brand-logo.png', 'fonts/*.woff2'],
         manifest: {
           id: '/',
-          name: 'حامی - سامانه لجستیک و ترابری',
-          short_name: 'حامی بار',
-          description: 'سامانه هوشمند مدیریت ناوگان، حضور و غیاب رانندگان، سرویس تعویض روغن و پرونده‌های ترابری شرکت حامی',
+          name: 'حامی',
+          short_name: 'حامی',
+          description: 'حامی - سامانه هوشمند مدیریت ناوگان، حضور و غیاب رانندگان، سرویس تعویض روغن و پرونده‌های ترابری',
           theme_color: '#0a101f',
           background_color: '#0a101f',
           display: 'standalone',

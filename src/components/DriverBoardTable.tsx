@@ -208,7 +208,7 @@ export const DriverBoardTable: FC<DriverBoardTableProps> = ({
                         )}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
-                        {driver.vehiclePlate ? `پلاک ${driver.vehiclePlate}` : 'راننده ناوگان حامی بار'}
+                        {driver.vehiclePlate ? `پلاک ${driver.vehiclePlate}` : 'راننده ناوگان حامی'}
                       </div>
                     </div>
                   </div>
@@ -853,7 +853,7 @@ export const DriverBoardTable: FC<DriverBoardTableProps> = ({
                 colSpan={3}
                 className="p-2 text-center font-mono text-[10px] text-slate-400 bg-[#080d1a]"
               >
-                ناوگان حامی بار
+                ناوگان حامی
               </td>
             </tr>
           </tfoot>

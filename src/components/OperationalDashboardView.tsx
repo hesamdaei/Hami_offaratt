@@ -80,7 +80,7 @@ export const OperationalDashboardView: FC<OperationalDashboardViewProps> = ({
               <span className="text-slate-400 text-xs font-mono">{today.fullFa}</span>
             </div>
             <h1 className="text-xl md:text-2xl font-black text-white mt-1.5">
-              داشبورد عملکرد روزانه ناوگان حامی بار
+              داشبورد عملکرد روزانه ناوگان حامی
             </h1>
             <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
               نمای یکپارچه از وضعیت آماده‌به‌کاری {toFaDigits(vehicles.length)} دستگاه خودروی باری، ضریب حضور {toFaDigits(attendanceRate)}٪ رانندگان و هشدارهای نگهداری و اسناد.
@@ -212,7 +212,7 @@ export const OperationalDashboardView: FC<OperationalDashboardViewProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-[#1f2c45]">
             <div className="flex items-center gap-2 font-bold text-slate-100 text-sm">
               <CarFront className="w-4 h-4 text-blue-400" />
-              <span>ترکیب ناوگان حامی بار</span>
+              <span>ترکیب ناوگان حامی</span>
             </div>
             <span className="text-[11px] text-slate-400 font-mono">{toFaDigits(vehicles.length)} کل</span>
           </div>

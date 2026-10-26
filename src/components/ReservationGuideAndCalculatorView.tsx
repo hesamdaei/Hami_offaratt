@@ -438,7 +438,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
       paymentType: serviceType === 'SUBURB' ? 'PREPAID' : 'POSTPAID',
       status: 'NORMAL',
       source: 'MANUAL',
-      coordinationNotes: `رزرو شده بر اساس استعلام حامی بار. ${reservationNotes ? `یادداشت: ${reservationNotes}` : ''}`,
+      coordinationNotes: `رزرو شده بر اساس استعلام حامی. ${reservationNotes ? `یادداشت: ${reservationNotes}` : ''}`,
       createdAt: todayInfo.gregorianFormatted,
     };
 
@@ -456,13 +456,13 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
   // Copy SMS Preview
   const handleCopySMS = () => {
     const text = `درود بر شما مشتری گرامی،
-پیش‌فاکتور رزرواسیون شرکت حامی بار:
+پیش‌فاکتور رزرواسیون شرکت حامی:
 • نام: ${customerName || 'مشتری محترم'}
 • سرویس: ${vehicleType === 'NISSAN' ? 'نیسان' : 'خاور'} (${serviceType === 'DOMESTIC' ? 'داخل شهر' : serviceType === 'SUBURB' ? 'حومه' : 'شهرستان'})
 • زمان پایه پیش‌بینی: ${expectedHours} ساعت
 • تعداد کارگر: ${carrierLaborCount + layoutLaborFemale + layoutLaborMale + cleaningLaborCount + packerLaborFemale + packerLaborMale + technicianCount} نفر
 • برآورد کل هزینه: ${calculation.grandTotal.toLocaleString('fa-IR')} تومان
-پشتیبانی ۲۴ ساعته حامی بار`;
+پشتیبانی ۲۴ ساعته حامی`;
 
     navigator.clipboard.writeText(text);
     if (showToast) {
@@ -472,7 +472,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
 
   return (
     <div className="space-y-5 animate-in fade-in duration-150">
-      {/* Top Banner Header with Sedaghat Bar Brand & Mode Switcher */}
+      {/* Top Banner Header with Hami Brand & Mode Switcher */}
       <div className="bg-[#111b2e] border border-[#1f2c45] p-4 sm:p-5 rounded-xl shadow-md">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -482,7 +482,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg sm:text-xl font-black text-white">
-                  راهنمای رزرواسیون و محاسبه‌گر هوشمند تعرفه حامی بار
+                  راهنمای رزرواسیون و محاسبه‌گر هوشمند تعرفه حامی
                 </h1>
                 <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-bold px-2 py-0.5 rounded-full">
                   کال‌سنتر و پذیرش
@@ -571,7 +571,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
               <div className="bg-amber-950/40 border-2 border-amber-500/60 p-4 rounded-xl flex items-start gap-3 shadow-md animate-pulse">
                 <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-200 leading-relaxed">
-                  <strong className="text-amber-300 font-bold block mb-0.5 text-sm">قانون الزامی حامی بار (ساید‌بای‌ساید + نیسان):</strong>
+                  <strong className="text-amber-300 font-bold block mb-0.5 text-sm">قانون الزامی حامی (ساید‌بای‌ساید + نیسان):</strong>
                   طبق دستورالعمل شرکت، در صورتی که مشتری دارای یخچال ساید‌بای‌ساید بوده و درخواست خودروی نیسان داشته باشد، <strong>اعزام کارگر ماهر الزامی است</strong> و راننده به تنهایی مجاز به بارگیری نمی‌باشد.
                 </div>
               </div>
@@ -1439,7 +1439,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div>
                   <span className="text-[11px] text-amber-400 font-bold uppercase tracking-wider block">پیش‌فاکتور رسمی استعلام</span>
-                  <h3 className="text-base font-black text-white">برآورد هزینه حامی بار</h3>
+                  <h3 className="text-base font-black text-white">برآورد هزینه حامی</h3>
                 </div>
                 <div className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
                   <Calculator className="w-5 h-5" />
@@ -1535,7 +1535,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
                   <ShieldCheck className="w-3.5 h-3.5" />
                   <span>یادآوری قوانین تماس:</span>
                 </div>
-                <p>• شروع مکالمه با عبارت «درود، حامی بار بفرمایید»</p>
+                <p>• شروع مکالمه با عبارت «درود، حامی بفرمایید»</p>
                 <p>• بارهای حومه مستلزم اخذ قطعی بیعانه می‌باشند</p>
                 <p>• تماس با واحد اعزام برای استعلام ماشین ممنوع است</p>
               </div>
@@ -1575,7 +1575,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
                   <span className="text-[10px] bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded">شروع مکالمه</span>
                 </div>
                 <div className="bg-slate-900 p-3 rounded-lg text-xs text-slate-200 border border-slate-800 font-serif leading-relaxed">
-                  «درود، حامی بار بفرمایید. در خدمتتون هستم...»
+                  «درود، حامی بفرمایید. در خدمتتون هستم...»
                 </div>
                 <p className="text-xs text-slate-300">
                   بلافاصله سه سوال کلیدی بپرسید:
@@ -2082,7 +2082,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <h2 className="text-base font-black text-white flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-amber-400" />
-              <span>متن مرجع و کامل جزوه آموزشی رزرواسیون شرکت حامی بار</span>
+              <span>متن مرجع و کامل جزوه آموزشی رزرواسیون شرکت حامی</span>
             </h2>
             <button
               type="button"
@@ -2122,7 +2122,7 @@ export const ReservationGuideAndCalculatorView: FC<ReservationGuideAndCalculator
             heavyItemsCost: calculation.totalHeavyItemsCost + calculation.walkingCost,
             totalCost: calculation.grandTotal,
             depositRequired: calculation.depositRequired,
-            notes: 'پیش‌فاکتور برآورد تقریبی صادر شده از طریق سامانه رزرواسیون حامی بار. چاپ شده با استاندارد لیزری.',
+            notes: 'پیش‌فاکتور برآورد تقریبی صادر شده از طریق سامانه رزرواسیون حامی. چاپ شده با استاندارد لیزری.',
           }}
           onClose={() => setIsPrintModalOpen(false)}
           onShowToast={showToast}

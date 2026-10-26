@@ -288,7 +288,7 @@ export const Header: FC<HeaderProps> = ({
             <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#070b14] flex items-center justify-center p-0.5">
               <img src="/brand-logo.png" alt="حامی" className="w-full h-full object-contain rounded" />
             </div>
-            <span className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white hidden sm:inline">
+            <span className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white">
               حامی
             </span>
           </div>
@@ -617,7 +617,7 @@ export const Header: FC<HeaderProps> = ({
                 <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center font-black text-slate-950">
                   <Truck className="w-4 h-4 text-slate-950" />
                 </div>
-                <span className="font-black text-slate-900 dark:text-white text-sm">منوی عملیات سامانه</span>
+                <span className="font-black text-slate-900 dark:text-white text-sm">حامی</span>
               </div>
               <button
                 type="button"

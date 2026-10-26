@@ -607,7 +607,7 @@ export const LanSharingModal: FC<LanSharingModalProps> = ({
         <div className="bg-[#091122] px-5 py-3 border-t border-[#172338] flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span>دیتابیس مشترک حامی بار — نسخه یکپارچه شبکه</span>
+            <span>دیتابیس مشترک حامی — نسخه یکپارچه شبکه</span>
           </div>
 
           <button

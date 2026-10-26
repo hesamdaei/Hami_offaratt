@@ -105,7 +105,7 @@ export const TehranZonePricingMatrix: FC<TehranZonePricingMatrixProps> = ({
                   جدول و ماتریس قیمت‌گذاری جامع مناطق (تهران، حومه و حومه ویژه)
                 </h2>
                 <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  پایه‌گذاری منطقه‌ای حامی بار
+                  پایه‌گذاری منطقه‌ای حامی
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1">
