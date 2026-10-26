@@ -753,195 +753,129 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
   return (
     <div className="space-y-4" dir="rtl">
-      {/* 1. TOP EXECUTIVE HEADER BANNER (Inspired by Nightly Driver Dashboard Design) */}
-      <div className="bg-gradient-to-r from-[#0d172c] via-[#101e38] to-[#0a1222] border border-[#22365e] rounded-2xl p-4 sm:p-5 shadow-2xl relative overflow-hidden">
-        {/* Ambient background glows */}
-        <div className="absolute top-0 right-1/4 w-96 h-36 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/4 w-80 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* 1. COMPACT & CLEAN TOP HEADER BAR */}
+      <div className="bg-[#0d172c] border border-[#22365e] rounded-2xl p-3.5 sm:p-4 shadow-lg">
+        {/* Row 1: Board Switcher + Date Navigator */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Board Switcher (Drivers vs Staff) */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="inline-flex p-1 bg-[#09101f] border border-[#1d2d4c] rounded-xl">
+              <button
+                onClick={() => setActiveBoard('DRIVERS')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                  activeBoard === 'DRIVERS'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Truck className="w-4 h-4" />
+                <span>رانندگان ({toFaDigits(activeDriversCount)})</span>
+              </button>
 
-        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          {/* Title & Live Status */}
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-0.5 shadow-lg shadow-blue-500/20 flex items-center justify-center shrink-0 border border-blue-400/30">
-              {activeBoard === 'DRIVERS' ? (
-                <Truck className="w-6 h-6 text-white" />
-              ) : (
-                <Users className="w-6 h-6 text-white" />
-              )}
+              <button
+                onClick={() => setActiveBoard('STAFF')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                  activeBoard === 'STAFF'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>پرسنل ({toFaDigits(activeStaffCount)})</span>
+              </button>
             </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  تابلوی حضور و غیاب و عملکرد عملیاتی
-                </h1>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  پایش برخط شیفت شب و روز
+
+            {/* Compact Date Navigator */}
+            <div className="flex items-center gap-1 bg-[#09101f] border border-[#1d2d4c] p-1 rounded-xl">
+              <button
+                onClick={handlePrevDay}
+                title="روز قبل"
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-white">
+                <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>
+                  {activeWeekdayName} {toFaDigits(selectedDay)} {PERSIAN_MONTH_NAMES[selectedMonth - 1]}{' '}
+                  {toFaDigits(selectedYear)}
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                کنترل تردد، تفکیک رانندگان ناوگان و کادر ستادی، ثبت وضعیت حضور و کارکرد روزانه
-              </p>
-            </div>
-          </div>
 
-          {/* Date Navigator Box */}
-          <div className="flex items-center gap-2 self-stretch lg:self-auto justify-between lg:justify-end bg-[#0a1222]/80 backdrop-blur border border-[#1e2f52] p-1.5 rounded-xl">
-            <button
-              onClick={handlePrevDay}
-              title="روز قبل"
-              className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2 px-3 py-1 bg-[#13223f] border border-blue-500/30 rounded-lg text-center">
-              <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
-              <div className="text-xs">
-                <div className="font-bold text-white">
-                  {activeWeekdayName}، {toFaDigits(selectedDay)} {PERSIAN_MONTH_NAMES[selectedMonth - 1]} {toFaDigits(selectedYear)}
-                </div>
-                <div className="text-[10px] text-blue-300">
-                  {selectedYear === today.jy && selectedMonth === today.jm && selectedDay === today.jd ? 'تاریخ امروز' : `روز ${toFaDigits(selectedDay)} از ${toFaDigits(daysInCurrentMonth)}`}
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleNextDay}
-              title="روز بعد"
-              className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-
-            {(selectedYear !== today.jy || selectedMonth !== today.jm || selectedDay !== today.jd) && (
               <button
-                onClick={handleResetToToday}
-                className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-sm"
+                onClick={handleNextDay}
+                title="روز بعد"
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
-                امروز
+                <ChevronLeft className="w-4 h-4" />
               </button>
-            )}
-          </div>
-        </div>
 
-        {/* PRIMARY BOARD SELECTOR TABS: Drivers vs Staff */}
-        <div className="mt-5 pt-4 border-t border-[#1e2f52]/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="inline-flex p-1 bg-[#09101f] border border-[#1d2d4c] rounded-xl self-start">
-            <button
-              onClick={() => setActiveBoard('DRIVERS')}
-              className={`flex items-center gap-2.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                activeBoard === 'DRIVERS'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Truck className="w-4 h-4" />
-              <span>تابلوی رانندگان ناوگان</span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-mono ${
-                activeBoard === 'DRIVERS' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'
-              }`}>
-                {toFaDigits(drivers.length)} راننده
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveBoard('STAFF')}
-              className={`flex items-center gap-2.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                activeBoard === 'STAFF'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/25'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>تابلوی پرسنل و کادر ستادی</span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-mono ${
-                activeBoard === 'STAFF' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'
-              }`}>
-                {toFaDigits(staffMembers.length)} پرسنل
-              </span>
-            </button>
+              {(selectedYear !== today.jy || selectedMonth !== today.jm || selectedDay !== today.jd) && (
+                <button
+                  onClick={handleResetToToday}
+                  className="text-[11px] font-bold px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all cursor-pointer"
+                >
+                  امروز
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Quick Header Actions: Mark All Present, Excel, Print, Add Person */}
-          <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Essential Quick Actions */}
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <button
               onClick={handleMarkAllPresent}
               title="ثبت حضور تمام افراد با یک کلیک"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-colors cursor-pointer"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>ثبت حضور همه</span>
+              <span>حضور همه</span>
+            </button>
+
+            <button
+              onClick={() => setLeaveCalendarPrintMode(activeBoard)}
+              title="چاپ فرم تقویم ماهانه مرخصی (A4)"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-amber-300 border border-amber-500/30 transition-colors cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-amber-400" />
+              <span>چاپ تقویم مرخصی</span>
+            </button>
+
+            <button
+              onClick={handlePrint}
+              title="چاپ برگه حضور و غیاب روزانه"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-slate-200 border border-[#273d6b] transition-colors cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline">چاپ روزانه</span>
             </button>
 
             <button
               onClick={handleExport}
               title="دریافت فایل اکسل"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-slate-200 border border-[#273d6b] transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-slate-200 border border-[#273d6b] transition-colors cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span>خروجی اکسل</span>
+              <span className="hidden sm:inline">اکسل</span>
             </button>
 
-            {onOpenBackup && (
-              <button
-                onClick={onOpenBackup}
-                title="پشتیبان‌گیری دستی از کل داده‌های برنامه (JSON)"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-amber-300 border border-amber-500/30 transition-colors"
-              >
-                <Database className="w-3.5 h-3.5 text-amber-400" />
-                <span>بک‌آپ دستی (JSON)</span>
-              </button>
-            )}
-
-            <button
-              onClick={handlePrint}
-              title="چاپ برگه حضور و غیاب شیفت (سیاه‌وسفید لیزری)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-slate-200 border border-[#273d6b] transition-colors cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5 text-blue-400" />
-              <span>چاپ لیست کارکرد</span>
-            </button>
-
-            <button
-              onClick={() => setLeaveCalendarPrintMode('DRIVERS')}
-              title="چاپ فرم تقویم ماهانه مرخصی رانندگان (A4 عمودی)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/35 transition-colors cursor-pointer"
-            >
-              <Calendar className="w-3.5 h-3.5 text-amber-400" />
-              <span>تقویم چاپی مرخصی رانندگان</span>
-            </button>
-
-            <button
-              onClick={() => setLeaveCalendarPrintMode('STAFF')}
-              title="چاپ فرم تقویم ماهانه مرخصی کاربران و پرسنل (A4 عمودی)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/35 transition-colors cursor-pointer"
-            >
-              <Calendar className="w-3.5 h-3.5 text-purple-400" />
-              <span>تقویم چاپی مرخصی پرسنل</span>
-            </button>
-
-            {/* Direct User & Member Management Center button */}
             <button
               onClick={() => {
                 setUserManagerTab(activeBoard);
                 setIsUserManagerOpen(true);
               }}
-              title="مدیریت کاربران، حذف، افزودن و فعال/غیرفعال‌سازی"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600/25 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 transition-colors shadow-sm"
+              title="مدیریت لیست اعضا (حذف و فعال/غیرفعال‌سازی)"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-indigo-300 border border-indigo-500/30 transition-colors cursor-pointer"
             >
               <UserCog className="w-3.5 h-3.5 text-indigo-400" />
-              <span>مدیریت اعضا و کاربران</span>
-              <span className="text-[10px] px-1.5 py-0.2 bg-indigo-500/30 text-white rounded-full font-mono">
-                {toFaDigits(activeBoard === 'DRIVERS' ? drivers.length : staffMembers.length)}
-              </span>
+              <span className="hidden md:inline">مدیریت اعضا</span>
             </button>
 
             {activeBoard === 'DRIVERS' ? (
               <button
                 onClick={() => setIsDirectAddDriverOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-xs transition-colors cursor-pointer"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>افزودن راننده</span>
@@ -949,7 +883,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
             ) : (
               <button
                 onClick={() => setIsAddStaffModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors cursor-pointer"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>افزودن پرسنل</span>
