@@ -261,21 +261,22 @@ export const Header: FC<HeaderProps> = ({
     }
   };
 
-  const currentActive = navModules.find((m) => m.id === activeTab) || navModules[0];
-  const ActiveIcon = currentActive.icon;
-
   return (
-    <header className="mb-3 select-none">
-      {/* CLEAN, MINIMALSINGLE-ROW TOP BAR */}
-      <div className="bg-white/95 dark:bg-[#0b1325]/95 backdrop-blur-md text-slate-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 h-13 flex items-center justify-between gap-3">
-        {/* RIGHT (RTL): Sidebar Toggle + Brand + Active Page Title */}
-        <div className="flex items-center gap-2.5 min-w-0">
+    <header className="relative z-50 mb-3 select-none">
+      {/* CLEAN TOP BAR WITH OPERATIONS NAVIGATION & DROPDOWN */}
+      <div className="relative z-50 bg-white/95 dark:bg-[#0b1325]/95 backdrop-blur-md text-slate-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 shadow-sm">
+        {/* RIGHT (RTL): Sidebar Toggle + Brand */}
+        <div className="flex items-center gap-2 shrink-0">
           {onToggleSidebar && (
             <button
               type="button"
               onClick={onToggleSidebar}
-              className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/70 transition cursor-pointer"
-              title="باز/بستن منوی کناری"
+              className={`hidden lg:flex items-center justify-center w-8 h-8 rounded-lg transition cursor-pointer ${
+                isSidebarOpen
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/70'
+              }`}
+              title="باز/بستن منوی عملیات کناری"
               aria-label="تغییر وضعیت سایدبار"
             >
               <PanelRight className="w-4 h-4" />
@@ -287,22 +288,39 @@ export const Header: FC<HeaderProps> = ({
             <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#070b14] flex items-center justify-center p-0.5">
               <img src="/brand-logo.png" alt="حامی" className="w-full h-full object-contain rounded" />
             </div>
-            <span className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white">
+            <span className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white hidden sm:inline">
               حامی
-            </span>
-          </div>
-
-          {/* Clean Unboxed Breadcrumb */}
-          <span className="text-slate-300 dark:text-slate-700 text-sm">/</span>
-          <div className="flex items-center gap-1.5 min-w-0 truncate">
-            <ActiveIcon className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
-            <span className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm truncate">
-              {currentActive.title}
             </span>
           </div>
         </div>
 
-        {/* LEFT (LTR): Clean 4-Control Action Group */}
+        {/* CENTER: Operations / Modules Navigation Bar (Always accessible on Desktop/Tablet) */}
+        <nav
+          aria-label="منوی عملیات سامانه"
+          className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 px-1"
+        >
+          {visibleNavModules.map((item) => {
+            const ItemIcon = item.icon;
+            const isSelected = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleTabClick(item.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <ItemIcon className="w-3.5 h-3.5 shrink-0" />
+                <span>{item.shortTitle}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* LEFT (LTR): Action Controls & Operations Dropdown */}
         <div className="flex items-center gap-1.5 shrink-0">
           {/* 1. Compact Insurance Alert Indicator (Only if alerts > 0) */}
           {insuranceAlertData.totalAlertsCount > 0 && (
@@ -316,7 +334,7 @@ export const Header: FC<HeaderProps> = ({
               title={`${toFaDigits(insuranceAlertData.totalAlertsCount)} خودرو نیازمند تمدید بیمه یا معاینه فنی`}
             >
               <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-              <span className="hidden md:inline">بیمه:</span>
+              <span className="hidden xl:inline">بیمه:</span>
               <span>{toFaDigits(insuranceAlertData.totalAlertsCount)}</span>
             </button>
           )}
@@ -325,11 +343,11 @@ export const Header: FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setIsSpotlightOpen(true)}
-            className="flex items-center gap-2 px-2.5 h-8 rounded-lg bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800/70 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs transition cursor-pointer"
+            className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800/70 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs transition cursor-pointer gap-1.5"
             title="جستجوی سریع (Ctrl + K)"
           >
             <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-            <span className="hidden sm:inline text-slate-500 dark:text-slate-400">جستجو...</span>
+            <span className="hidden xl:inline text-slate-500 dark:text-slate-400">جستجو</span>
           </button>
 
           {/* 3. Theme Toggle (Icon Only) */}
@@ -365,21 +383,21 @@ export const Header: FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* 5. Unified Tools, Settings & User Dropdown */}
-          <div className="relative" ref={masterMenuRef}>
+          {/* 5. Unified Operations, Tools & User Dropdown */}
+          <div className="relative z-50" ref={masterMenuRef}>
             <button
               type="button"
-              onClick={() => setIsMasterMenuOpen(!isMasterMenuOpen)}
+              onClick={() => setIsMasterMenuOpen((prev) => !prev)}
               className={`flex items-center gap-1.5 px-2.5 h-8 rounded-lg border transition text-xs font-bold cursor-pointer ${
                 isMasterMenuOpen
                   ? 'bg-slate-900 text-white border-slate-900 dark:bg-amber-500 dark:text-slate-950 dark:border-amber-400'
                   : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200/80 dark:bg-slate-800/70 dark:hover:bg-slate-800 dark:text-slate-200 dark:border-slate-700/70'
               }`}
-              title="منوی ابزارها، تنظیمات و حساب کاربری"
+              title="منوی عملیات و امکانات سیستم"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline max-w-[90px] truncate">
-                {currentUser?.fullName || 'امکانات'}
+              <span className="hidden sm:inline max-w-[95px] truncate">
+                منوی عملیات
               </span>
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
@@ -394,9 +412,9 @@ export const Header: FC<HeaderProps> = ({
             </button>
 
             {isMasterMenuOpen && (
-              <div className="absolute left-0 right-auto top-full mt-1.5 w-64 bg-white dark:bg-[#0d1629] border border-slate-200 dark:border-slate-700/80 rounded-xl shadow-xl p-1.5 z-50 text-right">
+              <div className="absolute left-0 right-auto top-full mt-2 w-72 max-h-[80vh] overflow-y-auto bg-white dark:bg-[#0d1629] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-2 z-[100] text-right">
                 {currentUser && (
-                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/80 mb-1 flex items-center justify-between">
+                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/80 mb-1.5 flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-slate-900 dark:text-white">
                         {currentUser.fullName}
@@ -411,7 +429,43 @@ export const Header: FC<HeaderProps> = ({
                   </div>
                 )}
 
+                {/* Quick Module Switcher inside Dropdown */}
+                <div className="mb-1.5 pb-1.5 border-b border-slate-100 dark:border-slate-800/80">
+                  <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                    بخش‌های عملیاتی سامانه
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {visibleNavModules.map((mod) => {
+                      const ModIcon = mod.icon;
+                      const isSelected = activeTab === mod.id;
+                      return (
+                        <button
+                          key={mod.id}
+                          type="button"
+                          onClick={() => {
+                            setIsMasterMenuOpen(false);
+                            handleTabClick(mod.id);
+                          }}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold transition text-right cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-500 text-slate-950'
+                              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                          }`}
+                        >
+                          <ModIcon className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{mod.shortTitle}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* System Operations & Tools */}
                 <div className="space-y-0.5 text-xs">
+                  <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                    ابزارها و تنظیمات سیستم
+                  </div>
+
                   {/* Bale Messenger */}
                   {(onOpenBale || onOpenEitaa) && (
                     <button
@@ -518,14 +572,14 @@ export const Header: FC<HeaderProps> = ({
                 </div>
 
                 {onLogout && (
-                  <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800/80">
+                  <div className="pt-1.5 mt-1.5 border-t border-slate-100 dark:border-slate-800/80">
                     <button
                       type="button"
                       onClick={() => {
                         setIsMasterMenuOpen(false);
                         onLogout();
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition text-xs font-bold text-right cursor-pointer"
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition text-xs font-bold text-right cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>خروج از سامانه</span>
@@ -552,10 +606,10 @@ export const Header: FC<HeaderProps> = ({
       {isMobileMenuOpen && (
         <div
           onClick={closeMobileMenu}
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex lg:hidden animate-in fade-in duration-150"
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex lg:hidden animate-in fade-in duration-150"
         >
           <div
-            className="fixed inset-y-0 right-0 w-[82%] max-w-xs bg-white dark:bg-[#0d1629] border-l border-slate-200 dark:border-slate-800 h-full p-4 overflow-y-auto space-y-4 shadow-2xl z-50 animate-in slide-in-from-right duration-200"
+            className="fixed inset-y-0 right-0 w-[82%] max-w-xs bg-white dark:bg-[#0d1629] border-l border-slate-200 dark:border-slate-800 h-full p-4 overflow-y-auto space-y-4 shadow-2xl z-[101] animate-in slide-in-from-right duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
@@ -563,7 +617,7 @@ export const Header: FC<HeaderProps> = ({
                 <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center font-black text-slate-950">
                   <Truck className="w-4 h-4 text-slate-950" />
                 </div>
-                <span className="font-black text-slate-900 dark:text-white text-sm">منوی سامانه حامی</span>
+                <span className="font-black text-slate-900 dark:text-white text-sm">منوی عملیات سامانه</span>
               </div>
               <button
                 type="button"
