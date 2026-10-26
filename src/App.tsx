@@ -6,6 +6,7 @@ import {
   FilterView,
   ToastMessage,
   StaffMember,
+  AttendanceNotes,
 } from './types';
 import {
   getInitialDrivers,
@@ -72,6 +73,7 @@ const STORAGE_KEY_VEHICLES = 'hamibar_vehicles_list_v1';
 const STORAGE_KEY_DRIVER_DIRECTORY = 'hamibar_driver_directory_v1';
 const STORAGE_KEY_STAFF_MEMBERS = 'hamibar_staff_members_v1';
 const STORAGE_KEY_STAFF_RECORDS = 'hamibar_staff_records_v1';
+const STORAGE_KEY_ATTENDANCE_NOTES = 'hamibar_attendance_notes_v1';
 const BACKUP_APPLIED_KEY = 'hami_backup_applied_v2';
 const PDF_SYNC_KEY = 'hamibar_fleet_pdf_14050722_sync_v4';
 
@@ -201,6 +203,41 @@ export const App: FC = () => {
     }
     return getInitialStaffAttendanceRecords();
   });
+
+  // Daily Attendance Notes state (Right-click day notes per person)
+  const [attendanceNotes, setAttendanceNotes] = useState<AttendanceNotes>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ATTENDANCE_NOTES);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return {};
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ATTENDANCE_NOTES, JSON.stringify(attendanceNotes));
+    } catch {
+      // ignore
+    }
+  }, [attendanceNotes]);
+
+  const handleUpdateAttendanceNote = (personId: string, dateKey: string, noteText: string) => {
+    setAttendanceNotes((prev) => {
+      const personNotes = { ...(prev[personId] || {}) };
+      const trimmed = noteText.trim();
+      if (!trimmed) {
+        delete personNotes[dateKey];
+      } else {
+        personNotes[dateKey] = trimmed;
+      }
+      return {
+        ...prev,
+        [personId]: personNotes,
+      };
+    });
+  };
 
   // Filter State (Attendance)
   const [filterView, setFilterView] = useState<FilterView>('all');
@@ -1946,6 +1983,9 @@ export const App: FC = () => {
                 staffMembers={staffMembers}
                 staffRecords={staffRecords}
                 vehicles={vehicles}
+                driverDirectory={driverDirectory}
+                attendanceNotes={attendanceNotes}
+                onUpdateAttendanceNote={handleUpdateAttendanceNote}
                 onAssignDriverToVehicle={handleAssignDriverToVehicle}
                 onAssignVehicleToDriver={handleAssignVehicleToDriver}
                 onNavigateToVehicleAssignment={() => setActiveTab('VEHICLE_ASSIGNMENT')}

@@ -40,8 +40,10 @@ import {
   CreditCard,
   Hash,
   Database,
+  FileText,
+  StickyNote,
 } from 'lucide-react';
-import { Driver, AttendanceRecords, AttendanceStatus, StaffMember } from '../types';
+import { Driver, AttendanceRecords, AttendanceStatus, StaffMember, AttendanceNotes } from '../types';
 import {
   toFaDigits,
   getTodayJalaali,
@@ -54,7 +56,7 @@ import {
 import { IranianPlate } from './IranianPlate';
 import { exportToExcel, exportStaffToExcel } from '../utils/excelExport';
 import { STAFF_DEPARTMENTS, StaffDepartment } from '../utils/staffSeedData';
-import { VehicleItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
+import { VehicleItem, VEHICLE_TYPE_NAMES, DriverDirectoryItem } from '../utils/fleetSeedData';
 import { AttendanceSheetPrintModal, AttendancePrintItem } from './AttendanceSheetPrintModal';
 import { LeaveCalendarPrintModal, LeaveCalendarBoardMode } from './LeaveCalendarPrintModal';
 
@@ -64,6 +66,9 @@ interface AttendanceManagementHubViewProps {
   staffMembers: StaffMember[];
   staffRecords: AttendanceRecords;
   vehicles?: VehicleItem[];
+  driverDirectory?: DriverDirectoryItem[];
+  attendanceNotes?: AttendanceNotes;
+  onUpdateAttendanceNote?: (personId: string, dateKey: string, noteText: string) => void;
   onAssignDriverToVehicle?: (vehicleId: string, driverNameOrNone: string, driverPhone?: string) => void;
   onAssignVehicleToDriver?: (driverId: string, vehiclePlateOrNone: string) => void;
   onNavigateToVehicleAssignment?: () => void;
@@ -95,6 +100,9 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
   staffMembers,
   staffRecords,
   vehicles = [],
+  driverDirectory = [],
+  attendanceNotes = {},
+  onUpdateAttendanceNote,
   onNavigateToVehicleAssignment,
   onUpdateDriverStatus,
   onUpdateStaffStatus,
@@ -272,6 +280,23 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
     onShowToast('تاریخ روی امروز تنظیم شد', 'info');
   };
 
+  // Helper to resolve start / creation date of driver or staff
+  const getPersonStartDate = (person: Driver | StaffMember): string | undefined => {
+    if ('hireDate' in person && (person as StaffMember).hireDate) {
+      return (person as StaffMember).hireDate;
+    }
+    if (person.createdAt) {
+      return person.createdAt;
+    }
+    if (driverDirectory && driverDirectory.length > 0) {
+      const dir = driverDirectory.find(
+        (d) => d.id === person.id || (d.name && person.name && d.name.trim() === person.name.trim())
+      );
+      if (dir?.joinedDate) return dir.joinedDate;
+    }
+    return undefined;
+  };
+
   // Helper to normalize status
   const getStatus = (records: AttendanceRecords, id: string, dateKey: string): AttendanceStatus => {
     const raw = records[id]?.[dateKey];
@@ -280,6 +305,68 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
     if (raw === 'ت' || raw === 'workshop') return 'workshop';
     if (raw === 'absent') return 'absent';
     return 'none';
+  };
+
+  // Day Note Modal State (Right-click on any day in Matrix or click in Cards)
+  const [dayNoteModal, setDayNoteModal] = useState<{
+    isOpen: boolean;
+    personId: string;
+    personName: string;
+    personCode: string;
+    day: number;
+    month: number;
+    year: number;
+    dateKey: string;
+    initialNote: string;
+    isStaff: boolean;
+  } | null>(null);
+  const [dayNoteInput, setDayNoteInput] = useState('');
+
+  const handleOpenDayNote = (
+    person: Driver | StaffMember,
+    day: number,
+    dateKey: string
+  ) => {
+    const existing = attendanceNotes?.[person.id]?.[dateKey] || '';
+    setDayNoteInput(existing);
+    setDayNoteModal({
+      isOpen: true,
+      personId: person.id,
+      personName: person.name,
+      personCode: person.code,
+      day,
+      month: selectedMonth,
+      year: selectedYear,
+      dateKey,
+      initialNote: existing,
+      isStaff: activeBoard === 'STAFF',
+    });
+  };
+
+  const handleSaveDayNote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dayNoteModal) return;
+    if (onUpdateAttendanceNote) {
+      onUpdateAttendanceNote(dayNoteModal.personId, dayNoteModal.dateKey, dayNoteInput);
+    }
+    if (dayNoteInput.trim()) {
+      onShowToast(
+        `نوت روز ${toFaDigits(dayNoteModal.day)} ${PERSIAN_MONTH_NAMES[dayNoteModal.month - 1]} برای «${dayNoteModal.personName}» ثبت شد.`,
+        'success'
+      );
+    } else {
+      onShowToast(`نوت روز ${toFaDigits(dayNoteModal.day)} حذف گردید.`, 'info');
+    }
+    setDayNoteModal(null);
+  };
+
+  const handleDeleteDayNote = () => {
+    if (!dayNoteModal) return;
+    if (onUpdateAttendanceNote) {
+      onUpdateAttendanceNote(dayNoteModal.personId, dayNoteModal.dateKey, '');
+    }
+    onShowToast(`نوت روز ${toFaDigits(dayNoteModal.day)} پاک شد.`, 'info');
+    setDayNoteModal(null);
   };
 
   // Drivers Statistics for the active day (do NOT mark unrecorded future days or days before creation as present)
@@ -292,7 +379,8 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
     drivers.forEach((d) => {
       // If the selected date is before the driver's creation/hire date, do not mark or count as present
-      const isBeforeStart = isDateBeforeStart(d.createdAt, selectedYear, selectedMonth, selectedDay);
+      const startDate = getPersonStartDate(d);
+      const isBeforeStart = isDateBeforeStart(startDate, selectedYear, selectedMonth, selectedDay);
       if (isBeforeStart) {
         beforeCreation++;
         return;
@@ -312,7 +400,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
     const rate = eligibleCount > 0 ? (isFutureActiveDate ? 0 : Math.round((active / eligibleCount) * 100)) : 100;
 
     return { total, present, leave, workshop, absent, active, rate, isFuture: isFutureActiveDate, beforeCreation };
-  }, [drivers, driverRecords, activeDateKey, isFutureActiveDate, selectedYear, selectedMonth, selectedDay]);
+  }, [drivers, driverRecords, activeDateKey, isFutureActiveDate, selectedYear, selectedMonth, selectedDay, driverDirectory]);
 
   // Staff Statistics for the active day (do NOT mark unrecorded future days or days before creation as present)
   const staffStats = useMemo(() => {
@@ -324,7 +412,8 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
     staffMembers.forEach((s) => {
       // If the selected date is before staff hire/creation date, do not mark or count as present
-      const isBeforeStart = isDateBeforeStart(s.hireDate || s.createdAt, selectedYear, selectedMonth, selectedDay);
+      const startDate = getPersonStartDate(s);
+      const isBeforeStart = isDateBeforeStart(startDate, selectedYear, selectedMonth, selectedDay);
       if (isBeforeStart) {
         beforeCreation++;
         return;
@@ -1337,13 +1426,15 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   {filteredDrivers.map((driver) => {
                     const st = getStatus(driverRecords, driver.id, activeDateKey);
-                    const isBeforeCreation = isDateBeforeStart(driver.createdAt, selectedYear, selectedMonth, selectedDay);
+                    const driverStartDate = getPersonStartDate(driver);
+                    const isBeforeCreation = isDateBeforeStart(driverStartDate, selectedYear, selectedMonth, selectedDay);
                     const isPresent = !isBeforeCreation && !isFutureActiveDate && st === 'none';
                     const isLeave = st === 'leave';
                     const isWorkshop = st === 'workshop';
                     const isAbsent = st === 'absent';
                     const isDriverActive = driver.status !== 'inactive';
                     const isDriverAnimating = animatingPersonId === driver.id;
+                    const activeDayNote = attendanceNotes?.[driver.id]?.[activeDateKey];
 
                     return (
                       <div
@@ -1470,9 +1561,9 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                               {/* Current Status Pill with Fast Smooth CSS Animation */}
                               <div key={`${st}-${isDriverAnimating}-${isBeforeCreation}`} className={isDriverAnimating ? 'animate-status-switch' : 'animate-status-pop'}>
                                 {isBeforeCreation ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800/80 text-slate-400 border border-slate-700/60" title={`تاریخ شروع به کار: ${driver.createdAt || 'نامشخص'}`}>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800/80 text-slate-400 border border-slate-700/60" title={`تاریخ ثبت در سامانه: ${toFaDigits(driverStartDate || 'نامشخص')}`}>
                                     <Clock className="w-3 h-3 text-slate-500" />
-                                    قبل از شروع به کار (ثبت‌نشده)
+                                    بدون حضور (قبل از ایجاد کاربر)
                                   </span>
                                 ) : isFutureActiveDate && st === 'none' ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800/70 text-slate-400 border border-slate-700/60">
@@ -1551,26 +1642,55 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                           })()}
                         </div>
 
+                        {/* Day Note Display if exists */}
+                        {activeDayNote && (
+                          <div className="bg-amber-500/10 border border-amber-500/25 rounded-lg p-2 mb-2 flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-1.5 text-[11px] text-amber-200">
+                              <StickyNote className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                              <span className="leading-relaxed break-words">{activeDayNote}</span>
+                            </div>
+                            <button
+                              onClick={() => handleOpenDayNote(driver, selectedDay, activeDateKey)}
+                              className="text-[10px] text-amber-300 hover:text-white underline shrink-0 font-medium cursor-pointer"
+                            >
+                              ویرایش
+                            </button>
+                          </div>
+                        )}
+
                         {/* Bottom Actions: Clean 4-Button Status Setter (حاضر / مرخصی / تعمیرگاه / غایب) */}
                         <div>
                           <div className="text-[10px] text-slate-400 mb-1.5 font-medium flex items-center justify-between">
                             <span>تعیین وضعیت تاریخ {toFaDigits(selectedDay)} {PERSIAN_MONTH_NAMES[selectedMonth - 1]}:</span>
-                            <button
-                              onClick={() =>
-                                setEditingPerson({
-                                  type: 'driver',
-                                  id: driver.id,
-                                  name: driver.name,
-                                  code: driver.code,
-                                  phone: driver.phone,
-                                  status: st,
-                                })
-                              }
-                              className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5"
-                            >
-                              <Edit className="w-2.5 h-2.5" />
-                              جزئیات
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleOpenDayNote(driver, selectedDay, activeDateKey)}
+                                className={`text-[10px] flex items-center gap-1 transition-colors cursor-pointer ${
+                                  activeDayNote ? 'text-amber-400 hover:text-amber-300' : 'text-slate-400 hover:text-amber-300'
+                                }`}
+                                title="ثبت یا ویرایش یادداشت برای این روز (همچنین با کلیک راست در ماتریس)"
+                              >
+                                <FileText className="w-2.5 h-2.5 text-amber-400" />
+                                {activeDayNote ? 'ویرایش نوت' : 'ثبت نوت'}
+                              </button>
+                              <span className="text-slate-600">|</span>
+                              <button
+                                onClick={() =>
+                                  setEditingPerson({
+                                    type: 'driver',
+                                    id: driver.id,
+                                    name: driver.name,
+                                    code: driver.code,
+                                    phone: driver.phone,
+                                    status: st,
+                                  })
+                                }
+                                className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <Edit className="w-2.5 h-2.5" />
+                                جزئیات
+                              </button>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-4 gap-1.5 text-[11px]">
@@ -1650,13 +1770,15 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   {filteredStaff.map((staff) => {
                     const st = getStatus(staffRecords, staff.id, activeDateKey);
-                    const isBeforeCreation = isDateBeforeStart(staff.hireDate || staff.createdAt, selectedYear, selectedMonth, selectedDay);
+                    const staffStartDate = getPersonStartDate(staff);
+                    const isBeforeCreation = isDateBeforeStart(staffStartDate, selectedYear, selectedMonth, selectedDay);
                     const isPresent = !isBeforeCreation && !isFutureActiveDate && st === 'none';
                     const isLeave = st === 'leave';
                     const isWorkshop = st === 'workshop';
                     const isAbsent = st === 'absent';
                     const isStaffActive = staff.status !== 'inactive';
                     const isStaffAnimating = animatingPersonId === staff.id;
+                    const activeDayNote = attendanceNotes?.[staff.id]?.[activeDateKey];
 
                     const shiftBadge =
                       staff.shift === 'night'
@@ -1779,9 +1901,9 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                               {/* Current Status Badge with Fast Smooth CSS Animation */}
                               <div key={`${st}-${isStaffAnimating}-${isBeforeCreation}`} className={isStaffAnimating ? 'animate-status-switch' : 'animate-status-pop'}>
                                 {isBeforeCreation ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800/80 text-slate-400 border border-slate-700/60" title={`تاریخ شروع به کار: ${staff.hireDate || staff.createdAt || 'نامشخص'}`}>
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800/80 text-slate-400 border border-slate-700/60" title={`تاریخ استخدام/ثبت: ${toFaDigits(staffStartDate || 'نامشخص')}`}>
                                     <Clock className="w-3 h-3 text-slate-500" />
-                                    قبل از شروع به کار (ثبت‌نشده)
+                                    بدون حضور (قبل از ایجاد کاربر)
                                   </span>
                                 ) : isFutureActiveDate && st === 'none' ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800/70 text-slate-400 border border-slate-700/60">
@@ -1851,30 +1973,59 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                           </div>
                         </div>
 
+                        {/* Day Note Display if exists */}
+                        {activeDayNote && (
+                          <div className="bg-amber-500/10 border border-amber-500/25 rounded-lg p-2 mb-2 flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-1.5 text-[11px] text-amber-200">
+                              <StickyNote className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                              <span className="leading-relaxed break-words">{activeDayNote}</span>
+                            </div>
+                            <button
+                              onClick={() => handleOpenDayNote(staff, selectedDay, activeDateKey)}
+                              className="text-[10px] text-amber-300 hover:text-white underline shrink-0 font-medium cursor-pointer"
+                            >
+                              ویرایش
+                            </button>
+                          </div>
+                        )}
+
                         {/* Bottom Actions: Clean 4-Button Status Setter (حاضر / مرخصی / استراحت / غایب) */}
                         <div>
                           <div className="text-[10px] text-slate-400 mb-1.5 font-medium flex items-center justify-between">
                             <span>تعیین وضعیت تاریخ {toFaDigits(selectedDay)} {PERSIAN_MONTH_NAMES[selectedMonth - 1]}:</span>
-                            <button
-                              onClick={() =>
-                                setEditingPerson({
-                                  type: 'staff',
-                                  id: staff.id,
-                                  name: staff.name,
-                                  code: staff.code,
-                                  phone: staff.phone,
-                                  entryTime: staff.entryTime,
-                                  exitTime: staff.exitTime,
-                                  missionsCount: staff.missionsCountToday || 0,
-                                  notes: staff.notes,
-                                  status: st,
-                                })
-                              }
-                              className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5"
-                            >
-                              <Edit className="w-2.5 h-2.5" />
-                              تنظیم ساعات و یادداشت
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleOpenDayNote(staff, selectedDay, activeDateKey)}
+                                className={`text-[10px] flex items-center gap-1 transition-colors cursor-pointer ${
+                                  activeDayNote ? 'text-amber-400 hover:text-amber-300' : 'text-slate-400 hover:text-amber-300'
+                                }`}
+                                title="ثبت یا ویرایش یادداشت برای این روز (همچنین با کلیک راست در ماتریس)"
+                              >
+                                <FileText className="w-2.5 h-2.5 text-amber-400" />
+                                {activeDayNote ? 'ویرایش نوت' : 'ثبت نوت'}
+                              </button>
+                              <span className="text-slate-600">|</span>
+                              <button
+                                onClick={() =>
+                                  setEditingPerson({
+                                    type: 'staff',
+                                    id: staff.id,
+                                    name: staff.name,
+                                    code: staff.code,
+                                    phone: staff.phone,
+                                    entryTime: staff.entryTime,
+                                    exitTime: staff.exitTime,
+                                    missionsCount: staff.missionsCountToday || 0,
+                                    notes: staff.notes,
+                                    status: st,
+                                  })
+                                }
+                                className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <Edit className="w-2.5 h-2.5" />
+                                ساعات/وظیفه
+                              </button>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-4 gap-1.5 text-[11px]">
@@ -1951,7 +2102,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                 ماتریس حضور و غیاب ماهانه {PERSIAN_MONTH_NAMES[selectedMonth - 1]} {toFaDigits(selectedYear)}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                برای تغییر وضعیت هر روز، روی خانه مورد نظر کلیک نمایید.
+                برای تغییر وضعیت هر روز کلیک کنید. با <span className="text-amber-400 font-bold">کلیک راست</span> روی هر روز می‌توانید یادداشت (نوت) ثبت نمایید.
               </p>
             </div>
 
@@ -1988,10 +2139,16 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                 روزهای پیش‌رو (خالی)
               </span>
               <span className="flex items-center gap-1.5 text-slate-500">
-                <span className="w-3 h-3 rounded bg-slate-900/80 border border-dotted border-slate-700/60 text-slate-600 flex items-center justify-center text-[8px]">
-                  —
+                <span className="w-3 h-3 rounded bg-[#091122]/40 border border-slate-800 text-slate-600 flex items-center justify-center text-[8px]">
+                  &nbsp;
                 </span>
-                قبل از تاریخ شروع/استخدام
+                بدون حضور (قبل از ایجاد کاربر)
+              </span>
+              <span className="flex items-center gap-1.5 text-amber-300 font-medium">
+                <span className="w-3 h-3 rounded bg-amber-500/25 border border-amber-400 text-amber-300 flex items-center justify-center text-[9px] font-bold">
+                  ✎
+                </span>
+                کلیک راست: ثبت نوت روز
               </span>
             </div>
           </div>
@@ -2198,16 +2355,15 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                       {/* Days */}
                       {Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1).map((day) => {
                         const isFuture = isDayInFuture(day);
-                        const personStartDate =
-                          activeBoard === 'DRIVERS'
-                            ? (person as Driver).createdAt
-                            : ((person as StaffMember).hireDate || (person as StaffMember).createdAt);
+                        const personStartDate = getPersonStartDate(person);
                         const isBeforeCreation = isDateBeforeStart(personStartDate, selectedYear, selectedMonth, day);
 
                         if (!isFuture && !isBeforeCreation) elapsedDaysCount++;
 
                         const dateKey = formatPersianDateKey(selectedYear, selectedMonth, day);
                         const st = getStatus(records, person.id, dateKey);
+                        const dayNote = attendanceNotes?.[person.id]?.[dateKey];
+                        const hasNote = Boolean(dayNote && dayNote.trim().length > 0);
 
                         // Count statuses (do NOT mark unrecorded future days OR days before creation as present!)
                         if (isBeforeCreation) {
@@ -2231,7 +2387,10 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                         // On past/today: none (present) -> leave -> workshop -> absent -> none
                         const handleCellClick = () => {
                           if (isBeforeCreation) {
-                            onShowToast(`این روز قبل از تاریخ ایجاد/استخدام (${toFaDigits(personStartDate || '---')}) است`, 'info');
+                            onShowToast(
+                              `این روز قبل از ایجاد کاربر در سامانه (${toFaDigits(personStartDate || '---')}) است. برای ثبت یادداشت کلیک راست کنید.`,
+                              'info'
+                            );
                             return;
                           }
 
@@ -2268,14 +2427,23 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                           <td
                             key={day}
                             onClick={handleCellClick}
-                            className={`p-0.5 ${isBeforeCreation ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'} transition-colors group/cell ${
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleOpenDayNote(person, day, dateKey);
+                            }}
+                            className={`p-0.5 ${
+                              isBeforeCreation
+                                ? 'cursor-context-menu opacity-25 hover:opacity-75'
+                                : 'cursor-pointer'
+                            } transition-colors group/cell ${
                               isSelectedDay ? 'bg-blue-600/10' : ''
                             } ${isCellAnimating ? 'bg-blue-500/20 ring-1 ring-blue-400/50' : ''}`}
                             title={
                               isBeforeCreation
-                                ? `${person.name} - روز ${toFaDigits(day)} ${PERSIAN_MONTH_NAMES[selectedMonth - 1]} - قبل از تاریخ ثبت/شروع به کار (${toFaDigits(personStartDate || '---')})`
+                                ? `${person.name} - روز ${toFaDigits(day)} ${PERSIAN_MONTH_NAMES[selectedMonth - 1]} - بدون حضور (قبل از ایجاد کاربر در سامانه: ${toFaDigits(personStartDate || '---')})${hasNote ? `\n📝 یادداشت روز: ${dayNote}` : '\n(برای ثبت یا ویرایش نوت کلیک راست کنید)'}`
                                 : isCellEmptyFuture
-                                ? `${person.name} - روز ${toFaDigits(day)} ${PERSIAN_MONTH_NAMES[selectedMonth - 1]} - روز پیش‌رو (خالی / برای ثبت مرخصی کلیک کنید)`
+                                ? `${person.name} - روز ${toFaDigits(day)} ${PERSIAN_MONTH_NAMES[selectedMonth - 1]} - روز پیش‌رو (خالی)${hasNote ? `\n📝 یادداشت روز: ${dayNote}` : '\n(برای ثبت نوت کلیک راست کنید)'}`
                                 : `${person.name} - روز ${toFaDigits(day)} ${PERSIAN_MONTH_NAMES[selectedMonth - 1]} - وضعیت: ${
                                     st === 'none'
                                       ? 'حاضر'
@@ -2284,18 +2452,18 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                                       : st === 'workshop'
                                       ? (activeBoard === 'DRIVERS' ? 'تعمیرگاه' : 'استراحت')
                                       : 'غایب'
-                                  }`
+                                  }${hasNote ? `\n📝 یادداشت روز: ${dayNote}` : '\n(برای ثبت نوت کلیک راست کنید)'}`
                             }
                           >
                             <div
-                              key={`${st}-${isCellAnimating}-${isCellEmptyFuture}-${isBeforeCreation}`}
-                              className={`w-7 h-7 mx-auto rounded flex items-center justify-center text-[10px] font-bold matrix-status-cell ${
+                              key={`${st}-${isCellAnimating}-${isCellEmptyFuture}-${isBeforeCreation}-${hasNote}`}
+                              className={`w-7 h-7 mx-auto rounded flex items-center justify-center text-[10px] font-bold relative matrix-status-cell ${
                                 isCellAnimating
                                   ? 'animate-status-switch ring-2 ring-blue-400/80 shadow-md scale-110'
                                   : 'animate-status-pop'
                               } ${
                                 isBeforeCreation
-                                  ? 'bg-slate-900/60 text-slate-600 border border-dotted border-slate-700/60'
+                                  ? 'bg-transparent text-transparent hover:bg-slate-800/40'
                                   : isCellEmptyFuture
                                   ? 'bg-[#091122]/40 text-slate-600 border border-dashed border-slate-800/80 hover:border-slate-600 hover:bg-slate-800/50'
                                   : st === 'none'
@@ -2315,9 +2483,17 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                                     }`
                               }`}
                             >
-                              {isBeforeCreation ? (
-                                <span className="text-[10px] text-slate-600 font-mono">—</span>
-                              ) : isCellEmptyFuture ? (
+                              {/* Amber Note Pin */}
+                              {hasNote && (
+                                <span
+                                  className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-[#091120] shadow flex items-center justify-center text-[7px] text-slate-950 font-black z-10 animate-pulse"
+                                  title={`یادداشت روز: ${dayNote}`}
+                                >
+                                  ✎
+                                </span>
+                              )}
+
+                              {isBeforeCreation ? null : isCellEmptyFuture ? (
                                 <span className="opacity-0 group-hover/cell:opacity-40 text-[9px] text-slate-500">-</span>
                               ) : st === 'none' ? (
                                 '✓'
@@ -3644,6 +3820,119 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
           onClose={() => setIsPrintModalOpen(false)}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* Day Note Modal (Opened via right-click in Matrix or button in Cards) */}
+      {dayNoteModal && dayNoteModal.isOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setDayNoteModal(null)}
+        >
+          <div
+            className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 border-b border-[#1e2f52] bg-[#0a1222] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                  <StickyNote className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">
+                    ثبت یادداشت روزانه
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {dayNoteModal.personName} {dayNoteModal.personCode ? `(کد: ${toFaDigits(dayNoteModal.personCode)})` : ''} • {toFaDigits(dayNoteModal.day)} {PERSIAN_MONTH_NAMES[dayNoteModal.month - 1]} {toFaDigits(dayNoteModal.year)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDayNoteModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleSaveDayNote} className="p-4 space-y-3.5">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  متن یادداشت / نوت:
+                </label>
+                <textarea
+                  value={dayNoteInput}
+                  onChange={(e) => setDayNoteInput(e.target.value)}
+                  placeholder="مثال: تاخیر با هماهنگی، ماموریت خارج از شهر، اضافه کار، کسری کارکرد، استعلاجی، شیفت کمکی..."
+                  rows={4}
+                  autoFocus
+                  className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30 leading-relaxed resize-none"
+                />
+              </div>
+
+              {/* Quick Tags for speed */}
+              <div>
+                <div className="text-[10px] text-slate-400 mb-1.5 font-medium">برچسب‌های سریع:</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {['ماموریت', 'مرخصی ساعتی', 'تاخیر با هماهنگی', 'استعلاجی', 'کسری کارکرد', 'کشیک شب', 'تعویض شیفت'].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setDayNoteInput((prev) => (prev ? `${prev} - ${tag}` : tag));
+                      }}
+                      className="px-2 py-0.5 rounded text-[10px] bg-slate-800/80 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/40 transition cursor-pointer"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hint */}
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-[11px] text-amber-200/90 leading-relaxed flex items-start gap-2">
+                <span className="text-amber-400 font-bold shrink-0">💡 راهنما:</span>
+                <span>
+                  این یادداشت در ماتریس با نشان <span className="text-amber-300 font-bold">✎</span> مشخص شده و با نگه داشتن موس روی روز قابل مشاهده است. همچنین با کلیک راست در هر زمان می‌توانید آن را ویرایش یا حذف کنید.
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-2 border-t border-[#1e2f52]">
+                {dayNoteModal.initialNote ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteDayNote}
+                    className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    حذف نوت
+                  </button>
+                ) : (
+                  <span />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDayNoteModal(null)}
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
+                  >
+                    انصراف
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md shadow-amber-900/40 flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    ذخیره یادداشت
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* A4 Portrait Monthly Leave Calendar Print Modal (Drivers & Staff Separately) */}

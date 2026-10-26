@@ -87,6 +87,8 @@ export interface StaffMember {
 
 export type AttendanceRecords = Record<string, Record<string, AttendanceStatus>>;
 
+export type AttendanceNotes = Record<string, Record<string, string>>;
+
 export interface DailySummary {
   day: number;
   weekday: string;
