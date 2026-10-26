@@ -741,7 +741,7 @@ export function decodeBackupData(payload: any = RAW_BACKUP_PAYLOAD): DecodedBack
 
         const dirItem = driverDirectoryList.find((dir) => dir.id === a.driverId);
         if (dirItem) {
-          dirItem.assignedVehicles = [`خودرو ${vObj.code} (${vObj.plate})`];
+          dirItem.assignedVehicles = [vObj.plate];
         }
       }
     }

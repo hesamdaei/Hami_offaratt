@@ -419,22 +419,44 @@ export const App: FC = () => {
     }
   }, []);
 
-  // 1. Auto-sync: Ensure every active driver in driverDirectory is present in drivers list (for Attendance Board)
+  const normalizeDriverName = useCallback((name?: string): string => {
+    if (!name) return '';
+    return name
+      .replace(/ي/g, 'ی')
+      .replace(/ك/g, 'ک')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  const isAssignedDriverName = useCallback(
+    (name?: string): boolean => {
+      const clean = normalizeDriverName(name);
+      return Boolean(clean && clean !== 'بدون راننده' && clean !== 'NONE' && clean !== 'فاقد راننده');
+    },
+    [normalizeDriverName]
+  );
+
+  // 1. Auto-sync: Ensure every active driver in driverDirectory or vehicles is present in drivers list (for Attendance Board)
   useEffect(() => {
-    const existingNames = new Set(drivers.map((d) => d.name));
+    const existingNormNames = new Set(drivers.map((d) => normalizeDriverName(d.name)));
     const missingActiveDrivers: Driver[] = [];
 
     driverDirectory.forEach((dirDriver) => {
+      const normName = normalizeDriverName(dirDriver.name);
       const isDirActive = dirDriver.status !== 'inactive' && dirDriver.status !== 'INACTIVE';
-      if (isDirActive && !existingNames.has(dirDriver.name)) {
-        const assignedVehicle = vehicles.find((v) => v.driverName === dirDriver.name);
-        const plate = assignedVehicle?.plateNumber || dirDriver.assignedVehicles?.[0] || '';
+      if (isDirActive && normName && !existingNormNames.has(normName)) {
+        existingNormNames.add(normName);
+        const assignedVehicle = vehicles.find(
+          (v) => isAssignedDriverName(v.driverName) && normalizeDriverName(v.driverName) === normName
+        );
+        const plate = assignedVehicle ? assignedVehicle.plateNumber : '';
+        const vehicleCode = assignedVehicle ? String(assignedVehicle.code) : dirDriver.code || dirDriver.personnelCode || '';
         missingActiveDrivers.push({
           id: dirDriver.id || `drv-sync-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          name: dirDriver.name,
-          code: dirDriver.code || dirDriver.personnelCode || '',
-          personnelCode: dirDriver.personnelCode || dirDriver.code || '',
-          phone: dirDriver.phone || '',
+          name: dirDriver.name.trim(),
+          code: vehicleCode,
+          personnelCode: dirDriver.personnelCode || dirDriver.code || vehicleCode,
+          phone: dirDriver.phone || assignedVehicle?.driverPhone || '',
           status: 'active',
           vehiclePlate: plate,
           createdAt: dirDriver.joinedDate || formatPersianDateKey(today.jy, today.jm, today.jd),
@@ -442,29 +464,84 @@ export const App: FC = () => {
       }
     });
 
+    vehicles.forEach((v) => {
+      const normName = normalizeDriverName(v.driverName);
+      if (isAssignedDriverName(v.driverName) && normName && !existingNormNames.has(normName)) {
+        existingNormNames.add(normName);
+        missingActiveDrivers.push({
+          id: `drv-veh-${v.id}`,
+          name: v.driverName.trim(),
+          code: String(v.code),
+          personnelCode: v.driverCode || String(v.code),
+          phone: v.driverPhone || '',
+          status: 'active',
+          vehiclePlate: v.plateNumber,
+          createdAt: formatPersianDateKey(today.jy, today.jm, today.jd),
+        });
+      }
+    });
+
     if (missingActiveDrivers.length > 0) {
       setDrivers((prev) => [...prev, ...missingActiveDrivers]);
     }
-  }, [driverDirectory, vehicles, drivers, today]);
+  }, [driverDirectory, vehicles, drivers, today, normalizeDriverName, isAssignedDriverName]);
 
-  // 2. Auto-sync: Synchronize vehiclePlate in drivers list whenever vehicles list changes
+  // 2. Auto-sync: Synchronize vehiclePlate & vehicle code in drivers and driverDirectory whenever vehicles list changes
   useEffect(() => {
     setDrivers((prevDrivers) => {
       let changed = false;
       const updated = prevDrivers.map((d) => {
+        const normName = normalizeDriverName(d.name);
         const assignedVehicle = vehicles.find(
-          (v) => v.driverName && v.driverName === d.name && v.driverName !== 'بدون راننده'
+          (v) => isAssignedDriverName(v.driverName) && normalizeDriverName(v.driverName) === normName
         );
         const expectedPlate = assignedVehicle ? assignedVehicle.plateNumber : '';
-        if (expectedPlate && d.vehiclePlate !== expectedPlate) {
+        const expectedCode = assignedVehicle ? String(assignedVehicle.code) : d.code;
+        const preservedPersonnelCode = d.personnelCode || d.code;
+
+        if ((d.vehiclePlate || '') !== expectedPlate || d.code !== expectedCode) {
           changed = true;
-          return { ...d, vehiclePlate: expectedPlate };
+          return {
+            ...d,
+            vehiclePlate: expectedPlate,
+            code: expectedCode,
+            personnelCode: preservedPersonnelCode,
+          };
         }
         return d;
       });
       return changed ? updated : prevDrivers;
     });
-  }, [vehicles]);
+
+    setDriverDirectory((prevDir) => {
+      let dirChanged = false;
+      const updatedDir = prevDir.map((dir) => {
+        const normName = normalizeDriverName(dir.name);
+        const matchedVehicles = vehicles.filter(
+          (v) => isAssignedDriverName(v.driverName) && normalizeDriverName(v.driverName) === normName
+        );
+        const expectedPlates = matchedVehicles.map((v) => v.plateNumber);
+        const expectedCode = matchedVehicles.length > 0 ? String(matchedVehicles[0].code) : dir.code;
+        const currentPlates = dir.assignedVehicles || [];
+
+        const platesDiffer =
+          currentPlates.length !== expectedPlates.length ||
+          currentPlates.some((p, i) => p !== expectedPlates[i]);
+
+        if (platesDiffer || dir.code !== expectedCode) {
+          dirChanged = true;
+          return {
+            ...dir,
+            assignedVehicles: expectedPlates,
+            code: expectedCode,
+            personnelCode: dir.personnelCode || dir.code,
+          };
+        }
+        return dir;
+      });
+      return dirChanged ? updatedDir : prevDir;
+    });
+  }, [vehicles, normalizeDriverName, isAssignedDriverName]);
 
   // Initial load from Central Network Database on startup
   useEffect(() => {
@@ -874,27 +951,74 @@ export const App: FC = () => {
   const handleAddDriver = (newDriver: (Omit<Driver, 'id'> & { id?: string }) | Driver) => {
     const todayStr = formatPersianDateKey(today.jy, today.jm, today.jd);
     const id = newDriver.id || `driver-${Date.now()}`;
+    const cleanPlate = newDriver.vehiclePlate?.trim() || '';
+    const matchedVehicle = cleanPlate
+      ? vehicles.find((v) => v.plateNumber === cleanPlate || String(v.code) === cleanPlate)
+      : undefined;
+
     const fullDriver: Driver = {
       ...newDriver,
       id,
-      code: newDriver.code || newDriver.personnelCode || id.slice(-4),
+      name: newDriver.name.trim(),
+      code: matchedVehicle ? String(matchedVehicle.code) : newDriver.code || newDriver.personnelCode || id.slice(-4),
+      personnelCode: newDriver.personnelCode || newDriver.code || id.slice(-4),
+      vehiclePlate: matchedVehicle ? matchedVehicle.plateNumber : cleanPlate,
       createdAt: newDriver.createdAt || todayStr,
       status: newDriver.status || 'active',
     };
 
     setDrivers((prev) => [fullDriver, ...prev]);
-    // Also sync to directory
-    setDriverDirectory((prev) => [
-      {
-        id: fullDriver.id,
-        name: fullDriver.name,
-        status: fullDriver.status,
-        joinedDate: fullDriver.createdAt || todayStr,
-        rating: 5.0,
-        tripsCount: 0,
-      },
-      ...prev,
-    ]);
+
+    // Sync to directory without duplicates
+    setDriverDirectory((prev) => {
+      const norm = normalizeDriverName(fullDriver.name);
+      if (prev.some((d) => normalizeDriverName(d.name) === norm)) {
+        return prev.map((d) =>
+          normalizeDriverName(d.name) === norm
+            ? {
+                ...d,
+                phone: fullDriver.phone || d.phone,
+                assignedVehicles: fullDriver.vehiclePlate ? [fullDriver.vehiclePlate] : d.assignedVehicles,
+              }
+            : d
+        );
+      }
+      return [
+        {
+          id: fullDriver.id,
+          name: fullDriver.name,
+          code: fullDriver.code,
+          personnelCode: fullDriver.personnelCode,
+          phone: fullDriver.phone || '',
+          nationalCode: fullDriver.nationalId || '0012345678',
+          licenseNumber: `LIC-${fullDriver.code}`,
+          driverType: 'EMPLOYED',
+          status: fullDriver.status === 'inactive' ? 'INACTIVE' : 'AVAILABLE',
+          joinedDate: fullDriver.createdAt || todayStr,
+          assignedVehicles: fullDriver.vehiclePlate ? [fullDriver.vehiclePlate] : [],
+          rating: 5.0,
+          tripsCount: 0,
+          totalTrips: 0,
+        },
+        ...prev,
+      ];
+    });
+
+    if (matchedVehicle) {
+      setVehicles((prev) =>
+        prev.map((v) =>
+          v.id === matchedVehicle.id
+            ? {
+                ...v,
+                driverName: fullDriver.name,
+                driverPhone: fullDriver.phone || v.driverPhone || '',
+                driverCode: String(matchedVehicle.code),
+              }
+            : v
+        )
+      );
+    }
+
     if (currentUser) {
       recordAuditLog(currentUser, {
         action: 'DRIVER_CREATE',
@@ -910,37 +1034,99 @@ export const App: FC = () => {
   };
 
   const handleUpdateDriver = (updatedDriver: Driver) => {
-    setDrivers((prev) => prev.map((d) => (d.id === updatedDriver.id ? updatedDriver : d)));
+    const oldDriver = drivers.find((d) => d.id === updatedDriver.id);
+    const cleanPlate = updatedDriver.vehiclePlate?.trim() || '';
+    const matchedVehicle = cleanPlate
+      ? vehicles.find((v) => v.plateNumber === cleanPlate || String(v.code) === cleanPlate)
+      : undefined;
+
+    const finalDriver: Driver = {
+      ...updatedDriver,
+      name: updatedDriver.name.trim(),
+      vehiclePlate: matchedVehicle ? matchedVehicle.plateNumber : cleanPlate,
+      code: matchedVehicle ? String(matchedVehicle.code) : updatedDriver.code,
+      personnelCode: updatedDriver.personnelCode || updatedDriver.code,
+    };
+
+    setDrivers((prev) => prev.map((d) => (d.id === finalDriver.id ? finalDriver : d)));
+
+    const oldNormName = normalizeDriverName(oldDriver?.name);
+    const newNormName = normalizeDriverName(finalDriver.name);
+
     setDriverDirectory((prev) =>
       prev.map((d) =>
-        d.id === updatedDriver.id
+        d.id === finalDriver.id || normalizeDriverName(d.name) === oldNormName
           ? {
               ...d,
-              name: updatedDriver.name,
-              status: updatedDriver.status,
+              name: finalDriver.name,
+              code: finalDriver.code,
+              phone: finalDriver.phone || d.phone,
+              status: finalDriver.status === 'inactive' ? 'INACTIVE' : 'AVAILABLE',
+              assignedVehicles: finalDriver.vehiclePlate ? [finalDriver.vehiclePlate] : [],
             }
           : d
       )
     );
+
+    // Also keep vehicles in sync if name or vehiclePlate changed
+    setVehicles((prev) =>
+      prev.map((v) => {
+        if (matchedVehicle && v.id === matchedVehicle.id) {
+          return {
+            ...v,
+            driverName: finalDriver.name,
+            driverPhone: finalDriver.phone || v.driverPhone || '',
+            driverCode: String(v.code),
+          };
+        }
+        const vNorm = normalizeDriverName(v.driverName);
+        if (vNorm === oldNormName || vNorm === newNormName) {
+          if (!cleanPlate) {
+            return { ...v, driverName: 'بدون راننده', driverPhone: '', driverCode: '' };
+          }
+          if (matchedVehicle && v.id !== matchedVehicle.id) {
+            return { ...v, driverName: 'بدون راننده', driverPhone: '', driverCode: '' };
+          }
+          return {
+            ...v,
+            driverName: finalDriver.name,
+            driverPhone: finalDriver.phone || v.driverPhone || '',
+          };
+        }
+        return v;
+      })
+    );
+
     if (currentUser) {
       recordAuditLog(currentUser, {
         action: 'DRIVER_UPDATE',
         module: 'DRIVERS',
-        title: `ویرایش مشخصات راننده: ${updatedDriver.name}`,
-        description: `اطلاعات راننده «${updatedDriver.name}» توسط ${currentUser.fullName} به‌روزرسانی شد.`,
-        targetId: updatedDriver.id,
-        targetName: updatedDriver.name,
+        title: `ویرایش مشخصات راننده: ${finalDriver.name}`,
+        description: `اطلاعات راننده «${finalDriver.name}» توسط ${currentUser.fullName} به‌روزرسانی شد.`,
+        targetId: finalDriver.id,
+        targetName: finalDriver.name,
         severity: 'INFO',
       });
     }
-    showToast(`اطلاعات راننده "${updatedDriver.name}" به‌روز شد.`, 'success');
+    showToast(`اطلاعات راننده "${finalDriver.name}" به‌روز شد.`, 'success');
   };
 
   const handleDeleteDriver = (driverId: string) => {
     const target = drivers.find((d) => d.id === driverId);
     if (!target) return;
     if (window.confirm(`آیا از حذف راننده "${target.name}" از تابلوی حضور و غیاب اطمینان دارید؟`)) {
+      const targetNorm = normalizeDriverName(target.name);
       setDrivers((prev) => prev.filter((d) => d.id !== driverId));
+      setDriverDirectory((prev) =>
+        prev.filter((d) => d.id !== driverId && normalizeDriverName(d.name) !== targetNorm)
+      );
+      setVehicles((prev) =>
+        prev.map((v) =>
+          normalizeDriverName(v.driverName) === targetNorm
+            ? { ...v, driverName: 'بدون راننده', driverPhone: '', driverCode: '' }
+            : v
+        )
+      );
       setRecords((prev) => {
         const copy = { ...prev };
         delete copy[driverId];
@@ -962,10 +1148,13 @@ export const App: FC = () => {
   };
 
   const handleToggleDriverActive = (driverId: string) => {
+    const target = drivers.find((d) => d.id === driverId);
+    const targetNorm = normalizeDriverName(target?.name);
+    const nextStatus = target?.status === 'inactive' ? 'active' : 'inactive';
+
     setDrivers((prev) =>
       prev.map((d) => {
         if (d.id === driverId) {
-          const nextStatus = d.status === 'inactive' ? 'active' : 'inactive';
           if (currentUser) {
             recordAuditLog(currentUser, {
               action: 'DRIVER_TOGGLE_ACTIVE',
@@ -988,6 +1177,16 @@ export const App: FC = () => {
         return d;
       })
     );
+
+    if (targetNorm) {
+      setDriverDirectory((prev) =>
+        prev.map((d) =>
+          d.id === driverId || normalizeDriverName(d.name) === targetNorm
+            ? { ...d, status: nextStatus === 'inactive' ? 'INACTIVE' : 'AVAILABLE' }
+            : d
+        )
+      );
+    }
   };
 
   // Staff Handlers
@@ -1152,12 +1351,76 @@ export const App: FC = () => {
 
   // Directory handlers
   const handleAddDirectoryDriver = (item: DriverDirectoryItem) => {
-    setDriverDirectory((prev) => [item, ...prev]);
-    showToast(`پرونده راننده "${item.name}" ثبت شد.`, 'success');
+    const todayStr = formatPersianDateKey(today.jy, today.jm, today.jd);
+    const assignedPlate = item.assignedVehicles?.[0] || '';
+    const matchedVeh = assignedPlate
+      ? vehicles.find((v) => v.plateNumber === assignedPlate)
+      : undefined;
+
+    const finalItem: DriverDirectoryItem = {
+      ...item,
+      name: item.name.trim(),
+      code: matchedVeh ? String(matchedVeh.code) : item.code,
+      personnelCode: item.personnelCode || item.code,
+    };
+
+    setDriverDirectory((prev) => [finalItem, ...prev]);
+
+    // Also add or update in drivers (Attendance Board)
+    setDrivers((prev) => {
+      const norm = normalizeDriverName(finalItem.name);
+      if (prev.some((d) => normalizeDriverName(d.name) === norm)) {
+        return prev.map((d) =>
+          normalizeDriverName(d.name) === norm
+            ? {
+                ...d,
+                code: finalItem.code || d.code,
+                phone: finalItem.phone || d.phone,
+                vehiclePlate: assignedPlate || d.vehiclePlate,
+                status: finalItem.status === 'INACTIVE' || finalItem.status === 'inactive' ? 'inactive' : 'active',
+              }
+            : d
+        );
+      }
+      return [
+        {
+          id: finalItem.id,
+          name: finalItem.name,
+          code: finalItem.code || '',
+          personnelCode: finalItem.personnelCode || finalItem.code || '',
+          phone: finalItem.phone || '',
+          status: finalItem.status === 'INACTIVE' || finalItem.status === 'inactive' ? 'inactive' : 'active',
+          vehiclePlate: assignedPlate,
+          createdAt: finalItem.joinedDate || todayStr,
+        },
+        ...prev,
+      ];
+    });
+
+    if (matchedVeh) {
+      handleAssignDriverToVehicle(matchedVeh.id, finalItem.name, finalItem.phone);
+    } else {
+      showToast(`پرونده راننده "${finalItem.name}" ثبت شد.`, 'success');
+    }
   };
 
   const handleUpdateDirectoryDriver = (item: DriverDirectoryItem) => {
+    const oldDir = driverDirectory.find((d) => d.id === item.id);
+    const oldNorm = normalizeDriverName(oldDir?.name);
+
     setDriverDirectory((prev) => prev.map((d) => (d.id === item.id ? item : d)));
+    setDrivers((prev) =>
+      prev.map((d) =>
+        d.id === item.id || normalizeDriverName(d.name) === oldNorm
+          ? {
+              ...d,
+              name: item.name.trim(),
+              phone: item.phone || d.phone,
+              status: item.status === 'INACTIVE' || item.status === 'inactive' ? 'inactive' : 'active',
+            }
+          : d
+      )
+    );
     showToast(`پرونده راننده "${item.name}" ویرایش شد.`, 'success');
   };
 
@@ -1181,13 +1444,14 @@ export const App: FC = () => {
     showToast(`اطلاعات خودروی "${updated.plateNumber || updated.code}" با موفقیت به‌روزرسانی شد.`, 'success');
   };
 
-  // Centralized Bidirectional Assignment: Driver <-> Vehicle (Fully Synced with Attendance Board)
+  // Centralized Bidirectional Assignment: Driver <-> Vehicle (Fully Synced with Attendance Board & Matrix)
   const handleAssignDriverToVehicle = (vehicleId: string, driverNameOrNone: string, driverPhone?: string) => {
     const targetVehicle = vehicles.find((v) => v.id === vehicleId);
     if (!targetVehicle) return;
 
-    const isUnassigning = !driverNameOrNone || driverNameOrNone === 'بدون راننده' || driverNameOrNone === 'NONE';
+    const isUnassigning = !isAssignedDriverName(driverNameOrNone);
     const oldDriverName = targetVehicle.driverName;
+    const oldDriverNorm = normalizeDriverName(oldDriverName);
 
     if (isUnassigning) {
       // 1. Update vehicle to unassigned
@@ -1195,27 +1459,37 @@ export const App: FC = () => {
         ...targetVehicle,
         driverName: 'بدون راننده',
         driverPhone: '',
+        driverCode: '',
       };
       setVehicles((prev) => prev.map((v) => (v.id === vehicleId ? updatedVehicle : v)));
 
       // 2. Remove this vehicle plate from any driver's assignedVehicles list in driverDirectory
-      if (targetVehicle.plateNumber) {
-        setDriverDirectory((prev) =>
-          prev.map((d) => ({
+      setDriverDirectory((prev) =>
+        prev.map((d) => {
+          const isOldOwner = oldDriverNorm && normalizeDriverName(d.name) === oldDriverNorm;
+          return {
             ...d,
-            assignedVehicles: (d.assignedVehicles || []).filter((p) => p !== targetVehicle.plateNumber),
-          }))
-        );
-      }
+            assignedVehicles: isOldOwner
+              ? []
+              : (d.assignedVehicles || []).filter(
+                  (p) => p !== targetVehicle.plateNumber && !p.includes(targetVehicle.plateNumber)
+                ),
+          };
+        })
+      );
 
-      // 3. CRITICAL: Remove vehiclePlate from drivers list for Attendance Board
+      // 3. CRITICAL: Remove vehiclePlate from drivers list for Attendance Board & Matrix
       setDrivers((prev) =>
         prev.map((d) => {
           if (
             (targetVehicle.plateNumber && d.vehiclePlate === targetVehicle.plateNumber) ||
-            (oldDriverName && d.name === oldDriverName)
+            (oldDriverNorm && normalizeDriverName(d.name) === oldDriverNorm)
           ) {
-            return { ...d, vehiclePlate: '' };
+            return {
+              ...d,
+              vehiclePlate: '',
+              personnelCode: d.personnelCode || d.code,
+            };
           }
           return d;
         })
@@ -1235,112 +1509,194 @@ export const App: FC = () => {
       }
       showToast(`خودرو کد ${toFaDigits(targetVehicle.code)} از راننده قبلی لغو انتساب شد (فاقد راننده).`, 'info');
     } else {
+      const cleanDriverName = driverNameOrNone.trim();
+      const targetDriverNorm = normalizeDriverName(cleanDriverName);
+
       // Find driver info from directory or drivers list
       const matchedDriver =
-        driverDirectory.find((d) => d.name === driverNameOrNone || d.phone === driverPhone) ||
-        drivers.find((d) => d.name === driverNameOrNone);
+        driverDirectory.find(
+          (d) => normalizeDriverName(d.name) === targetDriverNorm || (driverPhone && d.phone === driverPhone)
+        ) ||
+        drivers.find((d) => normalizeDriverName(d.name) === targetDriverNorm);
 
       const assignedPhone = matchedDriver?.phone || driverPhone || targetVehicle.driverPhone || '';
+      const newVehicleCodeStr = String(targetVehicle.code);
 
-      // 1. Update target vehicle with new driver
+      // 1. Update target vehicle with new driver, and unassign any other vehicle this driver previously had
       const updatedVehicle: VehicleItem = {
         ...targetVehicle,
-        driverName: driverNameOrNone,
+        driverName: cleanDriverName,
         driverPhone: assignedPhone,
+        driverCode: newVehicleCodeStr,
       };
 
-      // 2. If this driver had another vehicle, unassign the other vehicle to prevent double assignment
       setVehicles((prev) =>
         prev.map((v) => {
           if (v.id === vehicleId) return updatedVehicle;
-          if (v.driverName === driverNameOrNone) {
-            return { ...v, driverName: 'بدون راننده', driverPhone: '' };
+          if (normalizeDriverName(v.driverName) === targetDriverNorm) {
+            return { ...v, driverName: 'بدون راننده', driverPhone: '', driverCode: '' };
           }
           return v;
         })
       );
 
-      // 3. Update driverDirectory assignedVehicles
+      // 2. Update driverDirectory assignedVehicles & vehicle code
       setDriverDirectory((prev) =>
         prev.map((d) => {
-          if (d.name === driverNameOrNone) {
-            const currentPlates = d.assignedVehicles || [];
-            const withNewPlate = currentPlates.includes(targetVehicle.plateNumber)
-              ? currentPlates
-              : [targetVehicle.plateNumber, ...currentPlates];
-            return { ...d, assignedVehicles: withNewPlate };
+          const dNorm = normalizeDriverName(d.name);
+          if (dNorm === targetDriverNorm) {
+            return {
+              ...d,
+              code: newVehicleCodeStr,
+              personnelCode: d.personnelCode || d.code,
+              phone: d.phone || assignedPhone,
+              assignedVehicles: [targetVehicle.plateNumber],
+            };
           }
-          // Remove from other drivers who might have had this plate
+          // Remove from old owner or other drivers who might have had this plate
+          if (dNorm === oldDriverNorm) {
+            return { ...d, assignedVehicles: [] };
+          }
           return {
             ...d,
-            assignedVehicles: (d.assignedVehicles || []).filter((p) => p !== targetVehicle.plateNumber),
+            assignedVehicles: (d.assignedVehicles || []).filter(
+              (p) => p !== targetVehicle.plateNumber && !p.includes(targetVehicle.plateNumber)
+            ),
           };
         })
       );
 
-      // 4. CRITICAL: Update drivers array for Attendance Board
-      setDrivers((prev) =>
-        prev.map((d) => {
-          if (d.name === driverNameOrNone || (matchedDriver && d.id === matchedDriver.id)) {
-            return { ...d, vehiclePlate: targetVehicle.plateNumber };
+      // 3. CRITICAL: Update drivers array for Attendance Board & Matrix (both vehiclePlate AND code!)
+      setDrivers((prev) => {
+        const exists = prev.some(
+          (d) =>
+            normalizeDriverName(d.name) === targetDriverNorm ||
+            (matchedDriver && d.id === matchedDriver.id)
+        );
+
+        const nextList = prev.map((d) => {
+          const dNorm = normalizeDriverName(d.name);
+          if (dNorm === targetDriverNorm || (matchedDriver && d.id === matchedDriver.id)) {
+            return {
+              ...d,
+              vehiclePlate: targetVehicle.plateNumber,
+              code: newVehicleCodeStr,
+              personnelCode: d.personnelCode || d.code,
+              phone: d.phone || assignedPhone,
+              status: 'active' as const,
+            };
           }
-          if (targetVehicle.plateNumber && d.vehiclePlate === targetVehicle.plateNumber) {
-            return { ...d, vehiclePlate: '' };
+          if (
+            (targetVehicle.plateNumber && d.vehiclePlate === targetVehicle.plateNumber) ||
+            (oldDriverNorm && dNorm === oldDriverNorm)
+          ) {
+            return {
+              ...d,
+              vehiclePlate: '',
+              personnelCode: d.personnelCode || d.code,
+            };
           }
           return d;
-        })
-      );
+        });
 
-      // 5. Audit log & toast
+        if (!exists) {
+          nextList.unshift({
+            id: matchedDriver?.id || `drv-${Date.now()}`,
+            name: cleanDriverName,
+            code: newVehicleCodeStr,
+            personnelCode: matchedDriver?.code || newVehicleCodeStr,
+            phone: assignedPhone,
+            status: 'active',
+            vehiclePlate: targetVehicle.plateNumber,
+            createdAt: formatPersianDateKey(today.jy, today.jm, today.jd),
+          });
+        }
+
+        return nextList;
+      });
+
+      // 4. Audit log & toast
       if (currentUser) {
         recordAuditLog(currentUser, {
           action: 'VEHICLE_ASSIGN_DRIVER',
           module: 'FLEET',
-          title: `اختصاص خودرو کد ${toFaDigits(targetVehicle.code)} به ${driverNameOrNone}`,
-          description: `خودرو با پلاک «${targetVehicle.plateNumber}» به راننده «${driverNameOrNone}» اختصاص داده شد.`,
+          title: `اختصاص خودرو کد ${toFaDigits(targetVehicle.code)} به ${cleanDriverName}`,
+          description: `خودرو با پلاک «${targetVehicle.plateNumber}» به راننده «${cleanDriverName}» اختصاص داده شد.`,
           targetId: vehicleId,
           targetName: targetVehicle.plateNumber,
           severity: 'SUCCESS',
         });
       }
-      showToast(`خودرو با موفقیت به راننده «${driverNameOrNone}» اختصاص یافت.`, 'success');
+      showToast(
+        `خودرو کد ${toFaDigits(targetVehicle.code)} (${targetVehicle.plateNumber}) به راننده «${cleanDriverName}» اختصاص یافت و در ماتریس حضور و غیاب اعمال شد.`,
+        'success'
+      );
     }
   };
 
   const handleAssignVehicleToDriver = (driverId: string, vehiclePlateOrNone: string) => {
-    const driver = driverDirectory.find((d) => d.id === driverId) || drivers.find((d) => d.id === driverId);
+    const driver =
+      driverDirectory.find((d) => d.id === driverId || normalizeDriverName(d.name) === normalizeDriverName(driverId)) ||
+      drivers.find((d) => d.id === driverId || normalizeDriverName(d.name) === normalizeDriverName(driverId));
     if (!driver) return;
 
-    const isUnassigning = !vehiclePlateOrNone || vehiclePlateOrNone === 'NONE' || vehiclePlateOrNone === 'بدون خودرو';
+    const driverNorm = normalizeDriverName(driver.name);
+    const isUnassigning =
+      !vehiclePlateOrNone ||
+      vehiclePlateOrNone === 'NONE' ||
+      vehiclePlateOrNone === 'بدون خودرو' ||
+      vehiclePlateOrNone === 'بدون راننده';
 
     if (isUnassigning) {
-      // 1. Remove assigned vehicles from driver
-      const oldPlates = (driver as DriverDirectoryItem).assignedVehicles || [(driver as Driver).vehiclePlate].filter(Boolean) as string[];
+      const oldPlates = (
+        (driver as DriverDirectoryItem).assignedVehicles ||
+        [(driver as Driver).vehiclePlate].filter(Boolean)
+      ) as string[];
+
+      // 1. Remove assigned vehicles from driverDirectory
       setDriverDirectory((prev) =>
-        prev.map((d) => (d.id === driverId || d.name === driver.name ? { ...d, assignedVehicles: [] } : d))
+        prev.map((d) =>
+          d.id === driverId || normalizeDriverName(d.name) === driverNorm
+            ? { ...d, assignedVehicles: [] }
+            : d
+        )
       );
 
       // 2. Unassign vehicles that were assigned to this driver
       setVehicles((prev) =>
         prev.map((v) => {
-          if (oldPlates.includes(v.plateNumber) || v.driverName === driver.name) {
-            return { ...v, driverName: 'بدون راننده', driverPhone: '' };
+          if (
+            oldPlates.some((p) => p === v.plateNumber || p.includes(v.plateNumber)) ||
+            normalizeDriverName(v.driverName) === driverNorm
+          ) {
+            return { ...v, driverName: 'بدون راننده', driverPhone: '', driverCode: '' };
           }
           return v;
         })
       );
 
-      // 3. Update drivers array for Attendance Board
+      // 3. Update drivers array for Attendance Board & Matrix
       setDrivers((prev) =>
-        prev.map((d) => (d.id === driverId || d.name === driver.name ? { ...d, vehiclePlate: '' } : d))
+        prev.map((d) =>
+          d.id === driverId || normalizeDriverName(d.name) === driverNorm
+            ? { ...d, vehiclePlate: '', personnelCode: d.personnelCode || d.code }
+            : d
+        )
       );
 
-      showToast(`خودروی اختصاصی از راننده «${driver.name}» لغو انتساب شد.`, 'info');
+      showToast(
+        `خودروی اختصاصی از راننده «${driver.name}» لغو انتساب شد و به بخش رانندگان بدون خودرو منتقل گردید.`,
+        'info'
+      );
     } else {
-      const targetVehicle = vehicles.find((v) => v.plateNumber === vehiclePlateOrNone);
+      const targetVehicle = vehicles.find(
+        (v) =>
+          v.plateNumber === vehiclePlateOrNone ||
+          v.id === vehiclePlateOrNone ||
+          vehiclePlateOrNone.includes(v.plateNumber)
+      );
       if (!targetVehicle) return;
 
-      // Assign vehicle to driver
       handleAssignDriverToVehicle(targetVehicle.id, driver.name, (driver as any).phone);
     }
   };
@@ -1589,6 +1945,10 @@ export const App: FC = () => {
                 driverRecords={records}
                 staffMembers={staffMembers}
                 staffRecords={staffRecords}
+                vehicles={vehicles}
+                onAssignDriverToVehicle={handleAssignDriverToVehicle}
+                onAssignVehicleToDriver={handleAssignVehicleToDriver}
+                onNavigateToVehicleAssignment={() => setActiveTab('VEHICLE_ASSIGNMENT')}
                 onUpdateDriverStatus={handleUpdateDriverStatus}
                 onUpdateStaffStatus={handleUpdateStaffStatus}
                 onAddDriver={() => setIsAddDriverOpen(true)}

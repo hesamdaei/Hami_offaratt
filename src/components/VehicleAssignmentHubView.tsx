@@ -77,57 +77,95 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
     driverName?: string;
   } | null>(null);
 
-  // Active drivers list (status !== 'inactive')
+  // Normalize Persian/Arabic characters and whitespace for reliable matching
+  const normalizeName = (name?: string | null): string =>
+    (name || '')
+      .replace(/ي/g, 'ی')
+      .replace(/ك/g, 'ک')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const isVehicleAssigned = (driverName?: string | null): boolean => {
+    const n = normalizeName(driverName);
+    return Boolean(n && n !== 'بدون راننده' && n !== 'NONE' && n !== 'بدون خودرو' && n !== 'نامشخص' && n !== '---');
+  };
+
+  const findAssignedVehicleForDriver = (driverName?: string | null): VehicleItem | undefined => {
+    const target = normalizeName(driverName);
+    if (!target) return undefined;
+    return vehicles.find((v) => isVehicleAssigned(v.driverName) && normalizeName(v.driverName) === target);
+  };
+
+  // Active drivers list (status !== 'inactive'), deduplicated by normalized name
   const activeDrivers = useMemo(() => {
-    // Collect from directory, cross-checking with drivers list
-    const dirMap = new Map<string, DriverDirectoryItem>();
-    driverDirectory.forEach((d) => {
-      if (d.status !== 'inactive' && d.status !== 'INACTIVE') {
-        dirMap.set(d.id, d);
-      }
-    });
+    const byNameMap = new Map<string, DriverDirectoryItem>();
 
-    // Also include any active driver from `drivers` not in directory
+    // Check if a driver is marked inactive in the main `drivers` list
+    const inactiveNames = new Set<string>();
     drivers.forEach((d) => {
-      if (d.status !== 'inactive') {
-        if (!dirMap.has(d.id)) {
-          dirMap.set(d.id, {
-            id: d.id,
-            name: d.name,
-            code: d.code,
-            phone: d.phone,
-            personnelCode: d.personnelCode || d.code,
-            assignedVehicles: d.vehiclePlate ? [d.vehiclePlate] : [],
-            status: 'ACTIVE',
-            rating: 5.0,
-            tripsCount: 0,
-          });
-        }
+      if (d.status === 'inactive') {
+        inactiveNames.add(normalizeName(d.name));
       }
     });
 
-    return Array.from(dirMap.values()).sort((a, b) => {
+    driverDirectory.forEach((d) => {
+      const normName = normalizeName(d.name);
+      if (!normName) return;
+      if (d.status !== 'inactive' && d.status !== 'INACTIVE' && !inactiveNames.has(normName)) {
+        const assignedCar = vehicles.find(
+          (v) => isVehicleAssigned(v.driverName) && normalizeName(v.driverName) === normName
+        );
+        byNameMap.set(normName, {
+          ...d,
+          code: assignedCar ? String(assignedCar.code) : d.code,
+          assignedVehicles: assignedCar ? [assignedCar.plateNumber] : [],
+        });
+      }
+    });
+
+    // Also include any active driver from `drivers` not already in byNameMap
+    drivers.forEach((d) => {
+      const normName = normalizeName(d.name);
+      if (!normName || d.status === 'inactive') return;
+      const assignedCar = vehicles.find(
+        (v) => isVehicleAssigned(v.driverName) && normalizeName(v.driverName) === normName
+      );
+      if (!byNameMap.has(normName)) {
+        byNameMap.set(normName, {
+          id: d.id,
+          name: d.name,
+          code: assignedCar ? String(assignedCar.code) : d.code,
+          phone: d.phone,
+          personnelCode: d.personnelCode || d.code,
+          assignedVehicles: assignedCar ? [assignedCar.plateNumber] : [],
+          status: 'ACTIVE',
+          rating: 5.0,
+          tripsCount: 0,
+        });
+      }
+    });
+
+    return Array.from(byNameMap.values()).sort((a, b) => {
+      const carA = findAssignedVehicleForDriver(a.name);
+      const carB = findAssignedVehicleForDriver(b.name);
+      if (Boolean(carA) !== Boolean(carB)) return carA ? -1 : 1;
+      if (carA && carB && carA.code !== carB.code) return (carA.code || 0) - (carB.code || 0);
+
       const codeA = parseInt(a.code || a.personnelCode || '999', 10);
       const codeB = parseInt(b.code || b.personnelCode || '999', 10);
       if (!isNaN(codeA) && !isNaN(codeB) && codeA !== codeB) return codeA - codeB;
       return a.name.localeCompare(b.name, 'fa');
     });
-  }, [driverDirectory, drivers]);
+  }, [driverDirectory, drivers, vehicles]);
 
   // Executive KPI stats
   const stats = useMemo(() => {
     const totalVehicles = vehicles.length;
-    const assignedVehicles = vehicles.filter(
-      (v) => v.driverName && v.driverName.trim() && v.driverName !== 'بدون راننده' && v.driverName !== 'NONE'
-    ).length;
+    const assignedVehicles = vehicles.filter((v) => isVehicleAssigned(v.driverName)).length;
     const unassignedVehicles = totalVehicles - assignedVehicles;
 
     const totalActiveDrivers = activeDrivers.length;
-    const driversWithVehicle = activeDrivers.filter((d) => {
-      const hasDirVehicles = Array.isArray(d.assignedVehicles) && d.assignedVehicles.length > 0;
-      const isAssignedInFleet = vehicles.some((v) => v.driverName === d.name);
-      return hasDirVehicles || isAssignedInFleet;
-    }).length;
+    const driversWithVehicle = activeDrivers.filter((d) => Boolean(findAssignedVehicleForDriver(d.name))).length;
     const driversWithoutVehicle = Math.max(0, totalActiveDrivers - driversWithVehicle);
 
     return {
@@ -192,10 +230,8 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
   // Filtered drivers
   const filteredDrivers = useMemo(() => {
     return activeDrivers.filter((d) => {
-      const assignedCar = vehicles.find((v) => v.driverName === d.name);
-      const hasVehicle = Boolean(
-        assignedCar || (Array.isArray(d.assignedVehicles) && d.assignedVehicles.length > 0)
-      );
+      const assignedCar = findAssignedVehicleForDriver(d.name);
+      const hasVehicle = Boolean(assignedCar);
 
       // Tab filter
       if (tabFilter === 'UNASSIGNED_DRIVERS' && hasVehicle) return false;
@@ -206,7 +242,7 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
       if (!q) return true;
 
       const nameStr = (d.name || '').toLowerCase();
-      const codeStr = String(d.code || d.personnelCode || '');
+      const codeStr = String(assignedCar?.code || d.code || d.personnelCode || '');
       const phoneStr = d.phone || '';
       const plateStr = assignedCar ? assignedCar.plateNumber.toLowerCase() : '';
 
@@ -217,18 +253,18 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
         plateStr.includes(q)
       );
     }).sort((a, b) => {
-      // First drivers with vehicle, then drivers without vehicle (as requested)
-      const assignedCarA = vehicles.find((v) => v.driverName === a.name);
-      const hasVehicleA = Boolean(
-        assignedCarA || (Array.isArray(a.assignedVehicles) && a.assignedVehicles.length > 0)
-      );
-      const assignedCarB = vehicles.find((v) => v.driverName === b.name);
-      const hasVehicleB = Boolean(
-        assignedCarB || (Array.isArray(b.assignedVehicles) && b.assignedVehicles.length > 0)
-      );
+      // First drivers with vehicle (sorted by vehicle code), then drivers without vehicle
+      const assignedCarA = findAssignedVehicleForDriver(a.name);
+      const assignedCarB = findAssignedVehicleForDriver(b.name);
+      const hasVehicleA = Boolean(assignedCarA);
+      const hasVehicleB = Boolean(assignedCarB);
 
       if (hasVehicleA !== hasVehicleB) {
         return hasVehicleA ? -1 : 1;
+      }
+
+      if (assignedCarA && assignedCarB && assignedCarA.code !== assignedCarB.code) {
+        return (assignedCarA.code || 0) - (assignedCarB.code || 0);
       }
 
       const codeA = parseInt(a.code || a.personnelCode || '999', 10);
@@ -243,16 +279,8 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
     if (!unassignConfirm) return;
     if (unassignConfirm.type === 'VEHICLE' && unassignConfirm.vehicleId) {
       onAssignDriverToVehicle(unassignConfirm.vehicleId, 'بدون راننده', '');
-      showToast(
-        `خودرو کد ${toFaDigits(unassignConfirm.vehicleCode || '')} از راننده لغو انتساب شد.`,
-        'info'
-      );
     } else if (unassignConfirm.type === 'DRIVER' && unassignConfirm.driverId) {
       onAssignVehicleToDriver(unassignConfirm.driverId, 'NONE');
-      showToast(
-        `خودرو از راننده «${unassignConfirm.driverName}» با موفقیت لغو انتساب شد.`,
-        'info'
-      );
     }
     setUnassignConfirm(null);
   };
@@ -260,19 +288,13 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
   const handleExecuteAssignDriverToVehicle = (vehicle: VehicleItem, driver: DriverDirectoryItem) => {
     onAssignDriverToVehicle(vehicle.id, driver.name, driver.phone || '');
     setAssigningVehicle(null);
-    showToast(
-      `خودرو کد ${toFaDigits(vehicle.code)} با موفقیت به راننده «${driver.name}» اختصاص یافت.`,
-      'success'
-    );
+    setModalSearch('');
   };
 
   const handleExecuteAssignVehicleToDriver = (driver: DriverDirectoryItem, vehicle: VehicleItem) => {
     onAssignDriverToVehicle(vehicle.id, driver.name, driver.phone || '');
     setAssigningDriver(null);
-    showToast(
-      `خودرو کد ${toFaDigits(vehicle.code)} با موفقیت به راننده «${driver.name}» واگذار شد.`,
-      'success'
-    );
+    setModalSearch('');
   };
 
   const isLight = theme === 'light';
@@ -744,11 +766,9 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
             {filteredDrivers.map((driver) => {
-              const assignedVehicle = vehicles.find((v) => v.driverName === driver.name);
-              const hasVehicle = Boolean(
-                assignedVehicle || (Array.isArray(driver.assignedVehicles) && driver.assignedVehicles.length > 0)
-              );
-              const plateDisplay = assignedVehicle?.plateNumber || driver.assignedVehicles?.[0];
+              const assignedVehicle = findAssignedVehicleForDriver(driver.name);
+              const hasVehicle = Boolean(assignedVehicle);
+              const plateDisplay = assignedVehicle?.plateNumber;
 
               return (
                 <div
@@ -952,10 +972,7 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
 
             <div className="space-y-2.5 max-h-[620px] overflow-y-auto pr-1">
               {activeDrivers
-                .filter((d) => {
-                  const hasCar = vehicles.some((v) => v.driverName === d.name);
-                  return !hasCar && (!d.assignedVehicles || d.assignedVehicles.length === 0);
-                })
+                .filter((d) => !findAssignedVehicleForDriver(d.name))
                 .map((driver) => (
                   <div
                     key={driver.id}
@@ -1059,8 +1076,9 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                   );
                 })
                 .map((driver) => {
-                  const currentlyHasVehicle = vehicles.find((v) => v.driverName === driver.name);
-                  const isCurrentOfThisVehicle = assigningVehicle.driverName === driver.name;
+                  const currentlyHasVehicle = findAssignedVehicleForDriver(driver.name);
+                  const isCurrentOfThisVehicle =
+                    normalizeName(assigningVehicle.driverName) === normalizeName(driver.name);
 
                   return (
                     <button
@@ -1195,8 +1213,9 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                   return (a.code || 0) - (b.code || 0);
                 })
                 .map((vehicle) => {
-                  const isFree = !vehicle.driverName || vehicle.driverName === 'بدون راننده';
-                  const isCurrentlyThisDriver = vehicle.driverName === assigningDriver.name;
+                  const isFree = !isVehicleAssigned(vehicle.driverName);
+                  const isCurrentlyThisDriver =
+                    normalizeName(vehicle.driverName) === normalizeName(assigningDriver.name);
 
                   return (
                     <button

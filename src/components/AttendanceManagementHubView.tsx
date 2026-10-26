@@ -54,6 +54,7 @@ import {
 import { IranianPlate } from './IranianPlate';
 import { exportToExcel, exportStaffToExcel } from '../utils/excelExport';
 import { STAFF_DEPARTMENTS, StaffDepartment } from '../utils/staffSeedData';
+import { VehicleItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
 import { AttendanceSheetPrintModal, AttendancePrintItem } from './AttendanceSheetPrintModal';
 import { LeaveCalendarPrintModal, LeaveCalendarBoardMode } from './LeaveCalendarPrintModal';
 
@@ -62,6 +63,10 @@ interface AttendanceManagementHubViewProps {
   driverRecords: AttendanceRecords;
   staffMembers: StaffMember[];
   staffRecords: AttendanceRecords;
+  vehicles?: VehicleItem[];
+  onAssignDriverToVehicle?: (vehicleId: string, driverNameOrNone: string, driverPhone?: string) => void;
+  onAssignVehicleToDriver?: (driverId: string, vehiclePlateOrNone: string) => void;
+  onNavigateToVehicleAssignment?: () => void;
   onUpdateDriverStatus: (driverId: string, dateKey: string, status: AttendanceStatus) => void;
   onUpdateStaffStatus: (staffId: string, dateKey: string, status: AttendanceStatus) => void;
   onAddDriver: () => void;
@@ -89,6 +94,8 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
   driverRecords,
   staffMembers,
   staffRecords,
+  vehicles = [],
+  onNavigateToVehicleAssignment,
   onUpdateDriverStatus,
   onUpdateStaffStatus,
   onAddDriver,
@@ -342,65 +349,124 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
   // Current Board Stats
   const currentStats = activeBoard === 'DRIVERS' ? driversStats : staffStats;
 
+  // Normalize Persian/Arabic characters for reliable driver-vehicle matching
+  const normalizeName = (name?: string | null): string =>
+    (name || '')
+      .replace(/ي/g, 'ی')
+      .replace(/ك/g, 'ک')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const isValidAssignedName = (name?: string | null): boolean => {
+    const n = normalizeName(name);
+    return Boolean(n && n !== 'بدون راننده' && n !== 'NONE' && n !== 'بدون خودرو' && n !== 'نامشخص' && n !== '---');
+  };
+
+  // Live resolver: determines a driver's assigned vehicle directly from `vehicles` (or fallback `driver.vehiclePlate`)
+  const getDriverVehicleInfo = useMemo(() => {
+    return (driver: Driver): {
+      hasVehicle: boolean;
+      vehicle?: VehicleItem;
+      plate: string;
+      vehicleCode: string;
+      vehicleTypeName: string;
+    } => {
+      const normDriverName = normalizeName(driver.name);
+      if (vehicles && vehicles.length > 0) {
+        const matchedByDriverName = vehicles.find(
+          (v) => isValidAssignedName(v.driverName) && normalizeName(v.driverName) === normDriverName
+        );
+        if (matchedByDriverName) {
+          return {
+            hasVehicle: true,
+            vehicle: matchedByDriverName,
+            plate: matchedByDriverName.plateNumber,
+            vehicleCode: String(matchedByDriverName.code),
+            vehicleTypeName:
+              VEHICLE_TYPE_NAMES[matchedByDriverName.vehicleType] || matchedByDriverName.vehicleType || '',
+          };
+        }
+        // If `vehicles` is populated and no vehicle has this driver's name, check if driver has a custom plate not in fleet
+        const rawPlate = (driver.vehiclePlate || '').trim();
+        const isValidPlate =
+          Boolean(rawPlate) && rawPlate !== 'بدون خودرو' && rawPlate !== 'NONE' && rawPlate !== 'بدون راننده';
+        if (isValidPlate) {
+          const fleetCarWithPlate = vehicles.find((v) => v.plateNumber === rawPlate);
+          // Only count it if that fleet car isn't explicitly unassigned or assigned to someone else
+          if (!fleetCarWithPlate) {
+            return {
+              hasVehicle: true,
+              plate: rawPlate,
+              vehicleCode: driver.code || driver.personnelCode || '',
+              vehicleTypeName: '',
+            };
+          }
+        }
+        return {
+          hasVehicle: false,
+          plate: '',
+          vehicleCode: '',
+          vehicleTypeName: '',
+        };
+      }
+
+      // Fallback when `vehicles` prop is empty
+      const rawPlate = (driver.vehiclePlate || '').trim();
+      const hasPlate =
+        Boolean(rawPlate) && rawPlate !== 'بدون خودرو' && rawPlate !== 'NONE' && rawPlate !== 'بدون راننده';
+      return {
+        hasVehicle: hasPlate,
+        plate: hasPlate ? rawPlate : '',
+        vehicleCode: hasPlate ? driver.code || driver.personnelCode || '' : '',
+        vehicleTypeName: '',
+      };
+    };
+  }, [vehicles]);
+
   // Active & Inactive Headcounts & Vehicle Assignment Counts
   const activeDriversCount = useMemo(() => drivers.filter((d) => d.status !== 'inactive').length, [drivers]);
   const inactiveDriversCount = useMemo(() => drivers.filter((d) => d.status === 'inactive').length, [drivers]);
   const driversWithVehicleCount = useMemo(
-    () =>
-      drivers.filter(
-        (d) =>
-          d.status !== 'inactive' &&
-          Boolean(d.vehiclePlate && d.vehiclePlate.trim() && d.vehiclePlate !== 'بدون خودرو' && d.vehiclePlate !== 'NONE')
-      ).length,
-    [drivers]
+    () => drivers.filter((d) => d.status !== 'inactive' && getDriverVehicleInfo(d).hasVehicle).length,
+    [drivers, getDriverVehicleInfo]
   );
   const driversWithoutVehicleCount = useMemo(
-    () =>
-      drivers.filter(
-        (d) =>
-          d.status !== 'inactive' &&
-          (!d.vehiclePlate || !d.vehiclePlate.trim() || d.vehiclePlate === 'بدون خودرو' || d.vehiclePlate === 'NONE')
-      ).length,
-    [drivers]
+    () => drivers.filter((d) => d.status !== 'inactive' && !getDriverVehicleInfo(d).hasVehicle).length,
+    [drivers, getDriverVehicleInfo]
   );
   const activeStaffCount = useMemo(() => staffMembers.filter((s) => s.status !== 'inactive').length, [staffMembers]);
   const inactiveStaffCount = useMemo(() => staffMembers.filter((s) => s.status === 'inactive').length, [staffMembers]);
 
   // Filtered Drivers:
   // قانون محوری: هر راننده‌ای که در لیست رانندگان غیرفعال نشده در تابلو مرخصی است
-  // ترتیب نمایش: اول رانندگان دارای خودرو، سپس رانندگان بدون خودرو
+  // ترتیب نمایش: اول رانندگان دارای خودرو (مرتب بر اساس کد خودرو)، سپس رانندگان بدون خودرو
   const filteredDrivers = useMemo(() => {
     return drivers
       .filter((driver) => {
         const q = searchQuery.trim().toLowerCase();
-        const hasVehicle = Boolean(
-          driver.vehiclePlate &&
-          driver.vehiclePlate.trim() &&
-          driver.vehiclePlate !== 'بدون خودرو' &&
-          driver.vehiclePlate !== 'NONE'
-        );
+        const vInfo = getDriverVehicleInfo(driver);
+        const hasVehicle = vInfo.hasVehicle;
 
         const matchesSearch =
           !q ||
           driver.name.toLowerCase().includes(q) ||
+          (vInfo.vehicleCode && vInfo.vehicleCode.toLowerCase().includes(q)) ||
           (driver.code && driver.code.toLowerCase().includes(q)) ||
           (driver.personnelCode && driver.personnelCode.toLowerCase().includes(q)) ||
-          (driver.vehiclePlate && driver.vehiclePlate.toLowerCase().includes(q)) ||
+          (vInfo.plate && vInfo.plate.toLowerCase().includes(q)) ||
           (driver.phone && driver.phone.includes(q)) ||
           (!hasVehicle && ('بدون خودرو'.includes(q) || 'ذخیره'.includes(q) || 'کمکی'.includes(q)));
 
         if (!matchesSearch) return false;
 
         // Account Status Filter:
-        // اگر کاربر صراحتاً فیلتر «غیرفعال» را انتخاب نکرده باشد، تمامی رانندگان غیرفعال‌نشده در تابلو نمایش داده می‌شوند
         if (accountStatusFilter === 'INACTIVE') {
           if (driver.status !== 'inactive') return false;
         } else {
-          // در حالت ACTIVE و ALL، کلیه رانندگانی که غیرفعال نشده‌اند در تابلو حضور دارند
           if (driver.status === 'inactive') return false;
         }
 
-        // Optional Vehicle Assignment Filter (defaults to ALL so unassigned drivers are never excluded)
+        // Optional Vehicle Assignment Filter
         if (vehicleFilter === 'WITH_VEHICLE' && !hasVehicle) return false;
         if (vehicleFilter === 'WITHOUT_VEHICLE' && hasVehicle) return false;
 
@@ -418,25 +484,24 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
       })
       .sort((a, b) => {
         // ۱. ترتیب اصلی: اول رانندگان دارای خودرو، سپس رانندگان بدون خودرو
-        const hasCarA = Boolean(
-          a.vehiclePlate &&
-          a.vehiclePlate.trim() &&
-          a.vehiclePlate !== 'بدون خودرو' &&
-          a.vehiclePlate !== 'NONE'
-        );
-        const hasCarB = Boolean(
-          b.vehiclePlate &&
-          b.vehiclePlate.trim() &&
-          b.vehiclePlate !== 'بدون خودرو' &&
-          b.vehiclePlate !== 'NONE'
-        );
+        const infoA = getDriverVehicleInfo(a);
+        const infoB = getDriverVehicleInfo(b);
 
-        if (hasCarA && !hasCarB) return -1;
-        if (!hasCarA && hasCarB) return 1;
+        if (infoA.hasVehicle && !infoB.hasVehicle) return -1;
+        if (!infoA.hasVehicle && infoB.hasVehicle) return 1;
 
-        // ۲. مرتب‌سازی فرعی درون هر گروه: بر اساس کد پرسنلی راننده، سپس نام
-        const codeA = parseInt(a.code || a.personnelCode || '9999', 10);
-        const codeB = parseInt(b.code || b.personnelCode || '9999', 10);
+        // ۲. اگر هر دو دارای خودرو هستند: بر اساس کد خودروی تخصیص‌یافته مرتب شوند
+        if (infoA.hasVehicle && infoB.hasVehicle) {
+          const vCodeA = parseInt(infoA.vehicleCode || a.code || '9999', 10);
+          const vCodeB = parseInt(infoB.vehicleCode || b.code || '9999', 10);
+          if (!isNaN(vCodeA) && !isNaN(vCodeB) && vCodeA !== vCodeB) {
+            return vCodeA - vCodeB;
+          }
+        }
+
+        // ۳. مرتب‌سازی فرعی: بر اساس کد پرسنلی یا نام
+        const codeA = parseInt(a.personnelCode || a.code || '9999', 10);
+        const codeB = parseInt(b.personnelCode || b.code || '9999', 10);
         if (!isNaN(codeA) && !isNaN(codeB) && codeA !== codeB) {
           return codeA - codeB;
         }
@@ -445,6 +510,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
   }, [
     drivers,
     driverRecords,
+    getDriverVehicleInfo,
     activeDateKey,
     searchQuery,
     statusFilter,
@@ -1192,6 +1258,15 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                 {toFaDigits(driversWithoutVehicleCount)}
               </span>
             </button>
+            {onNavigateToVehicleAssignment && (
+              <button
+                onClick={onNavigateToVehicleAssignment}
+                className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-colors cursor-pointer mr-1"
+                title="ورود به منوی اختصاصی واگذاری و تغییر خودروی رانندگان"
+              >
+                مدیریت تخصیص خودرو ←
+              </button>
+            )}
           </div>
         )}
 
@@ -1323,8 +1398,17 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                                     </span>
                                   )}
                                 </div>
-                                <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                                  <span>کد راننده: {toFaDigits(driver.code)}</span>
+                                <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
+                                  {(() => {
+                                    const vInfo = getDriverVehicleInfo(driver);
+                                    return vInfo.hasVehicle ? (
+                                      <span className="text-emerald-400 font-bold">
+                                        کد خودرو: {toFaDigits(vInfo.vehicleCode || driver.code)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-amber-400 font-semibold">بدون خودرو (ذخیره)</span>
+                                    );
+                                  })()}
                                   {driver.personnelCode && (
                                     <>
                                       <span>•</span>
@@ -1361,7 +1445,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                                       name: driver.name,
                                       code: driver.code,
                                       phone: driver.phone,
-                                      vehiclePlate: driver.vehiclePlate,
+                                      vehiclePlate: getDriverVehicleInfo(driver).plate || driver.vehiclePlate,
                                       status: driver.status || 'active',
                                     })
                                   }
@@ -1424,34 +1508,47 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                           </div>
 
                           {/* Iranian Plate & Phone Row */}
-                          <div className="bg-[#091120] border border-[#1a2947] rounded-lg p-2 mb-3 flex items-center justify-between gap-2">
-                            <div>
-                              <div className="text-[10px] text-slate-400 mb-0.5">وضعیت خودرو / پلاک:</div>
-                              {driver.vehiclePlate && driver.vehiclePlate.trim() && driver.vehiclePlate !== 'بدون خودرو' && driver.vehiclePlate !== 'NONE' ? (
-                                <div className="scale-85 origin-right">
-                                  <IranianPlate plateNumber={driver.vehiclePlate} size="sm" />
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-blue-500/10 border border-blue-500/25">
-                                  <Truck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                  <div>
-                                    <div className="text-[11px] font-bold text-blue-300">بدون خودرو (نیروی آماده‌به‌کار / ذخیره)</div>
-                                    <div className="text-[9.5px] text-slate-400">سوابق مرخصی و کارکرد در سامانه ثبت و نگهداری می‌شود</div>
+                          {(() => {
+                            const vInfo = getDriverVehicleInfo(driver);
+                            return (
+                              <div className="bg-[#091120] border border-[#1a2947] rounded-lg p-2 mb-3 flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="text-[10px] text-slate-400 mb-0.5 flex items-center gap-1.5">
+                                    <span>وضعیت خودرو / پلاک:</span>
+                                    {vInfo.hasVehicle && vInfo.vehicleCode && (
+                                      <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-bold text-[10px]">
+                                        کد {toFaDigits(vInfo.vehicleCode)}
+                                        {vInfo.vehicleTypeName ? ` (${vInfo.vehicleTypeName})` : ''}
+                                      </span>
+                                    )}
                                   </div>
+                                  {vInfo.hasVehicle && vInfo.plate ? (
+                                    <div className="scale-85 origin-right">
+                                      <IranianPlate plateNumber={vInfo.plate} size="sm" />
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 py-1 px-2 rounded-lg bg-amber-500/10 border border-amber-500/25">
+                                      <Truck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                      <div>
+                                        <div className="text-[11px] font-bold text-amber-300">بدون خودرو (نیروی آماده‌به‌کار / ذخیره)</div>
+                                        <div className="text-[9.5px] text-slate-400">سوابق مرخصی و کارکرد در سامانه ثبت و نگهداری می‌شود</div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                            <div className="text-left text-[11px] text-slate-300">
-                              {driver.phone ? (
-                                <div className="flex items-center gap-1 font-mono text-slate-300">
-                                  <span>{toFaDigits(driver.phone)}</span>
-                                  <Phone className="w-3 h-3 text-blue-400" />
+                                <div className="text-left text-[11px] text-slate-300">
+                                  {driver.phone ? (
+                                    <div className="flex items-center gap-1 font-mono text-slate-300">
+                                      <span>{toFaDigits(driver.phone)}</span>
+                                      <Phone className="w-3 h-3 text-blue-400" />
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-500 text-[10px]">بدون شماره</span>
+                                  )}
                                 </div>
-                              ) : (
-                                <span className="text-slate-500 text-[10px]">بدون شماره</span>
-                              )}
-                            </div>
-                          </div>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Bottom Actions: Clean 4-Button Status Setter (حاضر / مرخصی / تعمیرگاه / غایب) */}
@@ -1904,10 +2001,12 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
             <table className="w-full text-center text-xs border-collapse select-none">
               <thead className="bg-[#091120] sticky top-0 z-20 text-slate-300 font-bold border-b border-[#1e2f52]">
                 <tr>
-                  <th className="py-2.5 px-3 text-right sticky right-0 bg-[#091120] z-30 min-w-[140px] shadow-sm">
+                  <th className="py-2.5 px-3 text-right sticky right-0 bg-[#091120] z-30 min-w-[165px] shadow-sm">
                     نام و مشخصات
                   </th>
-                  <th className="py-2.5 px-2 min-w-[75px] text-slate-400">کد</th>
+                  <th className="py-2.5 px-2 min-w-[115px] text-slate-400">
+                    {activeBoard === 'DRIVERS' ? 'کد و پلاک خودرو' : 'کد پرسنلی'}
+                  </th>
                   {Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1).map((day) => {
                     const isSelected = day === selectedDay;
                     const isToday =
@@ -1937,92 +2036,164 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#172542]">
-                {(activeBoard === 'DRIVERS' ? filteredDrivers : filteredStaff).map((person, idx) => {
+                {(activeBoard === 'DRIVERS' ? filteredDrivers : filteredStaff).map((person, idx, arr) => {
                   const records = activeBoard === 'DRIVERS' ? driverRecords : staffRecords;
                   let presentCount = 0;
                   let leaveCount = 0;
                   let workshopCount = 0;
                   let elapsedDaysCount = 0;
 
+                  const driverVehicleInfo =
+                    activeBoard === 'DRIVERS' ? getDriverVehicleInfo(person as Driver) : null;
+                  const prevDriverVehicleInfo =
+                    activeBoard === 'DRIVERS' && idx > 0
+                      ? getDriverVehicleInfo(arr[idx - 1] as Driver)
+                      : null;
+
+                  const showWithVehicleHeader =
+                    activeBoard === 'DRIVERS' &&
+                    driverVehicleInfo?.hasVehicle &&
+                    (idx === 0 || !prevDriverVehicleInfo?.hasVehicle);
+
+                  const showWithoutVehicleHeader =
+                    activeBoard === 'DRIVERS' &&
+                    !driverVehicleInfo?.hasVehicle &&
+                    (idx === 0 || prevDriverVehicleInfo?.hasVehicle);
+
+                  const totalColSpan = daysInCurrentMonth + 6;
+
                   return (
-                    <tr key={person.id} className="hover:bg-slate-800/40 transition-colors">
-                      {/* Name column */}
-                      <td className="py-2 px-3 text-right sticky right-0 bg-[#0e172a] z-10 font-medium text-white shadow-sm flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[10px] flex items-center justify-center shrink-0">
-                            {toFaDigits(idx + 1)}
-                          </span>
-                          <div className="truncate max-w-[130px]">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={person.status === 'inactive' ? 'line-through text-slate-400' : ''}>
-                                {person.name}
+                    <React.Fragment key={person.id}>
+                      {showWithVehicleHeader && (
+                        <tr className="bg-emerald-950/35 border-y border-emerald-500/30">
+                          <td
+                            colSpan={totalColSpan}
+                            className="py-1.5 px-3 text-right text-[11px] font-bold text-emerald-300 sticky right-0"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Truck className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>
+                                رانندگان دارای خودروی تحویلی ({toFaDigits(
+                                  filteredDrivers.filter((d) => getDriverVehicleInfo(d).hasVehicle).length
+                                )} نفر) — مرتب بر اساس کد خودرو
                               </span>
-                              {person.status === 'inactive' && (
-                                <span className="text-[9px] px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">
-                                  غیرفعال
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      {showWithoutVehicleHeader && (
+                        <tr className="bg-amber-950/35 border-y border-amber-500/30">
+                          <td
+                            colSpan={totalColSpan}
+                            className="py-1.5 px-3 text-right text-[11px] font-bold text-amber-300 sticky right-0"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Users className="w-3.5 h-3.5 text-amber-400" />
+                              <span>
+                                رانندگان بدون خودرو / نیروی ذخیره ({toFaDigits(
+                                  filteredDrivers.filter((d) => !getDriverVehicleInfo(d).hasVehicle).length
+                                )} نفر)
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      <tr className="hover:bg-slate-800/40 transition-colors">
+                        {/* Name column */}
+                        <td className="py-2 px-3 text-right sticky right-0 bg-[#0e172a] z-10 font-medium text-white shadow-sm flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-[10px] flex items-center justify-center shrink-0">
+                              {toFaDigits(idx + 1)}
+                            </span>
+                            <div className="truncate max-w-[145px]">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={person.status === 'inactive' ? 'line-through text-slate-400' : ''}>
+                                  {person.name}
                                 </span>
-                              )}
-                              {activeBoard === 'DRIVERS' && (
-                                (person as Driver).vehiclePlate &&
-                                (person as Driver).vehiclePlate?.trim() &&
-                                (person as Driver).vehiclePlate !== 'بدون خودرو' &&
-                                (person as Driver).vehiclePlate !== 'NONE' ? (
-                                  <span
-                                    className="text-[8.5px] px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/30"
-                                    title={`دارای خودرو: ${(person as Driver).vehiclePlate}`}
-                                  >
-                                    دارای خودرو
+                                {person.status === 'inactive' && (
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">
+                                    غیرفعال
                                   </span>
-                                ) : (
-                                  <span
-                                    className="text-[8.5px] px-1 py-0.2 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30"
-                                    title="راننده بدون خودروی تحویلی (نیروی ذخیره)"
-                                  >
-                                    بدون خودرو
-                                  </span>
-                                )
+                                )}
+                                {activeBoard === 'DRIVERS' && driverVehicleInfo && (
+                                  driverVehicleInfo.hasVehicle ? (
+                                    <span
+                                      className="text-[8.5px] px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/30"
+                                      title={`دارای خودرو کد ${driverVehicleInfo.vehicleCode} - پلاک: ${driverVehicleInfo.plate}`}
+                                    >
+                                      دارای خودرو
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="text-[8.5px] px-1 py-0.2 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30"
+                                      title="راننده بدون خودروی تحویلی (نیروی ذخیره)"
+                                    >
+                                      بدون خودرو
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                              {'role' in person && (
+                                <div className="text-[10px] text-slate-400 font-normal">{person.role}</div>
                               )}
                             </div>
-                            {'role' in person && (
-                              <div className="text-[10px] text-slate-400 font-normal">{person.role}</div>
-                            )}
                           </div>
-                        </div>
 
-                        {/* Quick User Management Actions in Table */}
-                        <div className="flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity shrink-0">
-                          <button
-                            onClick={() => handleToggleActive(activeBoard === 'DRIVERS' ? 'driver' : 'staff', person.id)}
-                            title={person.status === 'inactive' ? 'فعال‌سازی کاربر' : 'غیرفعال‌سازی کاربر'}
-                            className={`p-1 rounded transition-colors ${
-                              person.status === 'inactive'
-                                ? 'text-rose-400 hover:text-emerald-400 hover:bg-emerald-500/20'
-                                : 'text-emerald-400 hover:text-rose-400 hover:bg-rose-500/20'
-                            }`}
-                          >
-                            <Power className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleRequestDelete(
-                                activeBoard === 'DRIVERS' ? 'driver' : 'staff',
-                                person.id,
-                                person.name,
-                                person.code
-                              )
-                            }
-                            title="حذف از سیستم"
-                            className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </td>
+                          {/* Quick User Management Actions in Table */}
+                          <div className="flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity shrink-0">
+                            <button
+                              onClick={() => handleToggleActive(activeBoard === 'DRIVERS' ? 'driver' : 'staff', person.id)}
+                              title={person.status === 'inactive' ? 'فعال‌سازی کاربر' : 'غیرفعال‌سازی کاربر'}
+                              className={`p-1 rounded transition-colors ${
+                                person.status === 'inactive'
+                                  ? 'text-rose-400 hover:text-emerald-400 hover:bg-emerald-500/20'
+                                  : 'text-emerald-400 hover:text-rose-400 hover:bg-rose-500/20'
+                              }`}
+                            >
+                              <Power className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleRequestDelete(
+                                  activeBoard === 'DRIVERS' ? 'driver' : 'staff',
+                                  person.id,
+                                  person.name,
+                                  person.code
+                                )
+                              }
+                              title="حذف از سیستم"
+                              className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/20 transition-colors"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </td>
 
-                      {/* Code */}
-                      <td className="py-2 px-1 text-slate-400 font-mono text-[11px]">
-                        {toFaDigits(person.code)}
-                      </td>
+                        {/* Code & Vehicle Plate column */}
+                        <td className="py-1.5 px-1.5 text-slate-300 font-mono text-[11px]">
+                          {activeBoard === 'DRIVERS' && driverVehicleInfo ? (
+                            driverVehicleInfo.hasVehicle ? (
+                              <div className="flex flex-col items-center justify-center gap-0.5 leading-tight">
+                                <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-bold text-[10px] border border-blue-500/30 whitespace-nowrap">
+                                  کد {toFaDigits(driverVehicleInfo.vehicleCode || person.code)}
+                                </span>
+                                <span
+                                  className="text-[9.5px] text-slate-400 font-sans whitespace-nowrap"
+                                  dir="ltr"
+                                  title={driverVehicleInfo.plate}
+                                >
+                                  {toFaDigits(driverVehicleInfo.plate)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/90 text-[9.5px] font-sans font-bold border border-amber-500/25 whitespace-nowrap">
+                                بدون خودرو
+                              </span>
+                            )
+                          ) : (
+                            toFaDigits(person.code)
+                          )}
+                        </td>
 
                       {/* Days */}
                       {Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1).map((day) => {
@@ -2175,7 +2346,8 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                       <td className="py-2 px-1 text-indigo-300 font-bold font-mono" title={elapsedDaysCount > 0 ? `بر اساس ${toFaDigits(elapsedDaysCount)} روز گذشته از ماه` : 'ماه پیش‌رو'}>
                         {elapsedDaysCount > 0 ? `${toFaDigits(Math.round((presentCount / elapsedDaysCount) * 100))}%` : '---'}
                       </td>
-                    </tr>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
