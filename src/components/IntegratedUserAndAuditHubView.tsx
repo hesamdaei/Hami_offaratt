@@ -281,6 +281,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
           username: cleanEditUsername,
           roleTitle: editRoleTitle.trim() || u.roleTitle,
           password: editPassword.trim() ? editPassword.trim() : u.password,
+          passwordHash: editPassword.trim() ? undefined : u.passwordHash,
           phoneNumber: editPhoneNumber.trim() || undefined,
           baleId: editBaleId.trim() || undefined,
           avatarColor: editAvatarColor || u.avatarColor,
@@ -382,7 +383,9 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     if (!passwordResetUser || !newPasswordValue.trim()) return;
 
     const updatedUsers = users.map((u) =>
-      u.id === passwordResetUser.id ? { ...u, password: newPasswordValue.trim() } : u
+      u.id === passwordResetUser.id
+        ? { ...u, password: newPasswordValue.trim(), passwordHash: undefined }
+        : u
     );
     setUsers(updatedUsers);
     saveStoredUsers(updatedUsers);

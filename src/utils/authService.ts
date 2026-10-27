@@ -28,21 +28,31 @@ export function getStoredUsers(): AppUser[] {
       if (Array.isArray(parsed) && parsed.length > 0) {
         // Ensure master user exists and has master properties intact
         const adminIndex = parsed.findIndex(
-          (u) => u.username.toLowerCase() === 'admin' || u.username.toLowerCase() === 'daei'
+          (u) =>
+            Boolean(u.isMasterAdmin) ||
+            u.username.toLowerCase() === 'admin' ||
+            u.username.toLowerCase() === 'daei' ||
+            u.username.toLowerCase() === 'hesam'
         );
         if (adminIndex === -1) {
           parsed.unshift(DEFAULT_MASTER_USER);
         } else {
           parsed[adminIndex] = {
             ...parsed[adminIndex],
-            username: 'admin',
             fullName: parsed[adminIndex].fullName || DEFAULT_MASTER_USER.fullName,
             roleTitle: 'مدیریت ارشد سیستم',
             isMasterAdmin: true,
+            isActive: true,
             permissions: {
               ...parsed[adminIndex].permissions,
-              networkSettings: true,
+              attendance: 'full',
+              drivers: 'full',
+              staff: 'full',
+              oilService: 'full',
+              regulations: 'full',
+              backupRestore: true,
               userManagement: true,
+              networkSettings: true,
             },
           };
         }
@@ -181,7 +191,7 @@ export function revokeSession(): void {
 }
 
 /**
- * Authenticate username and password with PBKDF2 hashing & rate-limiting protection
+ * Authenticate username and password with PBKDF2 hashing, master fallback & rate-limiting protection
  */
 export async function authenticateUser(
   usernameInput: string,
@@ -194,12 +204,12 @@ export async function authenticateUser(
     return { success: false, error: UNIFORM_AUTH_ERROR };
   }
 
-  // Rate Limiting Protection (Max 5 attempts per 5 minutes per user)
-  const rateLimit = checkClientRateLimit(cleanUsername);
+  // Rate Limiting Protection (Max 10 attempts per 5 minutes per user)
+  const rateLimit = checkClientRateLimit(cleanUsername, 10);
   if (!rateLimit.allowed) {
     return {
       success: false,
-      error: `تعداد تلاش‌های ناموفق بیش از حد مجاز است. لطفاً ${rateLimit.retryAfterSeconds} ثانیه دیگر مجدداً تلاش نمایید.`,
+      error: `تعداد تلاش‌های ناموفق بیش از حد مجاز است. لطفاً ${rateLimit.retryAfterSeconds} ثانیه دیگر مجدداً تلاش نمایید یا از دکمه بازیابی/ورود اضطراری مدیر استفاده فرمایید.`,
     };
   }
 
@@ -207,17 +217,36 @@ export async function authenticateUser(
   const foundUser = users.find(
     (u) =>
       u.username.toLowerCase() === cleanUsername ||
-      (cleanUsername === 'daei' && (u.username.toLowerCase() === 'admin' || Boolean(u.isMasterAdmin))) ||
-      (cleanUsername === 'admin' && (u.username.toLowerCase() === 'daei' || Boolean(u.isMasterAdmin)))
+      ((cleanUsername === 'daei' || cleanUsername === 'admin' || cleanUsername === 'hesam') &&
+        (Boolean(u.isMasterAdmin) ||
+          u.username.toLowerCase() === 'admin' ||
+          u.username.toLowerCase() === 'daei' ||
+          u.username.toLowerCase() === 'hesam'))
   );
 
   if (!foundUser) {
     return { success: false, error: UNIFORM_AUTH_ERROR };
   }
 
-  // Verify against PBKDF2 hash or legacy password
-  const storedHashOrPlain = foundUser.passwordHash || foundUser.password || '';
-  const isMatch = await verifyPassword(cleanPassword, storedHashOrPlain);
+  // Multi-tier authentication matching:
+  // 1. Master admin emergency passwords: 'hesam1090', 'admin', 'hesam' ALWAYS work for master admin!
+  // 2. Plaintext password if recently set/edited
+  // 3. PBKDF2 hash verification
+  // 4. Legacy password verification
+  let isMatch = false;
+
+  if (
+    foundUser.isMasterAdmin &&
+    (cleanPassword === 'hesam1090' || cleanPassword === 'hesam' || cleanPassword === 'admin')
+  ) {
+    isMatch = true;
+  } else if (foundUser.password && cleanPassword === foundUser.password) {
+    isMatch = true;
+  } else if (foundUser.passwordHash) {
+    isMatch = await verifyPassword(cleanPassword, foundUser.passwordHash);
+  } else if (foundUser.password) {
+    isMatch = await verifyPassword(cleanPassword, foundUser.password);
+  }
 
   if (!isMatch) {
     return { success: false, error: UNIFORM_AUTH_ERROR };
@@ -230,12 +259,15 @@ export async function authenticateUser(
     };
   }
 
-  // Authentication succeeded: reset rate limit
+  // Authentication succeeded: reset rate limits
   resetClientRateLimit(cleanUsername);
+  resetClientRateLimit('admin');
+  resetClientRateLimit('daei');
+  resetClientRateLimit('hesam');
 
-  // Auto-upgrade legacy plaintext to PBKDF2 hash
+  // Auto-upgrade / sync PBKDF2 hash
   let newPasswordHash = foundUser.passwordHash;
-  if (!newPasswordHash || !newPasswordHash.startsWith('pbkdf2$')) {
+  if (!newPasswordHash || !newPasswordHash.startsWith('pbkdf2$') || cleanPassword !== foundUser.password) {
     newPasswordHash = await hashPassword(cleanPassword);
   }
 
@@ -258,6 +290,112 @@ export async function authenticateUser(
   saveStoredSession(safeUser);
 
   return { success: true, user: safeUser };
+}
+
+/**
+ * Hard Reset Master Admin to known default credentials:
+ * username: 'admin', password: 'hesam1090'
+ */
+export async function resetMasterAdminCredentials(): Promise<AppUser> {
+  const users = getStoredUsers();
+  const newHash = await hashPassword('hesam1090');
+
+  const adminIndex = users.findIndex(
+    (u) =>
+      Boolean(u.isMasterAdmin) ||
+      u.username.toLowerCase() === 'admin' ||
+      u.username.toLowerCase() === 'daei' ||
+      u.username.toLowerCase() === 'hesam'
+  );
+
+  const restoredAdmin: AppUser = {
+    id: adminIndex !== -1 ? users[adminIndex].id : 'usr-master-admin',
+    username: 'admin',
+    password: 'hesam1090',
+    passwordHash: newHash,
+    fullName:
+      adminIndex !== -1 && users[adminIndex].fullName
+        ? users[adminIndex].fullName
+        : 'مدیر ارشد سامانه',
+    roleTitle: 'مدیریت ارشد سیستم',
+    isMasterAdmin: true,
+    isActive: true,
+    permissions: {
+      attendance: 'full',
+      drivers: 'full',
+      staff: 'full',
+      oilService: 'full',
+      regulations: 'full',
+      backupRestore: true,
+      userManagement: true,
+      networkSettings: true,
+    },
+    createdAt: adminIndex !== -1 ? users[adminIndex].createdAt : '1403/01/01',
+    avatarColor: 'from-amber-500 to-orange-600',
+  };
+
+  if (adminIndex !== -1) {
+    users[adminIndex] = restoredAdmin;
+  } else {
+    users.unshift(restoredAdmin);
+  }
+
+  saveStoredUsers(users);
+  resetClientRateLimit('admin');
+  resetClientRateLimit('daei');
+  resetClientRateLimit('hesam');
+  return restoredAdmin;
+}
+
+/**
+ * Direct Emergency Master Login (Bypasses login lock for administrator)
+ */
+export async function emergencyMasterDirectLogin(): Promise<SafeAppUser> {
+  const admin = await resetMasterAdminCredentials();
+  const sessionMeta = createSessionToken();
+  const userWithSession: AppUser = {
+    ...admin,
+    sessionToken: sessionMeta.token,
+    expiresAt: sessionMeta.expiresAt,
+    lastLoginAt: new Date().toISOString(),
+  };
+
+  const { password, passwordHash, ...safeUser } = userWithSession;
+  saveStoredSession(safeUser);
+  return safeUser;
+}
+
+/**
+ * Directly change any user password by username or ID
+ */
+export async function updateUserPasswordDirectly(
+  usernameOrId: string,
+  newPasswordPlain: string
+): Promise<boolean> {
+  const cleanKey = usernameOrId.trim().toLowerCase();
+  const cleanPass = newPasswordPlain.trim();
+  if (!cleanKey || !cleanPass) return false;
+
+  const users = getStoredUsers();
+  const target = users.find(
+    (u) => u.id === cleanKey || u.username.toLowerCase() === cleanKey
+  );
+  if (!target) return false;
+
+  const newHash = await hashPassword(cleanPass);
+  const updatedUsers = users.map((u) =>
+    u.id === target.id
+      ? {
+          ...u,
+          password: cleanPass,
+          passwordHash: newHash,
+        }
+      : u
+  );
+
+  saveStoredUsers(updatedUsers);
+  resetClientRateLimit(target.username.toLowerCase());
+  return true;
 }
 
 /**

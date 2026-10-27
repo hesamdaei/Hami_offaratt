@@ -178,6 +178,7 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
           fullName: editFullName.trim() || u.fullName,
           roleTitle: editRoleTitle.trim() || u.roleTitle,
           password: editPassword.trim() || u.password,
+          passwordHash: editPassword.trim() ? undefined : u.passwordHash,
           permissions: {
             ...editPermissions,
             // Master Admin always keeps network & admin permissions

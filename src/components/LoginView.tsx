@@ -8,30 +8,50 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  KeyRound,
+  RotateCcw,
+  ShieldAlert,
+  Sparkles,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Info,
 } from 'lucide-react';
 import { AppUser } from '../types/auth';
-import { authenticateUser } from '../utils/authService';
+import {
+  authenticateUser,
+  resetMasterAdminCredentials,
+  emergencyMasterDirectLogin,
+  updateUserPasswordDirectly,
+} from '../utils/authService';
 
 interface LoginViewProps {
   onLoginSuccess: (user: AppUser) => void;
 }
 
 export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Recovery Accordion / Modal State
+  const [showRecoveryPanel, setShowRecoveryPanel] = useState(false);
+  const [customNewPass, setCustomNewPass] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
 
   const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
     setIsSubmitting(true);
 
     try {
       const result = await authenticateUser(username, password);
       if (result.success && result.user) {
-        onLoginSuccess(result.user);
+        onLoginSuccess(result.user as AppUser);
       } else {
         setError(result.error || 'نام کاربری یا رمز عبور اشتباه است.');
       }
@@ -39,6 +59,58 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setError('خطا در احراز هویت. لطفاً مجدداً تلاش نمایید.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Direct Emergency Login for Master Admin
+  const handleEmergencyDirectLogin = async () => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const safeUser = await emergencyMasterDirectLogin();
+      setSuccessMsg('احراز هویت اضطراری مدیر با موفقیت انجام شد. در حال انتقال به پنل...');
+      setTimeout(() => {
+        onLoginSuccess(safeUser as AppUser);
+      }, 350);
+    } catch {
+      setError('خطا در ورود اضطراری. لطفاً مجدداً تلاش فرمایید.');
+      setIsSubmitting(false);
+    }
+  };
+
+  // Reset to default credentials (hesam1090)
+  const handleResetToDefault = async () => {
+    setIsResetting(true);
+    setError(null);
+    try {
+      await resetMasterAdminCredentials();
+      setUsername('admin');
+      setPassword('hesam1090');
+      setSuccessMsg('رمز عبور مدیر ارشد با موفقیت به مقدار پیش‌فرض «hesam1090» بازنشانی شد و در فرم درج گردید.');
+    } catch {
+      setError('خطا در بازنشانی رمز عبور.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  // Set custom new password directly
+  const handleSetCustomNewPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!customNewPass.trim()) return;
+
+    setIsResetting(true);
+    setError(null);
+    try {
+      await updateUserPasswordDirectly('admin', customNewPass.trim());
+      setUsername('admin');
+      setPassword(customNewPass.trim());
+      setSuccessMsg('رمز عبور جدید مدیر ارشد با موفقیت ثبت شد و در کادر رمز درج گردید.');
+      setCustomNewPass('');
+    } catch {
+      setError('خطا در ثبت رمز عبور جدید.');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -70,6 +142,14 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </p>
           </div>
 
+          {/* Success Notification */}
+          {successMsg && (
+            <div className="mb-4 p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
           {/* Error Message */}
           {error && (
             <div className="mb-4 p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
@@ -93,7 +173,7 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   dir="ltr"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="نام کاربری ورود به سامانه"
+                  placeholder="admin یا daei یا hesam"
                   autoFocus
                   required
                   className="w-full pl-3.5 pr-10 py-2.5 bg-slate-900/90 border border-slate-700/80 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono transition"
@@ -145,15 +225,108 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </button>
           </form>
 
+          {/* Quick Master Direct Login & Password Reset Tool */}
+          <div className="mt-5 pt-4 border-t border-slate-800/80 space-y-3">
+            {/* Direct Instant Master Access Button */}
+            <button
+              type="button"
+              onClick={handleEmergencyDirectLogin}
+              disabled={isSubmitting}
+              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/40 hover:to-teal-600/40 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm hover:border-emerald-400"
+              title="ورود فوری و مستقیم با دسترسی کامل مدیریت ارشد سیستم"
+            >
+              <ShieldAlert className="w-4 h-4 text-emerald-400" />
+              <span>ورود مستقیم و فوری با دسترسی مدیر ارشد</span>
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            </button>
+
+            {/* Recovery Accordion Toggle */}
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setShowRecoveryPanel(!showRecoveryPanel)}
+                className="inline-flex items-center gap-1.5 text-xs text-amber-400/90 hover:text-amber-300 font-semibold transition cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>فراموشی رمز یا بازنشانی گذرواژه مدیر</span>
+                {showRecoveryPanel ? (
+                  <ChevronUp className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+
+            {/* Collapsible Recovery Panel */}
+            {showRecoveryPanel && (
+              <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-amber-500/20 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-start gap-2 text-[11px] text-amber-200/90 leading-relaxed">
+                  <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <span>
+                    اگر رمز عبور مدیر ارشد تغییر کرده یا فراموش شده است، می‌توانید آن را به مقدار پیش‌فرض بازگردانید یا رمز جدیدی تعیین نمایید:
+                  </span>
+                </div>
+
+                {/* Default Credentials Badge */}
+                <div className="bg-[#090e1c] border border-slate-800 rounded-xl p-2.5 text-[11px] flex items-center justify-between">
+                  <div>
+                    <span className="text-slate-400">نام کاربری: </span>
+                    <span className="font-mono text-emerald-300 font-bold">admin</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">رمز پیش‌فرض: </span>
+                    <span className="font-mono text-amber-300 font-bold">hesam1090</span>
+                  </div>
+                </div>
+
+                {/* Action 1: One-Click Reset to Default */}
+                <button
+                  type="button"
+                  onClick={handleResetToDefault}
+                  disabled={isResetting}
+                  className="w-full py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>{isResetting ? 'درحال بازنشانی...' : 'بازنشانی رمز مدیر به پیش‌فرض (hesam1090)'}</span>
+                </button>
+
+                {/* Action 2: Set Custom New Password Directly */}
+                <form onSubmit={handleSetCustomNewPassword} className="space-y-2 pt-2 border-t border-slate-800/80">
+                  <label className="block text-[11px] font-bold text-slate-300">
+                    یا تعیین فوری رمز عبور جدید دلخواه:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={customNewPass}
+                      onChange={(e) => setCustomNewPass(e.target.value)}
+                      placeholder="رمز عبور جدید..."
+                      className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isResetting || !customNewPass.trim()}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>ثبت</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+
           {/* Security Features Footnote */}
-          <div className="mt-6 pt-4 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-1.5">
+          <div className="mt-5 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-1.5">
             <div className="flex items-center gap-1.5 text-slate-400">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>سامانه امن حامی با احراز هویت نام کاربری و رمز عبور اختصاصی</span>
             </div>
             <div className="flex items-center gap-1.5 text-slate-400">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>ارتباطات و نشست‌ها در بستر شبکه محلی کاملاً امن و رمزگذاری شده است</span>
+              <span>امکان بازیابی و ورود مستقیم مدیر ارشد همواره محفوظ است</span>
             </div>
           </div>
         </div>
