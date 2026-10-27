@@ -28,10 +28,14 @@ import {
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
+  Truck,
+  FileCheck,
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { DriverRegulationsA4PrintModal } from './DriverRegulationsA4PrintModal';
 import { VehicleItem } from '../utils/fleetSeedData';
+import { Driver } from '../types';
+import { VehicleHandoverManager } from './VehicleHandoverManager';
 
 export interface ClauseItem {
   num: number;
@@ -527,14 +531,19 @@ const ICON_MAP: Record<string, any> = {
 export interface DriverRegulationsViewProps {
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   vehicles?: VehicleItem[];
+  drivers?: Driver[];
   onSyncCentralDb?: () => void;
 }
 
 export const DriverRegulationsView: FC<DriverRegulationsViewProps> = ({
   onShowToast,
   vehicles = [],
+  drivers = [],
   onSyncCentralDb,
 }) => {
+  // Top-level View Tab: Regulations Clauses vs Vehicle Handover Form
+  const [mainTab, setMainTab] = useState<'REGULATIONS' | 'HANDOVER'>('REGULATIONS');
+
   // A4 Print Modal state
   const [isA4ModalOpen, setIsA4ModalOpen] = useState(false);
 
@@ -856,10 +865,73 @@ export const DriverRegulationsView: FC<DriverRegulationsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Interactive Main View (Hidden completely during print) */}
-      <div className="no-print space-y-6">
-        {/* Top Banner & Control Bar */}
-        <div className="bg-[#111b2e] border border-[#1f2c45] rounded-2xl p-5 shadow-lg space-y-4">
+      {/* Top Level Section Switcher Bar */}
+      <div className="no-print bg-[#111b2e] border border-[#1f2c45] rounded-2xl p-2 sm:p-2.5 shadow-xl flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMainTab('REGULATIONS')}
+            className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              mainTab === 'REGULATIONS'
+                ? 'bg-linear-to-r from-amber-500 to-amber-600 text-slate-950 font-black shadow-md shadow-amber-950/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#15233c]'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>آیین‌نامه و مقررات انضباطی</span>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                mainTab === 'REGULATIONS'
+                  ? 'bg-amber-950/30 text-amber-950'
+                  : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {toFaDigits(totalClauses)} بند
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMainTab('HANDOVER')}
+            className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+              mainTab === 'HANDOVER'
+                ? 'bg-linear-to-r from-blue-600 to-cyan-500 text-white font-black shadow-md shadow-blue-950/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#15233c]'
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            <span>صورت‌جلسه و تحویل خودرو</span>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                mainTab === 'HANDOVER'
+                  ? 'bg-cyan-950/40 text-cyan-200 border border-cyan-400/30'
+                  : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+              }`}
+            >
+              ۶۶ قلم + ۴ وجه بدنه
+            </span>
+          </button>
+        </div>
+
+        <div className="hidden lg:flex items-center gap-2 text-xs text-slate-400 px-3">
+          <FileCheck className="w-4 h-4 text-emerald-400" />
+          <span>مستندسازی و تحویل استاندارد ناوگان ترابری حامی</span>
+        </div>
+      </div>
+
+      {mainTab === 'HANDOVER' ? (
+        <VehicleHandoverManager
+          vehicles={vehicles}
+          drivers={drivers}
+          onShowToast={onShowToast}
+          onSyncCentralDb={onSyncCentralDb}
+        />
+      ) : (
+        <>
+          {/* Interactive Main View (Hidden completely during print) */}
+          <div className="no-print space-y-6">
+            {/* Top Banner & Control Bar */}
+            <div className="bg-[#111b2e] border border-[#1f2c45] rounded-2xl p-5 shadow-lg space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-inner">
@@ -1389,6 +1461,8 @@ export const DriverRegulationsView: FC<DriverRegulationsViewProps> = ({
         </div>
       )}
       </div>
+      </>
+      )}
 
       {/* Official A4 Print Modal */}
       <DriverRegulationsA4PrintModal

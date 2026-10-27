@@ -2100,12 +2100,13 @@ export const App: FC = () => {
             </div>
           )}
 
-          {/* Module 5: Editable Disciplinary Regulations */}
+          {/* Module 5: Editable Disciplinary Regulations & Vehicle Handover */}
           {activeTab === 'REGULATIONS' && (
             <div className="animate-in fade-in duration-150">
               <DriverRegulationsView
                 onShowToast={showToast}
                 vehicles={vehicles}
+                drivers={drivers}
                 onSyncCentralDb={handleForceSaveToNetworkDb}
               />
             </div>
