@@ -121,6 +121,8 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [handoverViewMode, setHandoverViewMode] = useState<'SHEET_VIEW' | 'ARCHIVE_LIST'>('SHEET_VIEW');
+  const [selectedRecordIdForView, setSelectedRecordIdForView] = useState<string>('rec-init-1');
 
   // Active modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -378,6 +380,14 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     return { healthy, damaged, none };
   }, [checklist]);
 
+  const col1Items = useMemo(() => HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 1), []);
+  const col2Items = useMemo(() => HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 2), []);
+  const col3Items = useMemo(() => HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 3), []);
+
+  const viewingRecord = useMemo(() => {
+    return records.find((r) => r.id === selectedRecordIdForView) || records[0];
+  }, [records, selectedRecordIdForView]);
+
   return (
     <div className="space-y-4" dir="rtl">
       {/* 1. Header & KPI Banners */}
@@ -436,7 +446,342 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
         </div>
       </div>
 
-      {/* 2. Search & List Section */}
+      {/* 2. Sub-Navigation Tabs */}
+      <div className="bg-[#0f1a30] border border-[#1f2c45] rounded-xl p-1.5 flex flex-wrap items-center justify-between gap-2 no-print">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setHandoverViewMode('SHEET_VIEW')}
+            className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+              handoverViewMode === 'SHEET_VIEW'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Printer className="w-4 h-4 text-cyan-300" />
+            <span>مشاهده مستقیم و چاپ برگه تحویل (A4)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setHandoverViewMode('ARCHIVE_LIST')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              handoverViewMode === 'ARCHIVE_LIST'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-amber-300" />
+            <span>آرشیو صورت‌جلسات تحویل</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-slate-900/60 text-slate-300 text-[10px] font-mono">
+              {toFaDigits(records.length)}
+            </span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleOpenCreateNew}
+          className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+        >
+          <Plus className="w-4 h-4" />
+          <span>+ صدور برگه جدید</span>
+        </button>
+      </div>
+
+      {/* 3. Conditional View: Direct Sheet View OR Archive List */}
+      {handoverViewMode === 'SHEET_VIEW' && viewingRecord && (
+        <div className="space-y-3">
+          {/* Sheet Selector & Quick Actions Strip */}
+          <div className="bg-[#0f192e] border border-[#22365e] rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs no-print">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-medium">انتخاب برگه جهت مشاهده:</span>
+              <select
+                value={selectedRecordIdForView}
+                onChange={(e) => setSelectedRecordIdForView(e.target.value)}
+                className="bg-[#09101f] border border-[#233862] text-white rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-blue-500"
+              >
+                {records.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    قبض {toFaDigits(r.receiptNumber)} - {r.driverName} {r.driverLastName} ({r.vehiclePlate || r.vehicleType})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActivePrintRecord(viewingRecord)}
+                className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black shadow-md flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>چاپ رسمی این برگه A4</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenEdit(viewingRecord)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>ویرایش برگه</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Inline A4 Sheet Display */}
+          <div className="bg-slate-900/60 p-2 sm:p-6 rounded-2xl border border-slate-800 flex justify-center overflow-x-auto">
+            <div
+              dir="rtl"
+              className="bg-white text-slate-900 p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[11px] font-sans leading-tight border border-slate-300"
+              style={{ boxSizing: 'border-box' }}
+            >
+              {/* HEADER SECTION */}
+              <div className="border border-slate-900 rounded-lg p-3 mb-2 flex items-center justify-between">
+                <div className="w-1/3 flex flex-col items-start justify-center">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-base">
+                      ح
+                    </div>
+                    <div>
+                      <div className="font-black text-slate-900 text-sm tracking-tight">
+                        ترابری و لجستیک حامی
+                      </div>
+                      <div className="text-[9px] text-slate-600 font-mono">
+                        تلفن تماس: ۱۷۸۶
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="w-1/3 text-center border-x border-slate-300 px-2">
+                  <div className="inline-block px-4 py-1 border border-slate-900 rounded font-black text-base text-slate-950 mb-1 bg-slate-50">
+                    تحویل خودرو
+                  </div>
+                  <div className="text-[10px] text-slate-700 font-bold flex items-center justify-center gap-3">
+                    <span>تاریخ: <strong className="font-mono">{toFaDigits(viewingRecord.date)}</strong></span>
+                    <span>ساعت: <strong className="font-mono">{toFaDigits(viewingRecord.time)}</strong></span>
+                  </div>
+                </div>
+
+                <div className="w-1/3 text-left space-y-1 font-mono text-[10.5px]">
+                  <div className="text-right">
+                    <span className="font-bold text-slate-800">شماره قبض: </span>
+                    <span className="font-black text-slate-950 text-xs">{toFaDigits(viewingRecord.receiptNumber)}</span>
+                  </div>
+                  <div className="text-right text-[10px] text-slate-600 truncate">
+                    <span className="font-bold">آدرس: </span>
+                    <span>{viewingRecord.address || 'پایانه مرکزی ناوگان حامی'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* DRIVER & VEHICLE INFO */}
+              <div className="border border-slate-900 rounded-lg p-2.5 mb-2 relative">
+                <div className="grid grid-cols-4 gap-2 text-slate-900 text-[11px] mb-2 pb-2 border-b border-slate-200">
+                  <div>
+                    <span className="text-slate-600 font-medium">نام راننده: </span>
+                    <strong className="font-bold text-slate-950">{viewingRecord.driverName}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-600 font-medium">نام خانوادگی: </span>
+                    <strong className="font-bold text-slate-950">{viewingRecord.driverLastName}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-600 font-medium">نام پدر: </span>
+                    <strong className="font-bold text-slate-950">{viewingRecord.driverFatherName || '---'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-600 font-medium">کد ملی: </span>
+                    <strong className="font-mono font-bold text-slate-950">{toFaDigits(viewingRecord.driverNationalId) || '---'}</strong>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 items-center text-[11px]">
+                  <div>
+                    <span className="text-slate-600 font-medium">نوع وسیله: </span>
+                    <strong className="font-bold text-slate-950">{viewingRecord.vehicleType || 'کامیونت'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-600 font-medium">کد وسیله: </span>
+                    <strong className="font-mono font-bold text-slate-950">{toFaDigits(viewingRecord.vehicleCode) || '---'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-600 font-medium">رنگ: </span>
+                    <strong className="font-bold text-slate-950">{viewingRecord.vehicleColor || 'سفید'}</strong>
+                  </div>
+                  <div className="flex items-center justify-end">
+                    {viewingRecord.vehiclePlate ? (
+                      <div className="scale-85 origin-left inline-block">
+                        <IranianPlate plateNumber={viewingRecord.vehiclePlate} size="sm" />
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 font-mono">بدون پلاک</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3-COLUMN 66-ITEM CHECKLIST TABLE */}
+              <div className="border border-slate-900 rounded-lg overflow-hidden mb-2">
+                <table className="w-full border-collapse text-[9.5px]">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-900 text-slate-900 font-black text-center">
+                      <th className="py-1 px-1 border-l border-slate-400 text-right w-[15%]">شرح</th>
+                      <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
+                      <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
+                      <th className="py-1 px-1 border-l-2 border-slate-900 w-[6%]">ندارد</th>
+
+                      <th className="py-1 px-1 border-l border-slate-400 text-right w-[15%]">شرح</th>
+                      <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
+                      <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
+                      <th className="py-1 px-1 border-l-2 border-slate-900 w-[6%]">ندارد</th>
+
+                      <th className="py-1 px-1 border-l border-slate-400 text-right w-[16%]">شرح</th>
+                      <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
+                      <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
+                      <th className="py-1 px-1 w-[6%]">ندارد</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 22 }).map((_, rowIdx) => {
+                      const item1 = col1Items[rowIdx];
+                      const item2 = col2Items[rowIdx];
+                      const item3 = col3Items[rowIdx];
+
+                      const st1 = item1 ? viewingRecord.checklist[item1.id] || 'HEALTHY' : 'HEALTHY';
+                      const st2 = item2 ? viewingRecord.checklist[item2.id] || 'HEALTHY' : 'HEALTHY';
+                      const st3 = item3 ? viewingRecord.checklist[item3.id] || 'HEALTHY' : 'HEALTHY';
+
+                      const isEven = rowIdx % 2 === 0;
+
+                      return (
+                        <tr
+                          key={rowIdx}
+                          className={`border-b border-slate-300 text-center ${
+                            isEven ? 'bg-white' : 'bg-slate-50/50'
+                          }`}
+                        >
+                          <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
+                            {item1 ? item1.label : ''}
+                          </td>
+                          <td className="py-0.8 px-1 border-l border-slate-300">
+                            {st1 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
+                          </td>
+                          <td className="py-0.8 px-1 border-l border-slate-300">
+                            {st1 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
+                          </td>
+                          <td className="py-0.8 px-1 border-l-2 border-slate-900">
+                            {st1 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
+                          </td>
+
+                          <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
+                            {item2 ? item2.label : ''}
+                          </td>
+                          <td className="py-0.8 px-1 border-l border-slate-300">
+                            {st2 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
+                          </td>
+                          <td className="py-0.8 px-1 border-l border-slate-300">
+                            {st2 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
+                          </td>
+                          <td className="py-0.8 px-1 border-l-2 border-slate-900">
+                            {st2 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
+                          </td>
+
+                          <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
+                            {item3 ? item3.label : ''}
+                          </td>
+                          <td className="py-0.8 px-1 border-l border-slate-300">
+                            {st3 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
+                          </td>
+                          <td className="py-0.8 px-1 border-l border-slate-300">
+                            {st3 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
+                          </td>
+                          <td className="py-0.8 px-1">
+                            {st3 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 4-VIEW BODY DAMAGES SECTION */}
+              <div className="border border-slate-900 rounded-lg p-2.5 mb-2 bg-slate-50/50">
+                <div className="flex items-center justify-between mb-1.5 border-b border-slate-200 pb-1">
+                  <span className="font-black text-slate-900 text-[10.5px]">
+                    وضعیت بدنه و آسیب‌های مشهود در ۴ وجه کامیونت (جلو، عقب، راست، چپ):
+                  </span>
+                  <span className="text-[10px] text-slate-600 font-mono">
+                    تعداد موارد آسیب: <strong>{toFaDigits(viewingRecord.damages.length)}</strong>
+                  </span>
+                </div>
+
+                {viewingRecord.damages.length === 0 ? (
+                  <div className="text-center py-1 text-slate-500 text-[10px] font-bold">
+                    بدنه خودرو در هر ۴ وجه فاقد هرگونه خط و خش، قِری، شکستگی و تصادف قبلی رویت گردید (کاملاً سالم).
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[9.5px]">
+                    {viewingRecord.damages.map((dmg, idx) => (
+                      <div
+                        key={dmg.id}
+                        className="bg-white border border-slate-300 p-1.5 rounded flex items-start gap-1"
+                      >
+                        <span className="w-4 h-4 rounded-full bg-slate-900 text-white font-mono text-[9px] flex items-center justify-center shrink-0">
+                          {toFaDigits(idx + 1)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 truncate">
+                            {dmg.partName || (dmg.view === 'FRONT' ? 'جلو' : dmg.view === 'REAR' ? 'عقب' : dmg.view === 'RIGHT' ? 'راست' : 'چپ')}
+                          </div>
+                          <div className="text-slate-600 text-[8.5px]">
+                            {dmg.damageType === 'SCRATCH'
+                              ? 'خط و خش'
+                              : dmg.damageType === 'DENT'
+                              ? 'قِری و فرورفتگی'
+                              : dmg.damageType === 'CRACK'
+                              ? 'شکستگی'
+                              : dmg.damageType === 'PAINT_CHIP'
+                              ? 'رنگ‌پریدگی'
+                              : 'آسیب بدنه'}
+                            {dmg.description ? ` (${dmg.description})` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* AFFIDAVIT TEXT SECTION */}
+              <div className="border border-slate-900 rounded-lg p-2.5 mb-3 bg-white">
+                <p className="text-justify text-[10.5px] leading-relaxed text-slate-900 font-medium">
+                  اینجانب <strong className="font-black text-slate-950 underline px-1">{viewingRecord.driverName} {viewingRecord.driverLastName}</strong> فرزند <strong className="font-black text-slate-950 underline px-1">{viewingRecord.driverFatherName || '................'}</strong> به شماره ملی <strong className="font-mono font-black text-slate-950 underline px-1">{toFaDigits(viewingRecord.driverNationalId) || '................'}</strong> طبق مندرجات جدول بالا ماشین فوق را رویت و تحویل گرفتم و از تاریخ <strong className="font-mono font-black text-slate-950 underline px-1">{toFaDigits(viewingRecord.date)}</strong> مسئولیت نگهداری و عواقب جانبی و خلافی خودروی مذکور به عهده اینجانب می‌باشد.
+                </p>
+              </div>
+
+              {/* SIGNATURES SECTION */}
+              <div className="grid grid-cols-2 gap-4 text-xs font-bold text-slate-900 pt-2 border-t-2 border-slate-900">
+                <div className="flex flex-col items-center justify-between min-h-[60px]">
+                  <div>تحویل دهنده: <span className="font-normal">{viewingRecord.delivererName || 'مسئول ناوگان ترابری'}</span></div>
+                  <div className="text-[10px] text-slate-500 font-normal">امضا و اثر انگشت:</div>
+                </div>
+
+                <div className="flex flex-col items-center justify-between min-h-[60px]">
+                  <div>تحویل گیرنده: <span className="font-normal">{viewingRecord.receiverName || `${viewingRecord.driverName} ${viewingRecord.driverLastName}`}</span></div>
+                  <div className="text-[10px] text-slate-500 font-normal">امضا و اثر انگشت:</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Archive List Mode */}
+      {handoverViewMode === 'ARCHIVE_LIST' && (
       <div className="bg-[#0d1627] border border-[#1f2c45] rounded-2xl p-4 shadow-md space-y-3">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1 max-w-md">
@@ -584,6 +929,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* 3. Modal: Create / Edit Handover Session (Full Width Modal) */}
       {isFormModalOpen && (

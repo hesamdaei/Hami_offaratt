@@ -23,6 +23,9 @@ import {
   Layers,
   ParkingSquare,
   Navigation,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import {
   VehicleItem,
@@ -40,6 +43,20 @@ import { PersianDatePicker } from './PersianDatePicker';
 import * as XLSX from 'xlsx';
 
 const VEHICLE_DOC_SLOTS = VEHICLE_FULL_SLOTS;
+
+export type VehicleSortField =
+  | 'code'
+  | 'plateNumber'
+  | 'vehicleType'
+  | 'driverName'
+  | 'status'
+  | 'readyTime'
+  | 'lastStatusDate'
+  | 'thirdPartyExpiry'
+  | 'inspectionExpiry'
+  | 'bodyInsExpiry';
+
+export type SortDirection = 'asc' | 'desc';
 
 interface FleetManagementViewProps {
   vehicles: VehicleItem[];
@@ -84,6 +101,19 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
   const [assignDriverName, setAssignDriverName] = useState('');
   const [assignDriverPhone, setAssignDriverPhone] = useState('');
 
+  // Sort state
+  const [sortField, setSortField] = useState<VehicleSortField>('code');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const handleToggleSort = (field: VehicleSortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
   // Filtered vehicles
   const filteredVehicles = useMemo(() => {
     return vehicles.filter((v) => {
@@ -111,6 +141,75 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
       return matchSearch && matchType && matchStatus && matchExpiring;
     });
   }, [vehicles, searchQuery, selectedType, selectedStatus, onlyExpiring]);
+
+  // Smart Sorted vehicles
+  const sortedVehicles = useMemo(() => {
+    const STATUS_ORDER: Record<string, number> = {
+      ACTIVE: 1,
+      IN_MISSION: 2,
+      PARKING: 3,
+      IN_MAINTENANCE: 4,
+    };
+
+    const list = [...filteredVehicles];
+    return list.sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'code':
+          comparison = (a.code || 0) - (b.code || 0);
+          break;
+        case 'plateNumber':
+          comparison = (a.plateNumber || '').localeCompare(b.plateNumber || '', 'fa');
+          break;
+        case 'vehicleType':
+          comparison = (VEHICLE_TYPE_NAMES[a.vehicleType] || a.vehicleType).localeCompare(
+            VEHICLE_TYPE_NAMES[b.vehicleType] || b.vehicleType,
+            'fa'
+          );
+          break;
+        case 'driverName': {
+          const isAUnassigned = !a.driverName || a.driverName === 'بدون راننده';
+          const isBUnassigned = !b.driverName || b.driverName === 'بدون راننده';
+          if (isAUnassigned && !isBUnassigned) comparison = 1;
+          else if (!isAUnassigned && isBUnassigned) comparison = -1;
+          else comparison = (a.driverName || '').localeCompare(b.driverName || '', 'fa');
+          break;
+        }
+        case 'status': {
+          const orderA = STATUS_ORDER[a.status] || 99;
+          const orderB = STATUS_ORDER[b.status] || 99;
+          comparison = orderA - orderB;
+          break;
+        }
+        case 'readyTime': {
+          const tA = `${a.readyDate || ''} ${a.readyTime || ''}`;
+          const tB = `${b.readyDate || ''} ${b.readyTime || ''}`;
+          comparison = tA.localeCompare(tB);
+          break;
+        }
+        case 'lastStatusDate': {
+          const dA = `${a.lastStatusDate || ''} ${a.lastStatusTime || ''}`;
+          const dB = `${b.lastStatusDate || ''} ${b.lastStatusTime || ''}`;
+          comparison = dA.localeCompare(dB);
+          break;
+        }
+        case 'thirdPartyExpiry':
+          comparison = (a.thirdPartyExpiry || a.insuranceExpiry || '').localeCompare(
+            b.thirdPartyExpiry || b.insuranceExpiry || ''
+          );
+          break;
+        case 'inspectionExpiry':
+          comparison = (a.inspectionExpiry || '').localeCompare(b.inspectionExpiry || '');
+          break;
+        case 'bodyInsExpiry':
+          comparison = (a.bodyInsExpiry || '').localeCompare(b.bodyInsExpiry || '');
+          break;
+        default:
+          comparison = 0;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredVehicles, sortField, sortDirection]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -473,6 +572,34 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>نیاز به تمدید مدارک</span>
             </button>
+
+            {/* Quick Smart Sort Selector */}
+            <div className="flex items-center gap-1.5 bg-[#0a101f] border border-[#1f2c45] rounded-lg px-2.5 py-1.5">
+              <span className="text-[11px] text-slate-400 whitespace-nowrap font-medium">مرتب‌سازی:</span>
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value as VehicleSortField)}
+                className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer"
+              >
+                <option value="code" className="bg-[#0f172a]">کد خودرو</option>
+                <option value="status" className="bg-[#0f172a]">وضعیت کاری / عملیاتی</option>
+                <option value="driverName" className="bg-[#0f172a]">نام راننده</option>
+                <option value="plateNumber" className="bg-[#0f172a]">شماره پلاک</option>
+                <option value="vehicleType" className="bg-[#0f172a]">نوع خودرو</option>
+                <option value="thirdPartyExpiry" className="bg-[#0f172a]">بیمه شخص ثالث</option>
+                <option value="inspectionExpiry" className="bg-[#0f172a]">معاینه فنی</option>
+                <option value="readyTime" className="bg-[#0f172a]">زمان آمادگی</option>
+                <option value="lastStatusDate" className="bg-[#0f172a]">تاریخ آخرین وضعیت</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                className="p-1 rounded bg-[#172542] hover:bg-slate-700 text-amber-400 transition cursor-pointer"
+                title={sortDirection === 'asc' ? 'صعودی (کلیک جهت معکوس کردن)' : 'نزولی (کلیک جهت معکوس کردن)'}
+              >
+                {sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </div>
 
           {/* Actions */}
@@ -516,29 +643,169 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-right border-collapse text-xs">
             <thead>
-              <tr className="bg-[#0c1424] text-slate-400 border-b border-[#1f2c45] font-semibold">
-                <th className="py-3 px-3.5 text-center w-14">کد</th>
-                <th className="py-3 px-3 text-center min-w-[155px]">پلاک ملی</th>
-                <th className="py-3 px-3">نوع خودرو</th>
-                <th className="py-3 px-3">راننده تخصیص‌یافته</th>
-                <th className="py-3 px-3 text-center">وضعیت عملیاتی</th>
-                <th className="py-3 px-3 text-center">زمان آمادگی</th>
-                <th className="py-3 px-3 text-center">آخرین وضعیت</th>
-                <th className="py-3 px-3 text-center">بیمه شخص ثالث</th>
-                <th className="py-3 px-3 text-center">معاینه فنی</th>
-                <th className="py-3 px-3 text-center">بیمه بدنه</th>
+              <tr className="bg-[#0c1424] text-slate-300 border-b border-[#1f2c45] font-semibold select-none">
+                <th
+                  onClick={() => handleToggleSort('code')}
+                  className="py-3 px-3.5 text-center w-14 cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس کد خودرو"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>کد</span>
+                    {sortField === 'code' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('plateNumber')}
+                  className="py-3 px-3 text-center min-w-[155px] cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس پلاک ملی"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>پلاک ملی</span>
+                    {sortField === 'plateNumber' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('vehicleType')}
+                  className="py-3 px-3 cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس نوع خودرو"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>نوع خودرو</span>
+                    {sortField === 'vehicleType' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('driverName')}
+                  className="py-3 px-3 cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس نام راننده"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>راننده تخصیص‌یافته</span>
+                    {sortField === 'driverName' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('status')}
+                  className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس وضعیت کاری / عملیاتی"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>وضعیت عملیاتی</span>
+                    {sortField === 'status' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('readyTime')}
+                  className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس زمان آمادگی"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>زمان آمادگی</span>
+                    {sortField === 'readyTime' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('lastStatusDate')}
+                  className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس آخرین وضعیت"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>آخرین وضعیت</span>
+                    {sortField === 'lastStatusDate' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('thirdPartyExpiry')}
+                  className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس بیمه شخص ثالث"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>بیمه شخص ثالث</span>
+                    {sortField === 'thirdPartyExpiry' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('inspectionExpiry')}
+                  className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس معاینه فنی"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>معاینه فنی</span>
+                    {sortField === 'inspectionExpiry' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleToggleSort('bodyInsExpiry')}
+                  className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                  title="کلیک برای مرتب‌سازی بر اساس بیمه بدنه"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>بیمه بدنه</span>
+                    {sortField === 'bodyInsExpiry' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                    )}
+                  </div>
+                </th>
+
                 <th className="py-3 px-3.5 text-center w-48">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#172338]">
-              {filteredVehicles.length === 0 ? (
+              {sortedVehicles.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500">
+                  <td colSpan={11} className="py-12 text-center text-slate-500">
                     خودرویی مطابق با فیلترهای جستجو یافت نشد.
                   </td>
                 </tr>
               ) : (
-                filteredVehicles.map((v) => {
+                sortedVehicles.map((v) => {
                   const isUnassigned = !v.driverName || v.driverName === 'بدون راننده';
                   const isInspectionExpiring =
                     v.inspectionExpiry.startsWith('1405/04') || v.inspectionExpiry.startsWith('1405/05');

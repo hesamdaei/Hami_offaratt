@@ -1,4 +1,4 @@
-import { FC, useState, FormEvent } from 'react';
+import { FC, useState, useMemo, FormEvent } from 'react';
 import {
   Users,
   Search,
@@ -18,13 +18,31 @@ import {
   HeartPulse,
   MessageSquare,
   Printer,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  LayoutGrid,
+  List,
+  Calendar,
+  Send,
 } from 'lucide-react';
 import { DriverDirectoryItem, DriverDocuments, VehicleItem } from '../utils/fleetSeedData';
 import { toFaDigits } from '../utils/jalaali';
 import { DocumentUploaderModal, DocSlot } from './DocumentUploaderModal';
 import { DriverCard } from './DriverCard';
 import { DriverCardPrintModal } from './DriverCardPrintModal';
+import { IranianPlate } from './IranianPlate';
 import * as XLSX from 'xlsx';
+
+export type DriverSortField =
+  | 'personnelCode'
+  | 'joinedDate'
+  | 'status'
+  | 'name'
+  | 'rating'
+  | 'totalTrips';
+
+export type DriverSortDirection = 'asc' | 'desc';
 
 const DRIVER_DOC_SLOTS: DocSlot[] = [
   {
@@ -108,16 +126,90 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
     assignedVehicle: '',
   });
 
-  const filtered = drivers.filter((d) => {
-    const matchSearch =
-      d.name.includes(search) ||
-      d.phone.includes(search) ||
-      d.code.includes(search) ||
-      d.nationalCode.includes(search);
-    const matchType = filterType === 'ALL' || d.driverType === filterType;
-    const matchStatus = filterStatus === 'ALL' || d.status === filterStatus;
-    return matchSearch && matchType && matchStatus;
-  });
+  // View mode & Sort State
+  const [viewMode, setViewMode] = useState<'TABLE' | 'CARDS'>('TABLE');
+  const [sortField, setSortField] = useState<DriverSortField>('personnelCode');
+  const [sortDirection, setSortDirection] = useState<DriverSortDirection>('asc');
+
+  const handleToggleSort = (field: DriverSortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const filtered = useMemo(() => {
+    return drivers.filter((d) => {
+      const matchSearch =
+        d.name.includes(search) ||
+        (d.phone && d.phone.includes(search)) ||
+        (d.code && d.code.includes(search)) ||
+        (d.personnelCode && d.personnelCode.includes(search)) ||
+        (d.nationalCode && d.nationalCode.includes(search));
+      const matchType = filterType === 'ALL' || d.driverType === filterType;
+      const matchStatus = filterStatus === 'ALL' || d.status === filterStatus;
+      return matchSearch && matchType && matchStatus;
+    });
+  }, [drivers, search, filterType, filterStatus]);
+
+  const sortedDrivers = useMemo(() => {
+    const STATUS_PRIORITY: Record<string, number> = {
+      AVAILABLE: 1,
+      available: 1,
+      active: 1,
+      ACTIVE: 1,
+      ON_MISSION: 2,
+      mission: 2,
+      ON_LEAVE: 3,
+      leave: 3,
+      OFF_DUTY: 4,
+      inactive: 4,
+      INACTIVE: 4,
+    };
+
+    const list = [...filtered];
+    return list.sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'personnelCode': {
+          const codeA = parseInt(a.personnelCode || a.code || '0', 10);
+          const codeB = parseInt(b.personnelCode || b.code || '0', 10);
+          if (!isNaN(codeA) && !isNaN(codeB)) {
+            comparison = codeA - codeB;
+          } else {
+            comparison = (a.personnelCode || a.code || '').localeCompare(b.personnelCode || b.code || '', 'fa');
+          }
+          break;
+        }
+        case 'joinedDate':
+          comparison = (a.joinedDate || '').localeCompare(b.joinedDate || '');
+          break;
+        case 'status': {
+          const sA = STATUS_PRIORITY[a.status || 'AVAILABLE'] || 99;
+          const sB = STATUS_PRIORITY[b.status || 'AVAILABLE'] || 99;
+          comparison = sA - sB;
+          break;
+        }
+        case 'name':
+          comparison = (a.name || '').localeCompare(b.name || '', 'fa');
+          break;
+        case 'rating':
+          comparison = (a.rating || 0) - (b.rating || 0);
+          break;
+        case 'totalTrips': {
+          const tA = a.totalTrips || a.tripsCount || 0;
+          const tB = b.totalTrips || b.tripsCount || 0;
+          comparison = tA - tB;
+          break;
+        }
+        default:
+          comparison = 0;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filtered, sortField, sortDirection]);
 
   const handleOpenAdd = () => {
     setEditingDriver(null);
@@ -267,6 +359,61 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
             <option value="ON_LEAVE">در مرخصی</option>
           </select>
 
+          {/* Quick Sort Selector */}
+          <div className="flex items-center gap-1.5 bg-[#0a101f] border border-[#1f2c45] rounded-lg px-2.5 py-1.5">
+            <span className="text-[11px] text-slate-400 whitespace-nowrap font-medium">مرتب‌سازی:</span>
+            <select
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value as DriverSortField)}
+              className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer"
+            >
+              <option value="personnelCode" className="bg-[#0f172a]">کد پرسنلی</option>
+              <option value="joinedDate" className="bg-[#0f172a]">تاریخ پیوستن / استخدام</option>
+              <option value="status" className="bg-[#0f172a]">وضعیت کاری</option>
+              <option value="name" className="bg-[#0f172a]">نام و نام خانوادگی</option>
+              <option value="rating" className="bg-[#0f172a]">امتیاز عملکرد</option>
+              <option value="totalTrips" className="bg-[#0f172a]">تعداد سفرها</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              className="p-1 rounded bg-[#172542] hover:bg-slate-700 text-amber-400 transition cursor-pointer"
+              title={sortDirection === 'asc' ? 'صعودی (کلیک جهت معکوس کردن)' : 'نزولی (کلیک جهت معکوس کردن)'}
+            >
+              {sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-[#0a101f] border border-[#1f2c45] rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode('TABLE')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+                viewMode === 'TABLE'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="نمایش در قالب جدول تفصیلی"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">جدول</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('CARDS')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+                viewMode === 'CARDS'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="نمایش در قالب کارت‌ها"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">کارت‌ها</span>
+            </button>
+          </div>
+
           <button
             onClick={handleExportExcel}
             className="px-3 py-2 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -294,24 +441,312 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
         </div>
       </div>
 
-      {/* Drivers Grid (Using Redesigned High-Contrast, Laser-Ready DriverCard) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((d) => (
-          <DriverCard
-            key={d.id}
-            driver={d}
-            vehicles={vehicles}
-            onAssignVehicle={(drv, plate) => onAssignVehicleToDriver?.(drv.id, plate)}
-            onUnassignVehicle={(drv) => onAssignVehicleToDriver?.(drv.id, 'NONE')}
-            onEdit={handleOpenEdit}
-            onViewDocuments={setViewingDocsDriver}
-            onOpenBale={onOpenBaleForDriver}
-            onOpenEitaa={onOpenEitaaForDriver}
-            onPrintCard={setPrintingDriver}
-            onShowToast={onShowToast}
-          />
-        ))}
-      </div>
+      {/* Main Drivers List: Either Table View or Cards Grid */}
+      {viewMode === 'TABLE' ? (
+        <div className="bg-[#111b2e] border border-[#1f2c45] rounded-xl overflow-hidden shadow-lg">
+          <div className="overflow-x-auto">
+            <table className="w-full text-right border-collapse text-xs">
+              <thead>
+                <tr className="bg-[#0c1424] text-slate-300 border-b border-[#1f2c45] font-semibold select-none">
+                  <th className="py-3 px-3 text-center w-12">ردیف</th>
+
+                  <th
+                    onClick={() => handleToggleSort('personnelCode')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس کد پرسنلی"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>کد پرسنلی</span>
+                      {sortField === 'personnelCode' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('name')}
+                    className="py-3 px-3 cursor-pointer hover:bg-[#152238] transition-colors min-w-[170px]"
+                    title="کلیک برای مرتب‌سازی بر اساس نام راننده"
+                  >
+                    <div className="flex items-center gap-1 font-bold">
+                      <span>نام و نام خانوادگی</span>
+                      {sortField === 'name' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('joinedDate')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس تاریخ پیوستن"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>تاریخ پیوستن</span>
+                      {sortField === 'joinedDate' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('status')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس وضعیت کاری"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>وضعیت کاری</span>
+                      {sortField === 'status' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th className="py-3 px-3 text-center">نوع قرارداد</th>
+                  <th className="py-3 px-3 text-center">شماره تماس</th>
+                  <th className="py-3 px-3 text-center">کد ملی</th>
+                  <th className="py-3 px-3 text-center min-w-[145px]">خودروی تحت اختیار</th>
+
+                  <th
+                    onClick={() => handleToggleSort('rating')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس امتیاز و سفرها"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>امتیاز / سفر</span>
+                      {sortField === 'rating' || sortField === 'totalTrips' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th className="py-3 px-3.5 text-center w-48">عملیات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#172338]">
+                {sortedDrivers.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="py-12 text-center text-slate-500">
+                      راننده‌ای مطابق با فیلترهای جستجو یافت نشد.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedDrivers.map((d, idx) => {
+                    const assignedPlate = d.assignedVehicles?.[0];
+                    const matchedVeh = assignedPlate ? vehicles.find((v) => v.plateNumber === assignedPlate) : undefined;
+                    const avatarSrc = d.avatarUrl || d.documents?.avatarPhoto;
+
+                    const isAvailable = d.status === 'AVAILABLE' || d.status === 'available' || d.status === 'active';
+                    const isMission = d.status === 'ON_MISSION' || d.status === 'mission';
+                    const isLeave = d.status === 'ON_LEAVE' || d.status === 'leave';
+
+                    return (
+                      <tr key={d.id} className="hover:bg-[#152238] transition-colors text-slate-200">
+                        {/* Row Index */}
+                        <td className="py-3 px-3 text-center text-slate-500 font-mono text-[11px]">
+                          {toFaDigits(idx + 1)}
+                        </td>
+
+                        {/* Personnel Code */}
+                        <td className="py-3 px-3 text-center font-mono font-black text-amber-400 text-sm">
+                          {toFaDigits(d.personnelCode || d.code || '')}
+                        </td>
+
+                        {/* Driver Name & Avatar */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center shrink-0">
+                              {avatarSrc ? (
+                                <img src={avatarSrc} alt={d.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <Users className="w-4 h-4 text-slate-400" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-white text-xs truncate">
+                                {d.name}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                گواهینامه: {toFaDigits(d.licenseNumber || '---')}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Joined Date */}
+                        <td className="py-3 px-3 text-center font-mono text-xs text-slate-300">
+                          {d.joinedDate ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              <span>{toFaDigits(d.joinedDate)}</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-[11px]">۱۴۰۵/۰۱/۱۵</span>
+                          )}
+                        </td>
+
+                        {/* Work Status */}
+                        <td className="py-3 px-3 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                              isAvailable
+                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                : isMission
+                                ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                                : isLeave
+                                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                : 'bg-slate-800 text-slate-400 border-slate-700'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isAvailable
+                                  ? 'bg-emerald-400'
+                                  : isMission
+                                  ? 'bg-blue-400 animate-pulse'
+                                  : isLeave
+                                  ? 'bg-amber-400'
+                                  : 'bg-slate-500'
+                              }`}
+                            />
+                            <span>
+                              {isAvailable
+                                ? 'آماده به کار'
+                                : isMission
+                                ? 'در مأموریت'
+                                : isLeave
+                                ? 'در مرخصی'
+                                : 'غیرفعال'}
+                            </span>
+                          </span>
+                        </td>
+
+                        {/* Contract Type */}
+                        <td className="py-3 px-3 text-center text-[11px] text-slate-400">
+                          {d.driverType === 'EMPLOYED'
+                            ? 'استخدامی'
+                            : d.driverType === 'CONTRACTOR'
+                            ? 'پیمانکاری'
+                            : 'کمکی / آزاد'}
+                        </td>
+
+                        {/* Phone */}
+                        <td className="py-3 px-3 text-center font-mono text-slate-300 text-xs dir-ltr">
+                          {toFaDigits(d.phone || '---')}
+                        </td>
+
+                        {/* National ID */}
+                        <td className="py-3 px-3 text-center font-mono text-slate-300 text-xs">
+                          {toFaDigits(d.nationalCode || '---')}
+                        </td>
+
+                        {/* Assigned Vehicle */}
+                        <td className="py-3 px-3 text-center">
+                          {assignedPlate ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <IranianPlate plateNumber={assignedPlate} size="sm" />
+                              {matchedVeh && (
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  کد {toFaDigits(matchedVeh.code)} ({matchedVeh.vehicleType})
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 text-[11px]">فاقد خودرو</span>
+                          )}
+                        </td>
+
+                        {/* Rating & Trips */}
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1 text-amber-400 font-mono text-xs">
+                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                            <span>{toFaDigits(d.rating || 5.0)}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {toFaDigits(d.totalTrips || d.tripsCount || 0)} سفر
+                          </div>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 px-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(d)}
+                              className="p-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 transition cursor-pointer"
+                              title="ویرایش پرونده راننده"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setViewingDocsDriver(d)}
+                              className="p-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition cursor-pointer"
+                              title="مدارک و اسناد هویتی"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setPrintingDriver(d)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+                              title="چاپ کارت هوشمند راننده"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+
+                            {onOpenBaleForDriver && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenBaleForDriver(d)}
+                                className="p-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 transition cursor-pointer"
+                                title="ارسال پیامک و اعلان پیام‌رسان بله"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* Drivers Grid (Using Redesigned High-Contrast, Laser-Ready DriverCard) */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sortedDrivers.map((d) => (
+            <DriverCard
+              key={d.id}
+              driver={d}
+              vehicles={vehicles}
+              onAssignVehicle={(drv, plate) => onAssignVehicleToDriver?.(drv.id, plate)}
+              onUnassignVehicle={(drv) => onAssignVehicleToDriver?.(drv.id, 'NONE')}
+              onEdit={handleOpenEdit}
+              onViewDocuments={setViewingDocsDriver}
+              onOpenBale={onOpenBaleForDriver}
+              onOpenEitaa={onOpenEitaaForDriver}
+              onPrintCard={setPrintingDriver}
+              onShowToast={onShowToast}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Multi-Tab Register / Edit Driver Modal */}
       {isModalOpen && (

@@ -14,6 +14,7 @@ import {
   Sun,
   Moon,
   LogOut,
+  FileCheck,
 } from 'lucide-react';
 import { ActiveAppTab } from './Header';
 import { toFaDigits } from '../utils/jalaali';
@@ -112,6 +113,13 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           icon: Truck,
           badge: unassignedVehiclesCount > 0 ? `${toFaDigits(unassignedVehiclesCount)} آزاد` : undefined,
         },
+        {
+          id: 'HANDOVER',
+          label: 'برگه تحویل خودرو',
+          subLabel: 'صورت‌جلسه ۶۶ قلمی و بدنه',
+          icon: FileCheck,
+          badge: '۶۶ قلم',
+        },
       ],
     },
     {
@@ -175,6 +183,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
             return canViewModule(currentUser, 'attendance');
           case 'VEHICLE_ASSIGNMENT':
             return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
+          case 'HANDOVER':
+            return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
           case 'DRIVERS':
             return canViewModule(currentUser, 'drivers');
           case 'STAFF':

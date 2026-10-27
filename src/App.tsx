@@ -32,6 +32,7 @@ import { DriversDirectoryView } from './components/DriversDirectoryView';
 import { StaffDirectoryView } from './components/StaffDirectoryView';
 import { OilServiceManagementView } from './components/OilServiceManagementView';
 import { DriverRegulationsView } from './components/DriverRegulationsView';
+import { VehicleHandoverManager } from './components/VehicleHandoverManager';
 import { TimelineModal } from './components/TimelineModal';
 import { AddDriverModal } from './components/AddDriverModal';
 import { RangeAssignModal } from './components/RangeAssignModal';
@@ -403,6 +404,8 @@ export const App: FC = () => {
           return canViewModule(currentUser, 'staff');
         case 'OIL_SERVICE':
           return canViewModule(currentUser, 'oilService');
+        case 'HANDOVER':
+          return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
         case 'REGULATIONS':
           return canViewModule(currentUser, 'regulations');
         case 'USERS_LOGS':
@@ -2100,7 +2103,19 @@ export const App: FC = () => {
             </div>
           )}
 
-          {/* Module 5: Editable Disciplinary Regulations & Vehicle Handover */}
+          {/* Module 5: Dedicated Vehicle Handover & 66-item Checklist (صورت‌جلسه و برگه تحویل خودرو) */}
+          {activeTab === 'HANDOVER' && (
+            <div className="animate-in fade-in duration-150">
+              <VehicleHandoverManager
+                vehicles={vehicles}
+                drivers={drivers}
+                onShowToast={showToast}
+                onSyncCentralDb={handleForceSaveToNetworkDb}
+              />
+            </div>
+          )}
+
+          {/* Module 6: Editable Disciplinary Regulations & Vehicle Handover */}
           {activeTab === 'REGULATIONS' && (
             <div className="animate-in fade-in duration-150">
               <DriverRegulationsView

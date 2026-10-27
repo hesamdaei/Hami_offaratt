@@ -24,6 +24,7 @@ import {
   Sun,
   Moon,
   Send,
+  FileCheck,
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { QuickSearchSpotlight } from './QuickSearchSpotlight';
@@ -41,6 +42,7 @@ export type ActiveAppTab =
   | 'DRIVERS'
   | 'STAFF'
   | 'OIL_SERVICE'
+  | 'HANDOVER'
   | 'REGULATIONS'
   | 'USERS_LOGS';
 
@@ -204,6 +206,13 @@ export const Header: FC<HeaderProps> = ({
       badge: totalVehiclesCount > 0 ? toFaDigits(totalVehiclesCount) : undefined,
     },
     {
+      id: 'HANDOVER',
+      title: 'برگه و صورت‌جلسه تحویل خودرو',
+      shortTitle: 'تحویل خودرو',
+      icon: FileCheck,
+      badge: '۶۶ قلم',
+    },
+    {
       id: 'REGULATIONS',
       title: 'آیین‌نامه انضباطی',
       shortTitle: 'آیین‌نامه',
@@ -231,6 +240,8 @@ export const Header: FC<HeaderProps> = ({
         return canViewModule(currentUser, 'staff');
       case 'OIL_SERVICE':
         return canViewModule(currentUser, 'oilService');
+      case 'HANDOVER':
+        return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
       case 'REGULATIONS':
         return canViewModule(currentUser, 'regulations');
       case 'USERS_LOGS':
