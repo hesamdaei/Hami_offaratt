@@ -1367,7 +1367,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
 
                 <div>
                   <label className="block text-amber-300 font-bold mb-1 flex items-center justify-between">
-                    <span>نام کاربری ورود (قابل ویرایش) *</span>
+                    <span>نام کاربری ورود به سیستم (قابل ویرایش) *</span>
                     <span className="text-[10px] text-slate-400 font-mono">انگلیسی</span>
                   </label>
                   <input
@@ -1589,7 +1589,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
 
                 <div>
                   <label className="block text-amber-300 font-bold mb-1 flex items-center justify-between">
-                    <span>نام کاربری (قابل ویرایش) *</span>
+                    <span>نام کاربری ورود به سیستم (قابل ویرایش) *</span>
                     <span className="text-[10px] text-slate-400 font-mono">لاتین</span>
                   </label>
                   <input

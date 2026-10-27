@@ -1989,6 +1989,8 @@ export const App: FC = () => {
                 onAssignDriverToVehicle={handleAssignDriverToVehicle}
                 onAssignVehicleToDriver={handleAssignVehicleToDriver}
                 onNavigateToVehicleAssignment={() => setActiveTab('VEHICLE_ASSIGNMENT')}
+                onNavigateToDriversDirectory={() => setActiveTab('DRIVERS')}
+                onNavigateToStaffDirectory={() => setActiveTab('STAFF')}
                 onUpdateDriverStatus={handleUpdateDriverStatus}
                 onUpdateStaffStatus={handleUpdateStaffStatus}
                 onAddDriver={() => setIsAddDriverOpen(true)}

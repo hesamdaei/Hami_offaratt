@@ -363,7 +363,7 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                             </div>
                             <div>
                               <label className="text-[11px] text-amber-400 font-bold block mb-1 flex items-center justify-between">
-                                <span>نام کاربری (قابل ویرایش)</span>
+                                <span>نام کاربری ورود به سیستم (قابل ویرایش)</span>
                                 <span className="text-[10px] text-slate-500 font-normal">انگلیسی</span>
                               </label>
                               <input
@@ -749,7 +749,7 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
 
                   <div>
                     <label className="text-xs text-amber-300 block mb-1 font-bold flex items-center justify-between">
-                      <span>نام کاربری (قابل ویرایش) *</span>
+                      <span>نام کاربری ورود به سیستم (قابل ویرایش) *</span>
                       <span className="text-[10px] text-slate-400 font-normal">لاتین / دلخواه</span>
                     </label>
                     <input
