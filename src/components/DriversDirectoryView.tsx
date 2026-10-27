@@ -40,7 +40,11 @@ export type DriverSortField =
   | 'status'
   | 'name'
   | 'rating'
-  | 'totalTrips';
+  | 'totalTrips'
+  | 'driverType'
+  | 'phone'
+  | 'nationalCode'
+  | 'vehicleCode';
 
 export type DriverSortDirection = 'asc' | 'desc';
 
@@ -202,6 +206,21 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
           const tA = a.totalTrips || a.tripsCount || 0;
           const tB = b.totalTrips || b.tripsCount || 0;
           comparison = tA - tB;
+          break;
+        }
+        case 'driverType':
+          comparison = (a.driverType || '').localeCompare(b.driverType || '', 'fa');
+          break;
+        case 'phone':
+          comparison = (a.phone || '').localeCompare(b.phone || '', 'fa');
+          break;
+        case 'nationalCode':
+          comparison = (a.nationalCode || '').localeCompare(b.nationalCode || '', 'fa');
+          break;
+        case 'vehicleCode': {
+          const vehA = a.assignedVehicles?.[0] || '';
+          const vehB = b.assignedVehicles?.[0] || '';
+          comparison = vehA.localeCompare(vehB, 'fa');
           break;
         }
         default:
@@ -368,9 +387,13 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
               className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer"
             >
               <option value="personnelCode" className="bg-[#0f172a]">کد پرسنلی</option>
+              <option value="name" className="bg-[#0f172a]">نام و نام خانوادگی</option>
               <option value="joinedDate" className="bg-[#0f172a]">تاریخ پیوستن / استخدام</option>
               <option value="status" className="bg-[#0f172a]">وضعیت کاری</option>
-              <option value="name" className="bg-[#0f172a]">نام و نام خانوادگی</option>
+              <option value="driverType" className="bg-[#0f172a]">نوع قرارداد</option>
+              <option value="phone" className="bg-[#0f172a]">شماره تماس</option>
+              <option value="nationalCode" className="bg-[#0f172a]">کد ملی</option>
+              <option value="vehicleCode" className="bg-[#0f172a]">خودروی تحت اختیار</option>
               <option value="rating" className="bg-[#0f172a]">امتیاز عملکرد</option>
               <option value="totalTrips" className="bg-[#0f172a]">تعداد سفرها</option>
             </select>
@@ -510,10 +533,65 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
                     </div>
                   </th>
 
-                  <th className="py-3 px-3 text-center">نوع قرارداد</th>
-                  <th className="py-3 px-3 text-center">شماره تماس</th>
-                  <th className="py-3 px-3 text-center">کد ملی</th>
-                  <th className="py-3 px-3 text-center min-w-[145px]">خودروی تحت اختیار</th>
+                  <th
+                    onClick={() => handleToggleSort('driverType')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس نوع قرارداد"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>نوع قرارداد</span>
+                      {sortField === 'driverType' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('phone')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس شماره تماس"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>شماره تماس</span>
+                      {sortField === 'phone' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('nationalCode')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس کد ملی"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>کد ملی</span>
+                      {sortField === 'nationalCode' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('vehicleCode')}
+                    className="py-3 px-3 text-center min-w-[145px] cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس خودروی تحت اختیار"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>خودروی تحت اختیار</span>
+                      {sortField === 'vehicleCode' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
 
                   <th
                     onClick={() => handleToggleSort('rating')}

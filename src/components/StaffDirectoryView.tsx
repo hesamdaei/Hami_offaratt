@@ -34,10 +34,31 @@ import {
   KeyRound,
   Upload,
   Image as ImageIcon,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import { StaffMember, StaffContractType } from '../types';
 import { AppUser, UserPermissions } from '../types/auth';
 import { getStoredUsers, saveStoredUsers } from '../utils/authService';
+
+export type StaffSortField =
+  | 'code'
+  | 'name'
+  | 'department'
+  | 'role'
+  | 'shift'
+  | 'contractType'
+  | 'status'
+  | 'phone'
+  | 'nationalId'
+  | 'hireDate'
+  | 'rating'
+  | 'missions';
+
+export type StaffSortDirection = 'asc' | 'desc';
 import { STAFF_DOC_SLOTS, STAFF_DEPARTMENTS } from '../utils/staffSeedData';
 import { toFaDigits } from '../utils/jalaali';
 import { DocumentUploaderModal } from './DocumentUploaderModal';
@@ -104,7 +125,19 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   const [filterShift, setFilterShift] = useState('ALL');
   const [filterContract, setFilterContract] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [viewMode, setViewMode] = useState<'GRID' | 'TABLE'>('GRID');
+  // View Mode: default to TABLE (نمایش سطری)
+  const [viewMode, setViewMode] = useState<'GRID' | 'TABLE'>('TABLE');
+  const [sortField, setSortField] = useState<StaffSortField>('code');
+  const [sortDirection, setSortDirection] = useState<StaffSortDirection>('asc');
+
+  const handleToggleSort = (field: StaffSortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   // Dossier View Modal (شناسنامه جامع کارمند)
   const [viewingDossier, setViewingDossier] = useState<StaffMember | null>(null);
@@ -200,6 +233,55 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
       return matchSearch && matchDept && matchShift && matchContract && matchStatus;
     });
   }, [staffMembers, search, filterDepartment, filterShift, filterContract, filterStatus]);
+
+  // Smart Sorted Staff list for row table & cards
+  const sortedStaff = useMemo(() => {
+    const list = [...filtered];
+    return list.sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'code':
+          comparison = (a.code || '').localeCompare(b.code || '', undefined, { numeric: true });
+          break;
+        case 'name':
+          comparison = (a.name || '').localeCompare(b.name || '', 'fa');
+          break;
+        case 'department':
+          comparison = (a.department || '').localeCompare(b.department || '', 'fa');
+          break;
+        case 'role':
+          comparison = (a.role || '').localeCompare(b.role || '', 'fa');
+          break;
+        case 'shift':
+          comparison = (a.shift || '').localeCompare(b.shift || '', 'fa');
+          break;
+        case 'contractType':
+          comparison = (a.contractType || '').localeCompare(b.contractType || '', 'fa');
+          break;
+        case 'status':
+          comparison = (a.status || 'active').localeCompare(b.status || 'active', 'fa');
+          break;
+        case 'phone':
+          comparison = (a.phone || '').localeCompare(b.phone || '', 'fa');
+          break;
+        case 'nationalId':
+          comparison = (a.nationalId || '').localeCompare(b.nationalId || '', 'fa');
+          break;
+        case 'hireDate':
+          comparison = (a.hireDate || '').localeCompare(b.hireDate || '', 'fa');
+          break;
+        case 'rating':
+          comparison = (a.rating || 0) - (b.rating || 0);
+          break;
+        case 'missions':
+          comparison = (a.totalMissions || a.missionsCountToday || 0) - (b.totalMissions || b.missionsCountToday || 0);
+          break;
+        default:
+          comparison = 0;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filtered, sortField, sortDirection]);
 
   // Executive KPI summary calculations
   const totalStaffCount = staffMembers.length;
@@ -704,25 +786,58 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
             <option value="INACTIVE">فقط غیرفعال</option>
           </select>
 
-          {/* View Mode Toggle */}
+          {/* Quick Sort Selector */}
+          <div className="flex items-center gap-1.5 bg-[#0a101f] border border-[#1f2c45] rounded-lg px-2.5 py-1.5">
+            <span className="text-[11px] text-slate-400 whitespace-nowrap font-medium">مرتب‌سازی:</span>
+            <select
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value as StaffSortField)}
+              className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer font-medium"
+            >
+              <option value="code" className="bg-[#0f172a]">کد پرسنلی</option>
+              <option value="name" className="bg-[#0f172a]">نام و نام خانوادگی</option>
+              <option value="department" className="bg-[#0f172a]">واحد سازمانی</option>
+              <option value="role" className="bg-[#0f172a]">سمت شغلی</option>
+              <option value="shift" className="bg-[#0f172a]">شیفت کاری</option>
+              <option value="contractType" className="bg-[#0f172a]">نوع قرارداد</option>
+              <option value="status" className="bg-[#0f172a]">وضعیت کاری</option>
+              <option value="hireDate" className="bg-[#0f172a]">تاریخ استخدام</option>
+              <option value="rating" className="bg-[#0f172a]">امتیاز عملکرد (KPI)</option>
+              <option value="missions" className="bg-[#0f172a]">تعداد مأموریت‌ها</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              className="p-1 rounded bg-[#172542] hover:bg-slate-700 text-indigo-400 transition cursor-pointer"
+              title={sortDirection === 'asc' ? 'صعودی (جهت تغییر به نزولی کلیک کنید)' : 'نزولی (جهت تغییر به صعودی کلیک کنید)'}
+            >
+              {sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+
+          {/* View Mode Toggle: Row-based Table vs Cards */}
           <div className="flex items-center bg-[#0a101f] border border-[#1f2c45] rounded-lg p-0.5">
             <button
-              onClick={() => setViewMode('GRID')}
-              title="نمایش کارتی پرونده‌ها"
-              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${
-                viewMode === 'GRID' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              type="button"
+              onClick={() => setViewMode('TABLE')}
+              title="نمایش سطری در قالب جدول با قابلیت چینش بر اساس ستون‌ها"
+              className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                viewMode === 'TABLE' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <span>کارت‌ها</span>
+              <List className="w-3.5 h-3.5" />
+              <span>نمایش سطری (جدول)</span>
             </button>
             <button
-              onClick={() => setViewMode('TABLE')}
-              title="نمایش جدولی جامع"
-              className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition-colors ${
-                viewMode === 'TABLE' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              type="button"
+              onClick={() => setViewMode('GRID')}
+              title="نمایش در قالب کارت‌های پرسنلی"
+              className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                viewMode === 'GRID' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <span>جدول</span>
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>نمایش کارتی</span>
             </button>
           </div>
 
@@ -772,9 +887,10 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
       )}
 
       {/* 4. GRID VIEW */}
-      {viewMode === 'GRID' && filtered.length > 0 && (
+      {/* 4. CARDS GRID VIEW */}
+      {viewMode === 'GRID' && sortedStaff.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {filtered.map((s) => {
+          {sortedStaff.map((s) => {
             const shiftInfo = getShiftBadge(s.shift);
             const deptColor = getDeptColor(s.department);
             const isInactive = s.status === 'inactive';
@@ -993,29 +1109,157 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
         </div>
       )}
 
-      {/* 5. TABLE VIEW */}
-      {viewMode === 'TABLE' && filtered.length > 0 && (
+      {/* 5. ROW-BASED TABLE VIEW WITH COLUMN SORTING */}
+      {viewMode === 'TABLE' && sortedStaff.length > 0 && (
         <div className="bg-[#111b2e] border border-[#1f2c45] rounded-xl overflow-hidden shadow-md">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
               <thead>
-                <tr className="bg-[#0a101f] text-slate-300 border-b border-[#1f2c45] font-semibold">
-                  <th className="py-3 px-3">ردیف</th>
-                  <th className="py-3 px-3">کارمند</th>
-                  <th className="py-3 px-3">کد پرسنلی</th>
-                  <th className="py-3 px-3">واحد سازمانی</th>
-                  <th className="py-3 px-3">سمت شغلی</th>
-                  <th className="py-3 px-3">شیفت</th>
-                  <th className="py-3 px-3">ساعت کار</th>
-                  <th className="py-3 px-3">شماره تماس</th>
-                  <th className="py-3 px-3">کد ملی</th>
-                  <th className="py-3 px-3">نوع قرارداد</th>
-                  <th className="py-3 px-3">وضعیت</th>
+                <tr className="bg-[#0a101f] text-slate-300 border-b border-[#1f2c45] font-semibold select-none">
+                  <th className="py-3 px-3 text-center w-12">ردیف</th>
+
+                  <th
+                    onClick={() => handleToggleSort('name')}
+                    className="py-3 px-3 cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس نام کارمند"
+                  >
+                    <div className="flex items-center gap-1 font-bold">
+                      <span>کارمند</span>
+                      {sortField === 'name' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('code')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس کد پرسنلی"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>کد پرسنلی</span>
+                      {sortField === 'code' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('department')}
+                    className="py-3 px-3 cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس واحد سازمانی"
+                  >
+                    <div className="flex items-center gap-1 font-bold">
+                      <span>واحد سازمانی</span>
+                      {sortField === 'department' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('role')}
+                    className="py-3 px-3 cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس سمت شغلی"
+                  >
+                    <div className="flex items-center gap-1 font-bold">
+                      <span>سمت شغلی</span>
+                      {sortField === 'role' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('shift')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس شیفت کاری"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>شیفت</span>
+                      {sortField === 'shift' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th className="py-3 px-3 text-center">ساعت کار</th>
+
+                  <th
+                    onClick={() => handleToggleSort('phone')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس شماره تماس"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>شماره تماس</span>
+                      {sortField === 'phone' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('nationalId')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس کد ملی"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>کد ملی</span>
+                      {sortField === 'nationalId' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('contractType')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس نوع قرارداد"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>نوع قرارداد</span>
+                      {sortField === 'contractType' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('status')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#142340] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس وضعیت"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>وضعیت</span>
+                      {sortField === 'status' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-indigo-400" /> : <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
                   <th className="py-3 px-3 text-center">عملیات پرونده</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1f2c45]">
-                {filtered.map((s, idx) => {
+                {sortedStaff.map((s, idx) => {
                   const shiftInfo = getShiftBadge(s.shift);
                   const isInactive = s.status === 'inactive';
                   const docsCount = s.documents ? Object.values(s.documents).filter(Boolean).length : 0;

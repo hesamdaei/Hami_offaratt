@@ -19,6 +19,13 @@ import {
   Sparkles,
   HelpCircle,
   FileSpreadsheet,
+  List,
+  LayoutGrid,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  UserPlus,
+  UserMinus,
 } from 'lucide-react';
 import { Driver } from '../types';
 import { VehicleItem, DriverDirectoryItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
@@ -44,7 +51,18 @@ interface VehicleAssignmentHubViewProps {
 }
 
 type TabFilter = 'ALL' | 'UNASSIGNED_VEHICLES' | 'ASSIGNED_VEHICLES' | 'UNASSIGNED_DRIVERS' | 'ASSIGNED_DRIVERS';
-type ViewLayout = 'VEHICLES' | 'DRIVERS' | 'COMPARATIVE' | 'SPLIT_DESK';
+type ViewLayout = 'TABLE' | 'VEHICLES' | 'DRIVERS' | 'COMPARATIVE' | 'SPLIT_DESK';
+
+export type AssignmentSortField =
+  | 'code'
+  | 'plateNumber'
+  | 'vehicleType'
+  | 'driverName'
+  | 'driverPhone'
+  | 'status'
+  | 'isAssigned';
+
+export type AssignmentSortDirection = 'asc' | 'desc';
 
 export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
   vehicles,
@@ -59,8 +77,22 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [tabFilter, setTabFilter] = useState<TabFilter>('ALL');
-  const [viewLayout, setViewLayout] = useState<ViewLayout>('VEHICLES');
+  // Default to TABLE (نمایش سطری با چینش ستون‌ها)
+  const [viewLayout, setViewLayout] = useState<ViewLayout>('TABLE');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<string>('ALL');
+
+  // Sorting state for table view
+  const [assignmentSortField, setAssignmentSortField] = useState<AssignmentSortField>('code');
+  const [assignmentSortDir, setAssignmentSortDir] = useState<AssignmentSortDirection>('asc');
+
+  const handleToggleSort = (field: AssignmentSortField) => {
+    if (assignmentSortField === field) {
+      setAssignmentSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setAssignmentSortField(field);
+      setAssignmentSortDir('asc');
+    }
+  };
 
   // Modals & Popovers
   const [assigningVehicle, setAssigningVehicle] = useState<VehicleItem | null>(null);
@@ -227,6 +259,51 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
     });
   }, [vehicles, tabFilter, vehicleTypeFilter, searchQuery]);
 
+  // Smart Sorted Vehicles for Row Table
+  const sortedAssignmentVehicles = useMemo(() => {
+    const list = [...filteredVehicles];
+    return list.sort((a, b) => {
+      let comparison = 0;
+      switch (assignmentSortField) {
+        case 'code':
+          comparison = (a.code || 0) - (b.code || 0);
+          break;
+        case 'plateNumber':
+          comparison = (a.plateNumber || '').localeCompare(b.plateNumber || '', 'fa');
+          break;
+        case 'vehicleType':
+          comparison = (VEHICLE_TYPE_NAMES[a.vehicleType] || a.vehicleType).localeCompare(
+            VEHICLE_TYPE_NAMES[b.vehicleType] || b.vehicleType,
+            'fa'
+          );
+          break;
+        case 'driverName': {
+          const isAUnassigned = !a.driverName || a.driverName === 'بدون راننده';
+          const isBUnassigned = !b.driverName || b.driverName === 'بدون راننده';
+          if (isAUnassigned && !isBUnassigned) comparison = 1;
+          else if (!isAUnassigned && isBUnassigned) comparison = -1;
+          else comparison = (a.driverName || '').localeCompare(b.driverName || '', 'fa');
+          break;
+        }
+        case 'driverPhone':
+          comparison = (a.driverPhone || '').localeCompare(b.driverPhone || '', 'fa');
+          break;
+        case 'status':
+          comparison = (a.status || '').localeCompare(b.status || '', 'fa');
+          break;
+        case 'isAssigned': {
+          const isA = Boolean(a.driverName && a.driverName !== 'بدون راننده');
+          const isB = Boolean(b.driverName && b.driverName !== 'بدون راننده');
+          comparison = (isA === isB) ? 0 : isA ? -1 : 1;
+          break;
+        }
+        default:
+          comparison = 0;
+      }
+      return assignmentSortDir === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredVehicles, assignmentSortField, assignmentSortDir]);
+
   // Filtered drivers
   const filteredDrivers = useMemo(() => {
     return activeDrivers.filter((d) => {
@@ -337,6 +414,21 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
           >
             <button
               type="button"
+              onClick={() => setViewLayout('TABLE')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewLayout === 'TABLE'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : isLight
+                  ? 'text-slate-700 hover:text-slate-950'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+              title="نمایش سطری در قالب جدول با چینش ستون‌ها"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>نمایش سطری (جدول)</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setViewLayout('VEHICLES')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 viewLayout === 'VEHICLES'
@@ -345,9 +437,10 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                   ? 'text-slate-700 hover:text-slate-950'
                   : 'text-slate-300 hover:text-white'
               }`}
+              title="نمایش کارتی ناوگان"
             >
               <Truck className="w-3.5 h-3.5" />
-              <span>نمای ناوگان</span>
+              <span>کارت‌های ناوگان</span>
             </button>
             <button
               type="button"
@@ -359,9 +452,10 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                   ? 'text-slate-700 hover:text-slate-950'
                   : 'text-slate-300 hover:text-white'
               }`}
+              title="نمایش کارتی رانندگان"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>نمای رانندگان</span>
+              <span>کارت‌های رانندگان</span>
             </button>
             <button
               type="button"
@@ -373,6 +467,7 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                   ? 'text-slate-700 hover:text-slate-950'
                   : 'text-slate-300 hover:text-white'
               }`}
+              title="میز تخصیص سریع دو ستونه"
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
               <span>میز تخصیص سریع</span>
@@ -579,10 +674,324 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
               رانندگان بدون خودرو ({toFaDigits(stats.driversWithoutVehicle)})
             </button>
           </div>
+
+          {/* Quick Sort Controls */}
+          <div className="flex items-center gap-1.5 bg-[#0a101f] border border-[#1f2c45] rounded-lg px-2.5 py-1.5 self-start lg:self-auto">
+            <span className="text-[11px] text-slate-400 whitespace-nowrap font-medium">مرتب‌سازی ستونی:</span>
+            <select
+              value={assignmentSortField}
+              onChange={(e) => setAssignmentSortField(e.target.value as AssignmentSortField)}
+              className="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer font-medium"
+            >
+              <option value="code" className="bg-[#0f172a]">کد خودرو</option>
+              <option value="plateNumber" className="bg-[#0f172a]">پلاک انتظامی</option>
+              <option value="vehicleType" className="bg-[#0f172a]">نوع خودرو</option>
+              <option value="driverName" className="bg-[#0f172a]">نام راننده منتسب</option>
+              <option value="driverPhone" className="bg-[#0f172a]">شماره تماس</option>
+              <option value="status" className="bg-[#0f172a]">وضعیت کاری</option>
+              <option value="isAssigned" className="bg-[#0f172a]">وضعیت واگذاری</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setAssignmentSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              className="p-1 rounded bg-[#172542] hover:bg-slate-700 text-amber-400 transition cursor-pointer"
+              title={assignmentSortDir === 'asc' ? 'صعودی (کلیک برای معکوس)' : 'نزولی (کلیک برای معکوس)'}
+            >
+              {assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* 4. MAIN CONTENT DISPLAY (BASED ON LAYOUT) */}
+
+      {/* LAYOUT: ROW-BASED TABLE VIEW WITH COLUMN SORTING */}
+      {viewLayout === 'TABLE' && (
+        <div className="bg-[#111b2e] border border-[#1f2c45] rounded-xl overflow-hidden shadow-lg space-y-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-right border-collapse text-xs">
+              <thead>
+                <tr className="bg-[#0c1424] text-slate-300 border-b border-[#1f2c45] font-semibold select-none">
+                  <th className="py-3 px-3 text-center w-12">ردیف</th>
+
+                  <th
+                    onClick={() => handleToggleSort('code')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس کد ماشین"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>کد خودرو</span>
+                      {assignmentSortField === 'code' ? (
+                        assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('plateNumber')}
+                    className="py-3 px-3 text-center min-w-[150px] cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس پلاک ملی"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>پلاک انتظامی</span>
+                      {assignmentSortField === 'plateNumber' ? (
+                        assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('vehicleType')}
+                    className="py-3 px-3 cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس نوع و مدل خودرو"
+                  >
+                    <div className="flex items-center gap-1 font-bold">
+                      <span>نوع خودرو</span>
+                      {assignmentSortField === 'vehicleType' ? (
+                        assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('driverName')}
+                    className="py-3 px-3 cursor-pointer hover:bg-[#152238] transition-colors min-w-[170px]"
+                    title="کلیک برای مرتب‌سازی بر اساس نام راننده"
+                  >
+                    <div className="flex items-center gap-1 font-bold">
+                      <span>راننده منتسب</span>
+                      {assignmentSortField === 'driverName' ? (
+                        assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('driverPhone')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس شماره تماس"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>شماره تماس</span>
+                      {assignmentSortField === 'driverPhone' ? (
+                        assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('status')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس وضعیت عملیاتی"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>وضعیت خودرو</span>
+                      {assignmentSortField === 'status' ? (
+                        assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th
+                    onClick={() => handleToggleSort('isAssigned')}
+                    className="py-3 px-3 text-center cursor-pointer hover:bg-[#152238] transition-colors"
+                    title="کلیک برای مرتب‌سازی بر اساس وضعیت واگذاری"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold">
+                      <span>وضعیت واگذاری</span>
+                      {assignmentSortField === 'isAssigned' ? (
+                        assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-amber-400" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  <th className="py-3 px-3 text-center w-52">عملیات تخصیص و واگذاری</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#172338]">
+                {sortedAssignmentVehicles.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-slate-500">
+                      خودرویی مطابق با فیلترهای جستجو یافت نشد.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedAssignmentVehicles.map((vehicle, idx) => {
+                    const isAssigned = Boolean(
+                      vehicle.driverName &&
+                      vehicle.driverName.trim() &&
+                      vehicle.driverName !== 'بدون راننده' &&
+                      vehicle.driverName !== 'NONE'
+                    );
+
+                    return (
+                      <tr key={vehicle.id} className="hover:bg-[#152238] transition-colors text-slate-200">
+                        {/* Index */}
+                        <td className="py-3 px-3 text-center text-slate-500 font-mono text-[11px]">
+                          {toFaDigits(idx + 1)}
+                        </td>
+
+                        {/* Code */}
+                        <td className="py-3 px-3 text-center font-mono font-bold text-amber-400">
+                          {toFaDigits(vehicle.code)}
+                        </td>
+
+                        {/* Plate */}
+                        <td className="py-3 px-3 text-center">
+                          <IranianPlate plateNumber={vehicle.plateNumber} scale={0.75} />
+                        </td>
+
+                        {/* Type */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <Truck className="w-3.5 h-3.5 text-blue-400" />
+                            <span>{VEHICLE_TYPE_NAMES[vehicle.vehicleType] || vehicle.vehicleType}</span>
+                          </div>
+                        </td>
+
+                        {/* Driver */}
+                        <td className="py-3 px-3">
+                          {isAssigned ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xs shrink-0">
+                                {vehicle.driverName.slice(0, 1)}
+                              </div>
+                              <span className="font-bold text-white text-xs">{vehicle.driverName}</span>
+                            </div>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              بدون راننده (آزاد)
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Phone */}
+                        <td className="py-3 px-3 text-center font-mono text-slate-400 text-xs">
+                          {vehicle.driverPhone ? toFaDigits(vehicle.driverPhone) : '---'}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3 px-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                              vehicle.status === 'ACTIVE'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : vehicle.status === 'IN_MISSION'
+                                ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                                : vehicle.status === 'IN_MAINTENANCE'
+                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                : 'bg-slate-700/30 text-slate-400 border-slate-600/30'
+                            }`}
+                          >
+                            {vehicle.status === 'ACTIVE'
+                              ? 'آماده به کار'
+                              : vehicle.status === 'IN_MISSION'
+                              ? 'در مأموریت'
+                              : vehicle.status === 'IN_MAINTENANCE'
+                              ? 'تعمیرگاه'
+                              : 'پارکینگ'}
+                          </span>
+                        </td>
+
+                        {/* Assignment Status */}
+                        <td className="py-3 px-3 text-center">
+                          {isAssigned ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>تخصیص‌یافته</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              <AlertTriangle className="w-3 h-3" />
+                              <span>آزاد / آماده واگذاری</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {isAssigned ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setAssigningVehicle(vehicle)}
+                                  className="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="تغییر راننده منتسب به این خودرو"
+                                >
+                                  <UserPlus className="w-3 h-3" />
+                                  <span>تغییر راننده</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setUnassignConfirm({
+                                      type: 'VEHICLE',
+                                      vehicleId: vehicle.id,
+                                      vehiclePlate: vehicle.plateNumber,
+                                      vehicleCode: vehicle.code,
+                                      driverName: vehicle.driverName,
+                                    })
+                                  }
+                                  className="p-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 transition-colors cursor-pointer"
+                                  title="لغو واگذاری خودرو و بازگرداندن به حالت آزاد"
+                                >
+                                  <UserMinus className="w-3.5 h-3.5" />
+                                </button>
+                                {onOpenBaleForDriver && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onOpenBaleForDriver({
+                                        name: vehicle.driverName,
+                                        phone: vehicle.driverPhone,
+                                        vehicleCode: vehicle.code,
+                                        plateNumber: vehicle.plateNumber,
+                                        vehicleType: VEHICLE_TYPE_NAMES[vehicle.vehicleType],
+                                      })
+                                    }
+                                    className="p-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-colors cursor-pointer"
+                                    title="ارسال پیامک و مشخصات در بله"
+                                  >
+                                    <Send className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setAssigningVehicle(vehicle)}
+                                className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+                              >
+                                <UserPlus className="w-3 h-3" />
+                                <span>واگذاری به راننده</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* LAYOUT A: VEHICLES VIEW */}
       {viewLayout === 'VEHICLES' && (

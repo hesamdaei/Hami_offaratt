@@ -163,6 +163,13 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           icon: BookOpen,
         },
         {
+          id: 'HANDOVER',
+          label: 'فرم و برگه تحویل خودرو',
+          subLabel: 'صورت‌جلسه ۶۶ قلمی و بدنه',
+          icon: FileCheck,
+          badge: '۶۶ قلم',
+        },
+        {
           id: 'USERS_LOGS',
           label: 'مدیریت کاربران و لاگ',
           subLabel: 'کاربران، امنیت و رهگیری',

@@ -26,6 +26,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   VehicleItem,
@@ -75,6 +77,8 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [onlyExpiring, setOnlyExpiring] = useState(false);
   const [viewMode, setViewMode] = useState<'FLEET_LIST' | 'HISTORY_LOG'>('FLEET_LIST');
+  // Sub display mode: Row Table vs Cards
+  const [fleetDisplayMode, setFleetDisplayMode] = useState<'TABLE' | 'CARDS'>('TABLE');
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -602,11 +606,37 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
+          {/* Actions & Display Mode */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* View Mode: Row Table vs Cards */}
+            <div className="flex items-center bg-[#0a101f] border border-[#1f2c45] rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => setFleetDisplayMode('TABLE')}
+                className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                  fleetDisplayMode === 'TABLE' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="نمایش سطری در قالب جدول با چینش ستون‌ها"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>نمایش سطری (جدول)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFleetDisplayMode('CARDS')}
+                className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                  fleetDisplayMode === 'CARDS' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="نمایش در قالب کارت‌های ناوگان"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>نمایش کارتی</span>
+              </button>
+            </div>
+
             <button
               onClick={handleExportExcel}
-              className="px-3 py-2 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              className="px-3 py-2 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
               <span>خروجی اکسل</span>
@@ -638,8 +668,9 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
 
       {/* Main Content: Either FLEET_LIST or HISTORY_LOG */}
       {viewMode === 'FLEET_LIST' ? (
-        /* Main Fleet Table */
-        <div className="bg-[#111b2e] border border-[#1f2c45] rounded-xl overflow-hidden shadow-lg">
+        fleetDisplayMode === 'TABLE' ? (
+          /* Main Fleet Table */
+          <div className="bg-[#111b2e] border border-[#1f2c45] rounded-xl overflow-hidden shadow-lg">
         <div className="overflow-x-auto">
           <table className="w-full text-right border-collapse text-xs">
             <thead>
@@ -995,6 +1026,112 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
           </table>
         </div>
       </div>
+        ) : (
+          /* Cards Grid View for Fleet */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {sortedVehicles.map((v) => {
+              const isUnassigned = !v.driverName || v.driverName === 'بدون راننده';
+              return (
+                <div
+                  key={v.id}
+                  className="bg-[#111b2e] border border-[#1f2c45] rounded-xl p-4 shadow-md hover:border-blue-500/40 transition-all space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center font-bold text-amber-400 font-mono text-sm">
+                        {toFaDigits(v.code)}
+                      </div>
+                      <span className="font-bold text-white text-xs">{VEHICLE_TYPE_NAMES[v.vehicleType] || v.vehicleType}</span>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        v.status === 'ACTIVE'
+                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                          : v.status === 'IN_MISSION'
+                          ? 'bg-sky-500/10 text-sky-300 border-sky-500/30'
+                          : v.status === 'PARKING'
+                          ? 'bg-purple-500/10 text-purple-300 border-purple-500/30'
+                          : v.status === 'IN_MAINTENANCE'
+                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                          : 'bg-slate-700/20 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      {v.status === 'ACTIVE' && 'آماده به کار'}
+                      {v.status === 'IN_MISSION' && 'در مأموریت'}
+                      {v.status === 'PARKING' && 'پارکینگ'}
+                      {v.status === 'IN_MAINTENANCE' && 'تعمیرگاه'}
+                      {v.status === 'INACTIVE' && 'غیرفعال'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-center py-1">
+                    <IranianPlate plateNumber={v.plateNumber} scale={0.8} />
+                  </div>
+
+                  <div className="bg-[#0a101f] border border-[#1f2c45] rounded-lg p-2.5 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 text-[11px]">راننده منتسب:</span>
+                      <span className={`font-bold ${isUnassigned ? 'text-amber-400' : 'text-slate-200'}`}>
+                        {v.driverName}
+                      </span>
+                    </div>
+                    {v.driverPhone && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 text-[11px]">شماره تماس:</span>
+                        <span className="font-mono text-slate-300">{toFaDigits(v.driverPhone)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-1 border-t border-[#1a263d] text-[10px] font-mono text-slate-400">
+                      <span>بیمه ثالث: {toFaDigits(v.thirdPartyExpiry)}</span>
+                      <span>معاینه فنی: {toFaDigits(v.inspectionExpiry)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-[#1f2c45]">
+                    <button
+                      onClick={() => setEndOfWorkVehicle(v)}
+                      title="ثبت پایان کار و اعلام آمادگی روزانه"
+                      className="px-2 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors"
+                    >
+                      <Sparkles className="w-3 h-3 text-emerald-400" />
+                      <span>اعلام آمادگی</span>
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setStatusVehicle(v)}
+                        title="مشاهده وضعیت و شناسنامه ماشین"
+                        className="p-1 rounded-lg bg-sky-500/15 text-sky-400 hover:bg-sky-500/25 border border-sky-500/30 transition-colors"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenAssign(v)}
+                        title={isUnassigned ? 'تخصیص راننده' : 'تغییر راننده'}
+                        className="p-1 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenEdit(v)}
+                        title="ویرایش مشخصات"
+                        className="p-1 rounded-lg bg-slate-700/40 text-slate-300 hover:bg-slate-700 border border-slate-600/40 transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setViewingDocsVehicle(v)}
+                        title="مشاهده مدارک و تصاویر"
+                        className="p-1 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
       ) : (
         /* Comprehensive Fleet History Ledger (Replicating the exact Sedaqat Bar screen top table) */
         <div className="bg-[#111b2e] border border-[#1f2c45] rounded-xl overflow-hidden shadow-lg">

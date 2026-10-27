@@ -533,6 +533,7 @@ export interface DriverRegulationsViewProps {
   vehicles?: VehicleItem[];
   drivers?: Driver[];
   onSyncCentralDb?: () => void;
+  initialTab?: 'REGULATIONS' | 'HANDOVER';
 }
 
 export const DriverRegulationsView: FC<DriverRegulationsViewProps> = ({
@@ -540,9 +541,10 @@ export const DriverRegulationsView: FC<DriverRegulationsViewProps> = ({
   vehicles = [],
   drivers = [],
   onSyncCentralDb,
+  initialTab = 'REGULATIONS',
 }) => {
   // Top-level View Tab: Regulations Clauses vs Vehicle Handover Form
-  const [mainTab, setMainTab] = useState<'REGULATIONS' | 'HANDOVER'>('REGULATIONS');
+  const [mainTab, setMainTab] = useState<'REGULATIONS' | 'HANDOVER'>(initialTab);
 
   // A4 Print Modal state
   const [isA4ModalOpen, setIsA4ModalOpen] = useState(false);
@@ -930,6 +932,34 @@ export const DriverRegulationsView: FC<DriverRegulationsViewProps> = ({
         <>
           {/* Interactive Main View (Hidden completely during print) */}
           <div className="no-print space-y-6">
+            {/* Prominent Vehicle Handover Callout Banner inside Regulations */}
+            <div className="bg-gradient-to-r from-blue-950/80 via-slate-900 to-indigo-950/80 border-2 border-cyan-500/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 shrink-0">
+                  <Truck className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-white font-black text-sm sm:text-base">برگه و فرم رسمی تحویل خودرو به راننده</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500 text-slate-950">
+                      ۶۶ قلم استاندارد + ۴ وجه بدنه
+                    </span>
+                  </div>
+                  <p className="text-slate-300 text-xs mt-1">
+                    شامل چک‌لیست کامل ۶۶ موردی (موتور، بدنه، ادوات، اسناد) به همراه دیاگرام ۴ وجه بدنه کامیونت (جلو، عقب، راست، چپ) جهت ثبت خط و خش و خسارت‌ها با امکان چاپ رسمی A4.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMainTab('HANDOVER')}
+                className="whitespace-nowrap px-4 py-2.5 rounded-xl bg-linear-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-950/50 transition-all cursor-pointer shrink-0"
+              >
+                <FileCheck className="w-4 h-4" />
+                <span>ورود به فرم و برگه تحویل خودرو</span>
+              </button>
+            </div>
+
             {/* Top Banner & Control Bar */}
             <div className="bg-[#111b2e] border border-[#1f2c45] rounded-2xl p-5 shadow-lg space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
