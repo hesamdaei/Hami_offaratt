@@ -490,6 +490,7 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
             </button>
           </div>
         </div>
+      </div>
 
         {/* 2. Executive KPI Cards Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800/70">

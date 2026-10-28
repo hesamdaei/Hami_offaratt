@@ -2050,6 +2050,7 @@ export const App: FC = () => {
                 onAssignVehicleToDriver={handleAssignVehicleToDriver}
                 onUpdateVehicle={handleUpdateVehicle}
                 showToast={showToast}
+                onOpenHandover={handleOpenHandoverForVehicle}
                 onOpenBaleForDriver={(d) =>
                   handleOpenBale({
                     name: d.name,
@@ -2073,6 +2074,7 @@ export const App: FC = () => {
                 onAddDriver={handleAddDirectoryDriver}
                 onUpdateDriver={handleUpdateDirectoryDriver}
                 onAssignVehicleToDriver={handleAssignVehicleToDriver}
+                onOpenHandover={handleOpenHandoverForDriver}
                 onOpenBaleForDriver={(d) =>
                   handleOpenBale({
                     name: d.name,
@@ -2137,6 +2139,9 @@ export const App: FC = () => {
               <VehicleHandoverManager
                 vehicles={vehicles}
                 drivers={drivers}
+                driverDirectory={driverDirectory}
+                initialVehicle={preselectedHandoverVehicle}
+                initialDriver={preselectedHandoverDriver}
                 onShowToast={showToast}
                 onSyncCentralDb={handleForceSaveToNetworkDb}
               />
@@ -2150,6 +2155,7 @@ export const App: FC = () => {
                 onShowToast={showToast}
                 vehicles={vehicles}
                 drivers={drivers}
+                driverDirectory={driverDirectory}
                 onSyncCentralDb={handleForceSaveToNetworkDb}
               />
             </div>

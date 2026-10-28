@@ -532,6 +532,7 @@ export interface DriverRegulationsViewProps {
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   vehicles?: VehicleItem[];
   drivers?: Driver[];
+  driverDirectory?: DriverDirectoryItem[];
   onSyncCentralDb?: () => void;
   initialTab?: 'REGULATIONS' | 'HANDOVER';
 }
@@ -540,6 +541,7 @@ export const DriverRegulationsView: FC<DriverRegulationsViewProps> = ({
   onShowToast,
   vehicles = [],
   drivers = [],
+  driverDirectory = [],
   onSyncCentralDb,
   initialTab = 'REGULATIONS',
 }) => {
@@ -925,6 +927,7 @@ export const DriverRegulationsView: FC<DriverRegulationsViewProps> = ({
         <VehicleHandoverManager
           vehicles={vehicles}
           drivers={drivers}
+          driverDirectory={driverDirectory}
           onShowToast={onShowToast}
           onSyncCentralDb={onSyncCentralDb}
         />
