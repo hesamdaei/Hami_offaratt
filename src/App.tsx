@@ -2059,6 +2059,7 @@ export const App: FC = () => {
                     vehicleType: d.vehicleType,
                   })
                 }
+                onOpenHandover={handleOpenHandoverForVehicle}
                 theme={theme}
               />
             </div>
@@ -2089,6 +2090,7 @@ export const App: FC = () => {
                     plateNumber: d.assignedVehicles?.[0],
                   })
                 }
+                onOpenHandover={handleOpenHandoverForDriver}
                 onShowToast={showToast}
               />
             </div>
@@ -2137,6 +2139,9 @@ export const App: FC = () => {
               <VehicleHandoverManager
                 vehicles={vehicles}
                 drivers={drivers}
+                driverDirectory={driverDirectory}
+                initialVehicle={preselectedHandoverVehicle}
+                initialDriver={preselectedHandoverDriver}
                 onShowToast={showToast}
                 onSyncCentralDb={handleForceSaveToNetworkDb}
               />
@@ -2150,6 +2155,7 @@ export const App: FC = () => {
                 onShowToast={showToast}
                 vehicles={vehicles}
                 drivers={drivers}
+                driverDirectory={driverDirectory}
                 onSyncCentralDb={handleForceSaveToNetworkDb}
               />
             </div>
