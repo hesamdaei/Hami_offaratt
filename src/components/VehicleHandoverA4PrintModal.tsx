@@ -182,31 +182,31 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
             <div>
               <span className="text-slate-600 font-medium">نوع وسیله: </span>
               <strong className="font-bold text-slate-950">
-                {isBlankForm ? 'خاور / کامیونت کانتینردار' : (record.vehicleType || 'خاور کانتینردار')}
+                {record.vehicleType || 'کامیونت ایسوزو کانتینردار'}
               </strong>
             </div>
             <div>
               <span className="text-slate-600 font-medium">کد ناوگان: </span>
               <strong className="font-mono font-bold text-slate-950">
-                {isBlankForm ? '................' : (toFaDigits(record.vehicleCode) || '................')}
+                {record.vehicleCode ? toFaDigits(record.vehicleCode) : (isBlankForm ? '---' : '۱')}
               </strong>
             </div>
             <div>
               <span className="text-slate-600 font-medium">رنگ بدنه: </span>
               <strong className="font-bold text-slate-950">
-                {isBlankForm ? 'سفید روغنی' : (record.vehicleColor || 'سفید')}
+                {record.vehicleColor || 'سفید روغنی'}
               </strong>
             </div>
             <div className="flex items-center gap-1 justify-end">
               <span className="text-slate-600 font-medium text-[10px]">پلاک انتظامی: </span>
-              {!isBlankForm && record.vehiclePlate ? (
+              {record.vehiclePlate ? (
                 <div className="scale-75 origin-left inline-block">
                   <IranianPlate plateNumber={record.vehiclePlate} size="sm" />
                 </div>
               ) : (
-                <span className="font-mono font-bold text-slate-900">
-                  {record.vehiclePlate ? record.vehiclePlate : 'ایران ..... - ..... ع .....'}
-                </span>
+                <div className="scale-75 origin-left inline-block">
+                  <IranianPlate plateNumber="۶۶-۵۳۳ع۲۵" size="sm" />
+                </div>
               )}
             </div>
           </div>
@@ -264,9 +264,9 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
                       isEven ? 'bg-white' : 'bg-slate-50/60'
                     }`}
                   >
-                    {/* Item 1 */}
+                    {/* Column 1 Title */}
                     <td className="py-0.5 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                      {item1 ? `${toFaDigits(item1.id)}. ${item1.label}` : ''}
+                      {item1 ? `${toFaDigits(item1.id.replace(/^item_/, ''))}. ${item1.label}` : ''}
                     </td>
                     <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
                       {isBlankForm ? (
@@ -296,9 +296,9 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
                       )}
                     </td>
 
-                    {/* Item 2 */}
+                    {/* Column 2 Title */}
                     <td className="py-0.5 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                      {item2 ? `${toFaDigits(item2.id)}. ${item2.label}` : ''}
+                      {item2 ? `${toFaDigits(item2.id.replace(/^item_/, ''))}. ${item2.label}` : ''}
                     </td>
                     <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
                       {isBlankForm ? (
@@ -328,9 +328,9 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
                       )}
                     </td>
 
-                    {/* Item 3 */}
+                    {/* Column 3 Title */}
                     <td className="py-0.5 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                      {item3 ? `${toFaDigits(item3.id)}. ${item3.label}` : ''}
+                      {item3 ? `${toFaDigits(item3.id.replace(/^item_/, ''))}. ${item3.label}` : ''}
                     </td>
                     <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
                       {isBlankForm ? (

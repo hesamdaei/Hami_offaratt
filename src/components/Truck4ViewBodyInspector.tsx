@@ -110,17 +110,17 @@ export const Truck4ViewBodyInspector: FC<Truck4ViewBodyInspectorProps> = ({
   const damagesByView = (view: TruckBodyView) =>
     damages.filter((d) => d.view === view);
 
-  // SVG Renderers for the 4 faces of a freight truck (خاور / کانتینر)
+  // SVG Renderers for the 4 faces of an Isuzu NPR / ELF freight truck (کامیونت ایسوزو ۶ تن)
   const renderTruckFrontSvg = () => (
     <svg viewBox="0 0 400 320" className="w-full h-full select-none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="cabinFrontGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#253556" />
-          <stop offset="100%" stopColor="#172338" />
+          <stop offset="0%" stopColor="#2a3f68" />
+          <stop offset="100%" stopColor="#141f36" />
         </linearGradient>
         <linearGradient id="glassFrontGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="#0284c7" stopOpacity="0.15" />
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#0369a1" stopOpacity="0.2" />
         </linearGradient>
         <linearGradient id="containerFrontGrad" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#334155" />
@@ -128,88 +128,110 @@ export const Truck4ViewBodyInspector: FC<Truck4ViewBodyInspectorProps> = ({
         </linearGradient>
       </defs>
 
-      {/* Background Container Body (خاور کانتینری بالا) */}
-      <rect x="50" y="20" width="300" height="90" rx="6" fill="url(#containerFrontGrad)" stroke="#64748b" strokeWidth="2" />
-      <line x1="100" y1="20" x2="100" y2="110" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
-      <line x1="150" y1="20" x2="150" y2="110" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
-      <line x1="200" y1="20" x2="200" y2="110" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
-      <line x1="250" y1="20" x2="250" y2="110" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
-      <line x1="300" y1="20" x2="300" y2="110" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
-      <text x="200" y="55" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="bold">کانتین / اتاق بار حامی</text>
+      {/* Top Container Body (اتاق بار کانتینری بالا) */}
+      <rect x="52" y="15" width="296" height="85" rx="6" fill="url(#containerFrontGrad)" stroke="#64748b" strokeWidth="2" />
+      {[90, 130, 170, 230, 270, 310].map((x) => (
+        <line key={x} x1={x} y1="15" x2={x} y2="100" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
+      ))}
+      <text x="200" y="45" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="bold">کانتینر بار ترابری حامی</text>
 
-      {/* Main Cabin Frame */}
+      {/* Isuzu Roof Wind Deflector / Aerodynamic Spoiler */}
       <path
-        d="M 70 100 Q 75 80 100 80 L 300 80 Q 325 80 330 100 L 340 230 Q 340 250 320 250 L 80 250 Q 60 250 60 230 Z"
+        d="M 80 95 Q 120 55 200 55 Q 280 55 320 95 Z"
+        fill="#1e293b"
+        stroke="#475569"
+        strokeWidth="2"
+      />
+      <line x1="140" y1="70" x2="155" y2="95" stroke="#334155" strokeWidth="1.5" />
+      <line x1="200" y1="60" x2="200" y2="95" stroke="#334155" strokeWidth="1.5" />
+      <line x1="260" y1="70" x2="245" y2="95" stroke="#334155" strokeWidth="1.5" />
+
+      {/* Main Isuzu Cabover Cabin Frame */}
+      <path
+        d="M 68 100 Q 75 92 100 92 L 300 92 Q 325 92 332 100 L 338 238 Q 338 248 322 248 L 78 248 Q 62 248 62 238 Z"
         fill="url(#cabinFrontGrad)"
         stroke="#475569"
         strokeWidth="2.5"
       />
 
-      {/* Cabin Roof Light Bar */}
-      <rect x="130" y="75" width="140" height="8" rx="3" fill="#f59e0b" fillOpacity="0.8" stroke="#d97706" />
+      {/* Corner Air Deflectors (لوپی‌های بادگیر گوشه ایسوزو) */}
+      <path d="M 62 165 Q 56 190 62 220" fill="none" stroke="#64748b" strokeWidth="2.5" />
+      <path d="M 338 165 Q 344 190 338 220" fill="none" stroke="#64748b" strokeWidth="2.5" />
 
-      {/* Front Windshield (شیشه جلو) */}
-      <polygon
-        points="95,95 305,95 315,160 85,160"
+      {/* Windshield */}
+      <path
+        d="M 86 102 L 314 102 L 322 158 Q 322 162 316 162 L 84 162 Q 78 162 78 158 Z"
         fill="url(#glassFrontGrad)"
         stroke="#38bdf8"
         strokeWidth="2"
       />
-      {/* Windshield Wipers (برف پاک کن) */}
-      <line x1="140" y1="160" x2="180" y2="120" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="230" y1="160" x2="270" y2="120" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" />
+      {/* Dual Wipers */}
+      <line x1="135" y1="162" x2="180" y2="128" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="225" y1="162" x2="270" y2="128" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" />
+      <text x="200" y="135" textAnchor="middle" fill="#bae6fd" fontSize="11" fontWeight="bold">شیشه جلو ایسوزو</text>
 
-      {/* Hood (کاپوت جلو) */}
-      <rect x="90" y="165" width="220" height="35" rx="4" fill="#1e293b" stroke="#334155" strokeWidth="1.5" />
-      <text x="200" y="187" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="bold">کاپوت و سینی جلو</text>
+      {/* Roof Clearance Marker Lights */}
+      <rect x="135" y="86" width="14" height="5" rx="1.5" fill="#f59e0b" stroke="#78350f" />
+      <rect x="193" y="86" width="14" height="5" rx="1.5" fill="#f59e0b" stroke="#78350f" />
+      <rect x="251" y="86" width="14" height="5" rx="1.5" fill="#f59e0b" stroke="#78350f" />
 
-      {/* Grille (جلو پنجره) */}
-      <rect x="120" y="203" width="160" height="28" rx="4" fill="#090d16" stroke="#475569" strokeWidth="1.5" />
-      <line x1="120" y1="210" x2="280" y2="210" stroke="#334155" strokeWidth="1.5" />
-      <line x1="120" y1="217" x2="280" y2="217" stroke="#334155" strokeWidth="1.5" />
-      <line x1="120" y1="224" x2="280" y2="224" stroke="#334155" strokeWidth="1.5" />
-      <circle cx="200" cy="217" r="7" fill="#3b82f6" fillOpacity="0.8" />
+      {/* Center Panel & Isuzu Double Horizontal Grille */}
+      <rect x="105" y="170" width="190" height="64" rx="4" fill="#0b1120" stroke="#334155" strokeWidth="1.8" />
+      
+      {/* Isuzu Chrome Logo Bar */}
+      <rect x="135" y="175" width="130" height="18" rx="3" fill="#1e293b" stroke="#64748b" />
+      <text x="200" y="188" textAnchor="middle" fill="#f8fafc" fontSize="12" fontWeight="900" letterSpacing="4">ISUZU</text>
 
-      {/* Headlights (چراغ‌های جلو شاگرد و راننده) */}
-      {/* Right / شاگرد */}
+      {/* Twin Air Grille Slots */}
+      <rect x="115" y="198" width="170" height="14" rx="2" fill="#030712" stroke="#374151" strokeWidth="1.2" />
+      <line x1="115" y1="205" x2="285" y2="205" stroke="#4b5563" strokeWidth="1.5" />
+      <rect x="120" y="216" width="160" height="13" rx="2" fill="#030712" stroke="#374151" strokeWidth="1.2" />
+      <line x1="120" y1="222" x2="280" y2="222" stroke="#4b5563" strokeWidth="1.5" />
+
+      {/* Signature Isuzu Vertical Stacked Headlight Units */}
+      {/* Right Headlight (شاگرد) */}
       <g>
-        <rect x="75" y="195" width="38" height="24" rx="4" fill="#fef08a" stroke="#eab308" strokeWidth="2" fillOpacity="0.9" />
-        <rect x="75" y="222" width="22" height="10" rx="2" fill="#f97316" stroke="#c2410c" />
-        <text x="94" y="211" textAnchor="middle" fill="#713f12" fontSize="9" fontWeight="bold">شاگرد</text>
+        <rect x="68" y="174" width="32" height="60" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+        {/* Upper Turn Indicator (Amber) */}
+        <rect x="71" y="176" width="26" height="18" rx="2" fill="#f59e0b" stroke="#b45309" strokeWidth="1" />
+        {/* Main Headlight Reflector */}
+        <circle cx="84" cy="210" r="11" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
+        <circle cx="84" cy="210" r="4" fill="#713f12" />
       </g>
-      {/* Left / راننده */}
+
+      {/* Left Headlight (راننده) */}
       <g>
-        <rect x="287" y="195" width="38" height="24" rx="4" fill="#fef08a" stroke="#eab308" strokeWidth="2" fillOpacity="0.9" />
-        <rect x="303" y="222" width="22" height="10" rx="2" fill="#f97316" stroke="#c2410c" />
-        <text x="306" y="211" textAnchor="middle" fill="#713f12" fontSize="9" fontWeight="bold">راننده</text>
+        <rect x="300" y="174" width="32" height="60" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+        {/* Upper Turn Indicator (Amber) */}
+        <rect x="303" y="176" width="26" height="18" rx="2" fill="#f59e0b" stroke="#b45309" strokeWidth="1" />
+        {/* Main Headlight Reflector */}
+        <circle cx="316" cy="210" r="11" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
+        <circle cx="316" cy="210" r="4" fill="#713f12" />
       </g>
 
-      {/* Side Mirrors (آینه‌های بغل شاگرد و راننده) */}
-      {/* شاگرد (سمت راست - راست بیننده) */}
-      <path d="M 50 110 L 70 120 L 70 135 L 50 130 Z" fill="#475569" stroke="#64748b" />
-      <rect x="35" y="100" width="16" height="50" rx="3" fill="#1e293b" stroke="#94a3b8" strokeWidth="1.5" />
-      {/* راننده (سمت چپ - چپ بیننده) */}
-      <path d="M 350 110 L 330 120 L 330 135 L 350 130 Z" fill="#475569" stroke="#64748b" />
-      <rect x="349" y="100" width="16" height="50" rx="3" fill="#1e293b" stroke="#94a3b8" strokeWidth="1.5" />
+      {/* Extended Side Mirrors on Tubular Arms */}
+      {/* Right Mirror */}
+      <line x1="72" y1="120" x2="35" y2="105" stroke="#64748b" strokeWidth="2.5" />
+      <line x1="72" y1="150" x2="35" y2="155" stroke="#64748b" strokeWidth="2.5" />
+      <rect x="25" y="98" width="16" height="62" rx="3" fill="#1e293b" stroke="#94a3b8" strokeWidth="2" />
 
-      {/* Front Bumper (سپر جلو) */}
-      <rect x="50" y="240" width="300" height="32" rx="6" fill="#0f172a" stroke="#475569" strokeWidth="2" />
-      {/* License Plate Slot (محل پلاک جلو) */}
-      <rect x="155" y="246" width="90" height="20" rx="3" fill="#f8fafc" stroke="#1e293b" strokeWidth="1" />
-      <text x="200" y="260" textAnchor="middle" fill="#0f172a" fontSize="10" fontWeight="bold" fontFamily="monospace">پلاک انتظامی جلو</text>
+      {/* Left Mirror */}
+      <line x1="328" y1="120" x2="365" y2="105" stroke="#64748b" strokeWidth="2.5" />
+      <line x1="328" y1="150" x2="365" y2="155" stroke="#64748b" strokeWidth="2.5" />
+      <rect x="359" y="98" width="16" height="62" rx="3" fill="#1e293b" stroke="#94a3b8" strokeWidth="2" />
 
-      {/* Fog Lights in Bumper */}
-      <circle cx="80" cy="256" r="6" fill="#fed7aa" stroke="#ea580c" />
-      <circle cx="320" cy="256" r="6" fill="#fed7aa" stroke="#ea580c" />
+      {/* Front Heavy Bumper */}
+      <rect x="52" y="244" width="296" height="34" rx="5" fill="#0f172a" stroke="#475569" strokeWidth="2" />
+      {/* Lower Fog Lamps */}
+      <rect x="65" y="252" width="26" height="16" rx="3" fill="#fed7aa" stroke="#ea580c" strokeWidth="1.2" />
+      <rect x="309" y="252" width="26" height="16" rx="3" fill="#fed7aa" stroke="#ea580c" strokeWidth="1.2" />
+      {/* Center License Plate Bracket */}
+      <rect x="145" y="250" width="110" height="22" rx="3" fill="#ffffff" stroke="#1e293b" strokeWidth="1.5" />
+      <text x="200" y="265" textAnchor="middle" fill="#0f172a" fontSize="10" fontWeight="bold">پلاک جلو</text>
 
-      {/* Wheels Front (لاستیک‌های جلو) */}
-      <rect x="58" y="272" width="34" height="42" rx="6" fill="#090d16" stroke="#334155" strokeWidth="2" />
-      <rect x="308" y="272" width="34" height="42" rx="6" fill="#090d16" stroke="#334155" strokeWidth="2" />
-      <line x1="75" y1="272" x2="75" y2="314" stroke="#475569" strokeWidth="2" strokeDasharray="4 4" />
-      <line x1="325" y1="272" x2="325" y2="314" stroke="#475569" strokeWidth="2" strokeDasharray="4 4" />
-
-      {/* Ground Line */}
-      <line x1="20" y1="314" x2="380" y2="314" stroke="#334155" strokeWidth="1.5" strokeDasharray="4 4" />
+      {/* Front Wheels (Below Cab) */}
+      <rect x="58" y="278" width="36" height="34" rx="4" fill="#090d16" stroke="#334155" strokeWidth="2" />
+      <rect x="306" y="278" width="36" height="34" rx="4" fill="#090d16" stroke="#334155" strokeWidth="2" />
     </svg>
   );
 
@@ -222,82 +244,76 @@ export const Truck4ViewBodyInspector: FC<Truck4ViewBodyInspectorProps> = ({
         </linearGradient>
       </defs>
 
-      {/* Main Container Outline (نمای عقب اتاق بار) */}
-      <rect x="50" y="25" width="300" height="215" rx="6" fill="url(#rearContainerGrad)" stroke="#64748b" strokeWidth="2.5" />
+      {/* Main Container Outline */}
+      <rect x="48" y="20" width="304" height="225" rx="6" fill="url(#rearContainerGrad)" stroke="#64748b" strokeWidth="2.5" />
+      
+      {/* Double Doors Center Split */}
+      <line x1="200" y1="20" x2="200" y2="245" stroke="#0f172a" strokeWidth="3" />
 
-      {/* Double Doors Divider (خط جداکننده درهای دوقلو) */}
-      <line x1="200" y1="25" x2="200" y2="240" stroke="#0f172a" strokeWidth="3" />
+      {/* Right Door Panel */}
+      <rect x="58" y="30" width="134" height="205" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+      {/* Left Door Panel */}
+      <rect x="208" y="30" width="134" height="205" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
 
-      {/* Left Door Frame (شاگرد از پشت) */}
-      <rect x="60" y="35" width="130" height="195" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
-      {/* Right Door Frame (راننده از پشت) */}
-      <rect x="210" y="35" width="130" height="195" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+      <text x="125" y="70" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="bold">درب راست</text>
+      <text x="275" y="70" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="bold">درب چپ</text>
 
-      {/* Container Door Hinges (لولاهای درب کانتین) */}
-      <rect x="46" y="50" width="12" height="16" rx="2" fill="#0f172a" stroke="#94a3b8" />
-      <rect x="46" y="125" width="12" height="16" rx="2" fill="#0f172a" stroke="#94a3b8" />
-      <rect x="46" y="200" width="12" height="16" rx="2" fill="#0f172a" stroke="#94a3b8" />
+      {/* Top Marker Clearance Lights */}
+      <rect x="65" y="24" width="16" height="6" rx="1.5" fill="#ef4444" stroke="#7f1d1d" />
+      <rect x="192" y="24" width="16" height="6" rx="1.5" fill="#ef4444" stroke="#7f1d1d" />
+      <rect x="319" y="24" width="16" height="6" rx="1.5" fill="#ef4444" stroke="#7f1d1d" />
 
-      <rect x="342" y="50" width="12" height="16" rx="2" fill="#0f172a" stroke="#94a3b8" />
-      <rect x="342" y="125" width="12" height="16" rx="2" fill="#0f172a" stroke="#94a3b8" />
-      <rect x="342" y="200" width="12" height="16" rx="2" fill="#0f172a" stroke="#94a3b8" />
+      {/* Vertical Locking Rods (میله‌های قفل عمودی کانتینر) */}
+      <line x1="168" y1="35" x2="168" y2="230" stroke="#cbd5e1" strokeWidth="3.5" />
+      <rect x="158" y="130" width="22" height="14" rx="2" fill="#f59e0b" stroke="#78350f" strokeWidth="1.5" />
 
-      {/* Locking Rods & Handles (دستگیره‌های میله‌ای کانتین راست و چپ) */}
-      {/* Rod Left */}
-      <line x1="165" y1="40" x2="165" y2="225" stroke="#94a3b8" strokeWidth="3.5" />
-      <rect x="155" y="130" width="22" height="12" rx="2" fill="#f59e0b" stroke="#78350f" />
-      <text x="120" y="140" fill="#cbd5e1" fontSize="10" textAnchor="middle">دستگیره راست</text>
+      <line x1="232" y1="35" x2="232" y2="230" stroke="#cbd5e1" strokeWidth="3.5" />
+      <rect x="222" y="130" width="22" height="14" rx="2" fill="#f59e0b" stroke="#78350f" strokeWidth="1.5" />
 
-      {/* Rod Right */}
-      <line x1="235" y1="40" x2="235" y2="225" stroke="#94a3b8" strokeWidth="3.5" />
-      <rect x="223" y="130" width="22" height="12" rx="2" fill="#f59e0b" stroke="#78350f" />
-      <text x="278" y="140" fill="#cbd5e1" fontSize="10" textAnchor="middle">دستگیره چپ</text>
+      {/* Heavy Duty Hinges */}
+      {[50, 105, 160, 215].map((y) => (
+        <g key={y}>
+          <rect x="44" y={y} width="14" height="14" rx="2" fill="#0f172a" stroke="#64748b" />
+          <rect x="342" y={y} width="14" height="14" rx="2" fill="#0f172a" stroke="#64748b" />
+        </g>
+      ))}
 
-      {/* Rear Top Marker Lights */}
-      <rect x="70" y="20" width="24" height="6" rx="2" fill="#ef4444" />
-      <rect x="306" y="20" width="24" height="6" rx="2" fill="#ef4444" />
+      {/* Rear Underrun Protection Bumper */}
+      <rect x="42" y="248" width="316" height="26" rx="4" fill="#0f172a" stroke="#475569" strokeWidth="2" />
+      {/* Warning Chevron Stripes */}
+      <path d="M 45 274 L 60 248 M 65 274 L 80 248 M 85 274 L 100 248 M 300 274 L 315 248 M 320 274 L 335 248 M 340 274 L 355 248" stroke="#f59e0b" strokeWidth="3" />
 
-      {/* Rear Bumper (سپر عقب) */}
-      <rect x="40" y="240" width="320" height="30" rx="4" fill="#090d16" stroke="#475569" strokeWidth="2" />
-
-      {/* Rear Tail Lights (چراغ‌های خطر عقب شاگرد و راننده) */}
-      {/* شاگرد (سمت راست خودرو / چپ تصویر) */}
+      {/* Rear Horizontal Isuzu Taillights */}
+      {/* Right Taillight */}
       <g>
-        <rect x="52" y="246" width="55" height="18" rx="3" fill="#7f1d1d" stroke="#ef4444" strokeWidth="1.5" />
-        <rect x="55" y="248" width="16" height="14" fill="#ef4444" />
-        <rect x="73" y="248" width="14" height="14" fill="#f97316" />
-        <rect x="89" y="248" width="15" height="14" fill="#f8fafc" />
+        <rect x="52" y="252" width="60" height="18" rx="3" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+        <rect x="54" y="254" width="18" height="14" fill="#f59e0b" />
+        <rect x="73" y="254" width="20" height="14" fill="#ef4444" />
+        <rect x="94" y="254" width="16" height="14" fill="#f8fafc" />
       </g>
 
-      {/* راننده (سمت چپ خودرو / راست تصویر) */}
+      {/* Left Taillight */}
       <g>
-        <rect x="293" y="246" width="55" height="18" rx="3" fill="#7f1d1d" stroke="#ef4444" strokeWidth="1.5" />
-        <rect x="296" y="248" width="15" height="14" fill="#f8fafc" />
-        <rect x="313" y="248" width="14" height="14" fill="#f97316" />
-        <rect x="329" y="248" width="16" height="14" fill="#ef4444" />
+        <rect x="288" y="252" width="60" height="18" rx="3" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+        <rect x="290" y="254" width="16" height="14" fill="#f8fafc" />
+        <rect x="307" y="254" width="20" height="14" fill="#ef4444" />
+        <rect x="328" y="254" width="18" height="14" fill="#f59e0b" />
       </g>
 
-      {/* Mudflaps (گل پخش کن های عقب) */}
-      <path d="M 50 270 L 110 270 L 105 310 L 55 310 Z" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
-      <text x="80" y="295" fill="#94a3b8" fontSize="8" textAnchor="middle">گل‌پخش‌کن</text>
+      {/* Rear License Plate Slot */}
+      <rect x="155" y="251" width="90" height="20" rx="3" fill="#ffffff" stroke="#1e293b" strokeWidth="1.5" />
+      <text x="200" y="265" textAnchor="middle" fill="#0f172a" fontSize="9" fontWeight="bold">پلاک عقب</text>
 
-      <path d="M 290 270 L 350 270 L 345 310 L 295 310 Z" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
-      <text x="320" y="295" fill="#94a3b8" fontSize="8" textAnchor="middle">گل‌پخش‌کن</text>
+      {/* Mudflaps with ISUZU Logo */}
+      <rect x="46" y="274" width="46" height="34" rx="3" fill="#090d16" stroke="#334155" />
+      <text x="69" y="295" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">ISUZU</text>
 
-      {/* Dual Rear Wheels (تایرهای عقب دوبل) */}
-      <rect x="42" y="270" width="18" height="42" rx="4" fill="#090d16" stroke="#334155" />
-      <rect x="340" y="270" width="18" height="42" rx="4" fill="#090d16" stroke="#334155" />
+      <rect x="308" y="274" width="46" height="34" rx="3" fill="#090d16" stroke="#334155" />
+      <text x="331" y="295" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">ISUZU</text>
 
-      {/* Spare Tire underneath (زاپاس زیر شاسی) */}
-      <circle cx="200" cy="272" r="16" fill="#0f172a" stroke="#64748b" strokeWidth="2" />
-      <circle cx="200" cy="272" r="8" fill="#334155" />
-      <text x="200" y="298" fill="#94a3b8" fontSize="9" textAnchor="middle">زاپاس</text>
-
-      {/* Warning Chevron stripes (خطوط شبرنگ ایمنی) */}
-      <line x1="120" y1="242" x2="135" y2="268" stroke="#f59e0b" strokeWidth="3" />
-      <line x1="140" y1="242" x2="155" y2="268" stroke="#f59e0b" strokeWidth="3" />
-      <line x1="245" y1="242" x2="260" y2="268" stroke="#f59e0b" strokeWidth="3" />
-      <line x1="265" y1="242" x2="280" y2="268" stroke="#f59e0b" strokeWidth="3" />
+      {/* Spare Wheel Underneath */}
+      <circle cx="200" cy="285" r="16" fill="#0f172a" stroke="#64748b" strokeWidth="2" />
+      <circle cx="200" cy="285" r="7" fill="#334155" />
     </svg>
   );
 
@@ -310,74 +326,78 @@ export const Truck4ViewBodyInspector: FC<Truck4ViewBodyInspectorProps> = ({
         </linearGradient>
       </defs>
 
-      {/* Rear Cargo Container (سمت راست - کانتین) */}
-      <rect x="40" y="30" width="310" height="155" rx="4" fill="url(#sideContainerGrad)" stroke="#64748b" strokeWidth="2" />
-      {/* Container Ribs */}
+      {/* Cargo Box (Container) */}
+      <rect x="35" y="25" width="310" height="162" rx="4" fill="url(#sideContainerGrad)" stroke="#64748b" strokeWidth="2.5" />
       {[85, 135, 185, 235, 285].map((x) => (
-        <line key={x} x1={x} y1="30" x2={x} y2="185" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
+        <line key={x} x1={x} y1="25" x2={x} y2="187" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
       ))}
-      <text x="195" y="105" textAnchor="middle" fill="#94a3b8" fontSize="13" fontWeight="bold">دیواره کانتین سمت راست (شاگرد)</text>
+      <text x="190" y="105" textAnchor="middle" fill="#cbd5e1" fontSize="12" fontWeight="bold">کانتینر شاگرد (ایسوزو)</text>
 
-      {/* Cabin Profile (سمت شاگرد) */}
+      {/* Isuzu Roof Spoiler / Wind Deflector */}
       <path
-        d="M 350 75 L 420 75 Q 465 75 480 120 L 500 170 L 500 205 L 350 205 Z"
-        fill="#253556"
+        d="M 345 25 L 425 45 Q 460 70 475 90 L 345 90 Z"
+        fill="#1e293b"
         stroke="#475569"
         strokeWidth="2"
       />
 
-      {/* Passenger Door (درب سمت شاگرد) */}
+      {/* Isuzu Cabover Cabin Profile (Flat Upright Nose) */}
       <path
-        d="M 360 85 L 415 85 Q 450 85 465 125 L 475 200 L 360 200 Z"
-        fill="#1e293b"
-        stroke="#64748b"
-        strokeWidth="1.5"
+        d="M 345 90 L 450 90 Q 482 92 495 130 L 512 178 L 512 210 L 485 210 L 475 220 L 345 220 Z"
+        fill="#253556"
+        stroke="#475569"
+        strokeWidth="2.5"
       />
 
-      {/* Passenger Window (شیشه سمت شاگرد) */}
+      {/* Isuzu Passenger Door with Characteristic Angled Lower Window Cut */}
       <path
-        d="M 370 95 L 410 95 Q 440 95 452 130 L 370 130 Z"
+        d="M 355 98 L 442 98 Q 470 100 482 135 L 495 198 L 355 198 Z"
+        fill="#1e293b"
+        stroke="#64748b"
+        strokeWidth="1.8"
+      />
+      {/* Distinctive Isuzu Sloped Window Sill */}
+      <path
+        d="M 365 106 L 436 106 Q 460 108 470 135 L 445 148 L 365 148 Z"
         fill="#38bdf8"
         fillOpacity="0.3"
         stroke="#38bdf8"
         strokeWidth="1.5"
       />
+      {/* Door Handle */}
+      <rect x="370" y="160" width="18" height="6" rx="2" fill="#94a3b8" />
+      {/* Side Turn Indicator */}
+      <rect x="495" y="170" width="8" height="12" rx="2" fill="#f59e0b" stroke="#78350f" />
+      {/* Cab Entry Step */}
+      <rect x="475" y="215" width="28" height="10" rx="2" fill="#f59e0b" stroke="#b45309" strokeWidth="1.5" />
 
-      {/* Door Handle (دستگیره درب شاگرد) */}
-      <rect x="375" y="145" width="18" height="6" rx="2" fill="#94a3b8" />
+      {/* Passenger Side Extended Mirror */}
+      <rect x="480" y="105" width="12" height="38" rx="2" fill="#0f172a" stroke="#94a3b8" strokeWidth="2" />
+      <line x1="480" y1="120" x2="455" y2="120" stroke="#94a3b8" strokeWidth="2" />
 
-      {/* Right Side Mirror (آینه بغل شاگرد) */}
-      <rect x="455" y="100" width="12" height="32" rx="3" fill="#0f172a" stroke="#94a3b8" />
-      <line x1="445" y1="115" x2="455" y2="115" stroke="#94a3b8" strokeWidth="2" />
+      {/* Front Wheel (Directly Below Cab) */}
+      <circle cx="468" cy="225" r="32" fill="#090d16" stroke="#334155" strokeWidth="2.5" />
+      <circle cx="468" cy="225" r="14" fill="#334155" stroke="#64748b" />
+      <circle cx="468" cy="225" r="5" fill="#f8fafc" />
 
-      {/* Front Wheel & Arch (چرخ و گلگیر جلو) */}
-      <path d="M 430 205 A 38 38 0 0 1 495 205 Z" fill="#0f172a" />
-      <circle cx="462" cy="220" r="32" fill="#090d16" stroke="#334155" strokeWidth="2.5" />
-      <circle cx="462" cy="220" r="14" fill="#334155" stroke="#64748b" />
-      <circle cx="462" cy="220" r="5" fill="#f8fafc" />
+      {/* Rear Dual Wheels */}
+      <circle cx="155" cy="225" r="34" fill="#090d16" stroke="#334155" strokeWidth="2.5" />
+      <circle cx="155" cy="225" r="15" fill="#334155" stroke="#64748b" />
+      <circle cx="155" cy="225" r="5" fill="#f8fafc" />
 
-      {/* Rear Dual Wheels (چرخ‌های عقب راست) */}
-      <path d="M 120 185 A 42 42 0 0 1 200 185 Z" fill="#0f172a" />
-      <circle cx="160" cy="220" r="34" fill="#090d16" stroke="#334155" strokeWidth="2.5" />
-      <circle cx="160" cy="220" r="15" fill="#334155" stroke="#64748b" />
-      <circle cx="160" cy="220" r="5" fill="#f8fafc" />
+      {/* Chassis Rail */}
+      <rect x="25" y="187" width="485" height="8" fill="#0f172a" stroke="#475569" strokeWidth="1" />
 
-      {/* Fuel Tank / Tool Box (جعبه ابزار / مخزن) */}
-      <rect x="230" y="190" width="75" height="28" rx="4" fill="#1e293b" stroke="#64748b" strokeWidth="1.5" />
-      <text x="267" y="208" textAnchor="middle" fill="#94a3b8" fontSize="9">درب جعبه</text>
+      {/* Isuzu Cylindrical Diesel Fuel Tank with Mounting Straps */}
+      <rect x="230" y="195" width="85" height="28" rx="5" fill="#1e293b" stroke="#64748b" strokeWidth="1.8" />
+      <line x1="248" y1="195" x2="248" y2="223" stroke="#f59e0b" strokeWidth="2" />
+      <line x1="295" y1="195" x2="295" y2="223" stroke="#f59e0b" strokeWidth="2" />
+      <circle cx="238" cy="205" r="4" fill="#f59e0b" />
+      <text x="272" y="212" textAnchor="middle" fill="#cbd5e1" fontSize="9" fontWeight="bold">باک گازوئیل</text>
 
-      {/* Footstep / Step bar (رکاب شاگرد) */}
-      <rect x="420" y="200" width="28" height="7" rx="2" fill="#f59e0b" stroke="#b45309" />
-
-      {/* Side Marker Lights (چراغ‌های خطر جانبی) */}
-      <circle cx="70" cy="180" r="4" fill="#f97316" />
-      <circle cx="210" cy="180" r="4" fill="#f97316" />
-      <circle cx="320" cy="180" r="4" fill="#f97316" />
-
-      {/* Chassis Frame Rail */}
-      <rect x="30" y="185" width="470" height="8" fill="#0f172a" stroke="#475569" strokeWidth="1" />
-      {/* Ground Line */}
-      <line x1="20" y1="254" x2="520" y2="254" stroke="#334155" strokeWidth="1.5" strokeDasharray="4 4" />
+      {/* Side Underrun Cyclist Guard Rails */}
+      <rect x="215" y="222" width="115" height="4" fill="#64748b" />
+      <rect x="215" y="229" width="115" height="4" fill="#64748b" />
     </svg>
   );
 
@@ -390,75 +410,79 @@ export const Truck4ViewBodyInspector: FC<Truck4ViewBodyInspectorProps> = ({
         </linearGradient>
       </defs>
 
-      {/* Rear Cargo Container (سمت چپ - کانتین) */}
-      <rect x="190" y="30" width="310" height="155" rx="4" fill="url(#sideLeftContainerGrad)" stroke="#64748b" strokeWidth="2" />
-      {/* Container Ribs */}
-      {[240, 290, 340, 390, 440].map((x) => (
-        <line key={x} x1={x} y1="30" x2={x} y2="185" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
+      {/* Cargo Box (Container) */}
+      <rect x="195" y="25" width="310" height="162" rx="4" fill="url(#sideLeftContainerGrad)" stroke="#64748b" strokeWidth="2.5" />
+      {[245, 295, 345, 395, 445].map((x) => (
+        <line key={x} x1={x} y1="25" x2={x} y2="187" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
       ))}
-      <text x="345" y="105" textAnchor="middle" fill="#94a3b8" fontSize="13" fontWeight="bold">دیواره کانتین سمت چپ (راننده)</text>
+      {/* Side Loading Door (درب جانبی کانتینر) */}
+      <rect x="310" y="35" width="60" height="145" fill="#1e293b" stroke="#64748b" strokeWidth="1.5" />
+      <line x1="360" y1="40" x2="360" y2="175" stroke="#94a3b8" strokeWidth="2" />
+      <text x="340" y="105" textAnchor="middle" fill="#cbd5e1" fontSize="11" fontWeight="bold">کانتینر راننده</text>
 
-      {/* Cabin Profile (سمت راننده) */}
+      {/* Isuzu Roof Spoiler / Wind Deflector */}
       <path
-        d="M 190 75 L 120 75 Q 75 75 60 120 L 40 170 L 40 205 L 190 205 Z"
-        fill="#253556"
+        d="M 195 25 L 115 45 Q 80 70 65 90 L 195 90 Z"
+        fill="#1e293b"
         stroke="#475569"
         strokeWidth="2"
       />
 
-      {/* Driver Door (درب سمت راننده) */}
+      {/* Isuzu Cabover Cabin Profile (Flat Upright Nose) */}
       <path
-        d="M 180 85 L 125 85 Q 90 85 75 125 L 65 200 L 180 200 Z"
-        fill="#1e293b"
-        stroke="#64748b"
-        strokeWidth="1.5"
+        d="M 195 90 L 90 90 Q 58 92 45 130 L 28 178 L 28 210 L 55 210 L 65 220 L 195 220 Z"
+        fill="#253556"
+        stroke="#475569"
+        strokeWidth="2.5"
       />
 
-      {/* Driver Window (شیشه سمت راننده) */}
+      {/* Isuzu Driver Door with Angled Lower Window Cut */}
       <path
-        d="M 170 95 L 130 95 Q 100 95 88 130 L 170 130 Z"
+        d="M 185 98 L 98 98 Q 70 100 58 135 L 45 198 L 185 198 Z"
+        fill="#1e293b"
+        stroke="#64748b"
+        strokeWidth="1.8"
+      />
+      {/* Distinctive Isuzu Sloped Window Sill */}
+      <path
+        d="M 175 106 L 104 106 Q 80 108 70 135 L 95 148 L 175 148 Z"
         fill="#38bdf8"
         fillOpacity="0.3"
         stroke="#38bdf8"
         strokeWidth="1.5"
       />
+      {/* Door Handle */}
+      <rect x="152" y="160" width="18" height="6" rx="2" fill="#94a3b8" />
+      {/* Side Turn Indicator */}
+      <rect x="37" y="170" width="8" height="12" rx="2" fill="#f59e0b" stroke="#78350f" />
+      {/* Cab Entry Step */}
+      <rect x="37" y="215" width="28" height="10" rx="2" fill="#f59e0b" stroke="#b45309" strokeWidth="1.5" />
 
-      {/* Door Handle (دستگیره درب راننده) */}
-      <rect x="145" y="145" width="18" height="6" rx="2" fill="#94a3b8" />
+      {/* Driver Side Mirror */}
+      <rect x="48" y="105" width="12" height="38" rx="2" fill="#0f172a" stroke="#94a3b8" strokeWidth="2" />
+      <line x1="60" y1="120" x2="85" y2="120" stroke="#94a3b8" strokeWidth="2" />
 
-      {/* Left Side Mirror (آینه بغل راننده) */}
-      <rect x="73" y="100" width="12" height="32" rx="3" fill="#0f172a" stroke="#94a3b8" />
-      <line x1="85" y1="115" x2="95" y2="115" stroke="#94a3b8" strokeWidth="2" />
+      {/* Front Wheel (Below Cab) */}
+      <circle cx="72" cy="225" r="32" fill="#090d16" stroke="#334155" strokeWidth="2.5" />
+      <circle cx="72" cy="225" r="14" fill="#334155" stroke="#64748b" />
+      <circle cx="72" cy="225" r="5" fill="#f8fafc" />
 
-      {/* Front Wheel & Arch (چرخ و گلگیر جلو راننده) */}
-      <path d="M 45 205 A 38 38 0 0 1 110 205 Z" fill="#0f172a" />
-      <circle cx="78" cy="220" r="32" fill="#090d16" stroke="#334155" strokeWidth="2.5" />
-      <circle cx="78" cy="220" r="14" fill="#334155" stroke="#64748b" />
-      <circle cx="78" cy="220" r="5" fill="#f8fafc" />
+      {/* Rear Dual Wheels */}
+      <circle cx="385" cy="225" r="34" fill="#090d16" stroke="#334155" strokeWidth="2.5" />
+      <circle cx="385" cy="225" r="15" fill="#334155" stroke="#64748b" />
+      <circle cx="385" cy="225" r="5" fill="#f8fafc" />
 
-      {/* Rear Dual Wheels (چرخ‌های عقب راننده) */}
-      <path d="M 340 185 A 42 42 0 0 1 420 185 Z" fill="#0f172a" />
-      <circle cx="380" cy="220" r="34" fill="#090d16" stroke="#334155" strokeWidth="2.5" />
-      <circle cx="380" cy="220" r="15" fill="#334155" stroke="#64748b" />
-      <circle cx="380" cy="220" r="5" fill="#f8fafc" />
+      {/* Chassis Rail */}
+      <rect x="30" y="187" width="485" height="8" fill="#0f172a" stroke="#475569" strokeWidth="1" />
 
-      {/* Fuel Tank (درب و باک سوخت) */}
-      <rect x="235" y="190" width="80" height="28" rx="4" fill="#1e293b" stroke="#eab308" strokeWidth="1.5" />
-      <circle cx="250" cy="204" r="7" fill="#f59e0b" stroke="#78350f" />
-      <text x="282" y="208" textAnchor="middle" fill="#f59e0b" fontSize="9" fontWeight="bold">درب باک</text>
+      {/* Isuzu Steel Toolbox & Battery Compartment */}
+      <rect x="225" y="195" width="80" height="28" rx="3" fill="#1e293b" stroke="#64748b" strokeWidth="1.8" />
+      <rect x="255" y="202" width="20" height="8" rx="1" fill="#cbd5e1" stroke="#475569" strokeWidth="1" />
+      <text x="265" y="217" textAnchor="middle" fill="#cbd5e1" fontSize="9" fontWeight="bold">جعبه ابزار فلزی</text>
 
-      {/* Footstep / Step bar (رکاب راننده) */}
-      <rect x="92" y="200" width="28" height="7" rx="2" fill="#f59e0b" stroke="#b45309" />
-
-      {/* Side Marker Lights (چراغ‌های خطر جانبی) */}
-      <circle cx="220" cy="180" r="4" fill="#f97316" />
-      <circle cx="330" cy="180" r="4" fill="#f97316" />
-      <circle cx="470" cy="180" r="4" fill="#f97316" />
-
-      {/* Chassis Frame Rail */}
-      <rect x="40" y="185" width="470" height="8" fill="#0f172a" stroke="#475569" strokeWidth="1" />
-      {/* Ground Line */}
-      <line x1="20" y1="254" x2="520" y2="254" stroke="#334155" strokeWidth="1.5" strokeDasharray="4 4" />
+      {/* Side Underrun Cyclist Guard Rails */}
+      <rect x="210" y="222" width="115" height="4" fill="#64748b" />
+      <rect x="210" y="229" width="115" height="4" fill="#64748b" />
     </svg>
   );
 

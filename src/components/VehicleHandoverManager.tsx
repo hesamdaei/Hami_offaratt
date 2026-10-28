@@ -959,7 +959,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
                             >
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <span className="font-mono text-[10px] text-slate-500 shrink-0">
-                                  {toFaDigits(item.id)}.
+                                  {toFaDigits(item.id.replace(/^item_/, ''))}.
                                 </span>
                                 <span
                                   className={`text-xs truncate font-medium ${
@@ -1326,7 +1326,10 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
                                       idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'
                                     }`}
                                   >
-                                    <td className="py-0.5 px-1 truncate max-w-[110px] text-slate-900 font-medium">
+                                    <td className="py-0.5 px-1 truncate max-w-[125px] text-slate-900 font-medium">
+                                      <span className="font-mono text-slate-500 ml-1 text-[9px]">
+                                        {toFaDigits(item.id.replace(/^item_/, ''))}.
+                                      </span>
                                       {item.label}
                                     </td>
                                     <td className="py-0.5 text-center">
