@@ -89,6 +89,7 @@ interface DriversDirectoryViewProps {
   onAssignVehicleToDriver?: (driverId: string, vehiclePlateOrNone: string) => void;
   onOpenBaleForDriver?: (driver: DriverDirectoryItem) => void;
   onOpenEitaaForDriver?: (driver: DriverDirectoryItem) => void;
+  onOpenHandover?: (driver: DriverDirectoryItem) => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -100,6 +101,7 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
   onAssignVehicleToDriver,
   onOpenBaleForDriver,
   onOpenEitaaForDriver,
+  onOpenHandover,
   onShowToast,
 }) => {
   const [search, setSearch] = useState('');
@@ -766,6 +768,17 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
+
+                            {onOpenHandover && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenHandover(d)}
+                                className="p-1.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/30 text-teal-300 border border-teal-500/30 transition cursor-pointer"
+                                title="صدور یا مشاهده برگه تحویل خودروی این راننده"
+                              >
+                                <FileCheck className="w-3.5 h-3.5" />
+                              </button>
+                            )}
 
                             <button
                               type="button"

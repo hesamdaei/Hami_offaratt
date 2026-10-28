@@ -20,6 +20,10 @@ import {
   Check,
   Eye,
   RotateCcw,
+  Hash,
+  MapPin,
+  ShieldCheck,
+  Download,
 } from 'lucide-react';
 import {
   VehicleHandoverRecord,
@@ -31,13 +35,16 @@ import {
 import { Truck4ViewBodyInspector } from './Truck4ViewBodyInspector';
 import { VehicleHandoverA4PrintModal } from './VehicleHandoverA4PrintModal';
 import { IranianPlate } from './IranianPlate';
-import { VehicleItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
+import { VehicleItem, DriverDirectoryItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
 import { Driver } from '../types';
 import { toFaDigits, getTodayJalaali, formatPersianDateKey } from '../utils/jalaali';
 
 interface VehicleHandoverManagerProps {
   vehicles?: VehicleItem[];
   drivers?: Driver[];
+  driverDirectory?: DriverDirectoryItem[];
+  initialVehicle?: VehicleItem | null;
+  initialDriver?: Driver | DriverDirectoryItem | null;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onSyncCentralDb?: () => void;
 }
@@ -47,6 +54,9 @@ const STORAGE_KEY_HANDOVER = 'hamibar_vehicle_handover_records_v1';
 export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
   vehicles = [],
   drivers = [],
+  driverDirectory = [],
+  initialVehicle = null,
+  initialDriver = null,
   onShowToast,
   onSyncCentralDb,
 }) => {
@@ -61,7 +71,10 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     try {
       const saved = localStorage.getItem(STORAGE_KEY_HANDOVER);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     } catch (e) {
       console.error(e);
@@ -119,20 +132,22 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     }
   };
 
-  // Search & Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [handoverViewMode, setHandoverViewMode] = useState<'SHEET_VIEW' | 'ARCHIVE_LIST'>('SHEET_VIEW');
+  // View Mode: Default to 'FORM' so the user immediately gets the interactive form!
+  const [handoverViewMode, setHandoverViewMode] = useState<'FORM' | 'SHEET_VIEW' | 'ARCHIVE_LIST'>('FORM');
   const [selectedRecordIdForView, setSelectedRecordIdForView] = useState<string>('rec-init-1');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDamageStatus, setFilterDamageStatus] = useState<'ALL' | 'DAMAGED' | 'CLEAN'>('ALL');
 
-  // Active modal states
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  // Active print record for A4 Modal
   const [activePrintRecord, setActivePrintRecord] = useState<VehicleHandoverRecord | null>(null);
 
-  // Form Fields
-  const [receiptNumber, setReceiptNumber] = useState('');
+  // Form Fields State
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [receiptNumber, setReceiptNumber] = useState(() => String(Math.floor(10000 + Math.random() * 89999)));
   const [handoverDate, setHandoverDate] = useState(todayDateStr);
-  const [handoverTime, setHandoverTime] = useState('۰۸:۰۰');
+  const [handoverTime, setHandoverTime] = useState(() =>
+    new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
+  );
   const [address, setAddress] = useState('پایانه مرکزی ناوگان حامی');
 
   const [driverName, setDriverName] = useState('');
@@ -145,15 +160,88 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
   const [vehicleColor, setVehicleColor] = useState('سفید');
   const [vehiclePlate, setVehiclePlate] = useState('');
 
-  const [checklist, setChecklist] = useState<Record<string, VehicleHandoverItemStatus>>({});
+  // Default checklist with all items HEALTHY
+  const [checklist, setChecklist] = useState<Record<string, VehicleHandoverItemStatus>>(() => {
+    const initCheck: Record<string, VehicleHandoverItemStatus> = {};
+    HANDOVER_CHECKLIST_ITEMS.forEach((i) => {
+      initCheck[i.id] = 'HEALTHY';
+    });
+    return initCheck;
+  });
+
   const [damages, setDamages] = useState<BodyDamageMarker[]>([]);
   const [affidavitText, setAffidavitText] = useState(DEFAULT_HANDOVER_AFFIDAVIT);
-  const [delivererName, setDelivererName] = useState('مسئول ناوگان حامی');
+  const [delivererName, setDelivererName] = useState('مسئول اعزام و ترابری حامی');
   const [receiverName, setReceiverName] = useState('');
   const [notes, setNotes] = useState('');
 
-  // Open Form to Create New Record
-  const handleOpenCreateNew = () => {
+  // Auto-fill when initialVehicle or initialDriver are passed
+  useEffect(() => {
+    if (initialVehicle) {
+      setHandoverViewMode('FORM');
+      setVehiclePlate(initialVehicle.plateNumber || '');
+      setVehicleCode(String(initialVehicle.code || ''));
+      setVehicleType(VEHICLE_TYPE_NAMES[initialVehicle.vehicleType] || initialVehicle.vehicleType || 'خاور کانتینردار');
+      if (initialVehicle.color) setVehicleColor(initialVehicle.color);
+
+      if (initialVehicle.driverName && initialVehicle.driverName !== 'بدون راننده' && initialVehicle.driverName !== 'NONE') {
+        const parts = initialVehicle.driverName.trim().split(' ');
+        if (parts.length > 1) {
+          setDriverName(parts[0]);
+          setDriverLastName(parts.slice(1).join(' '));
+        } else {
+          setDriverName(initialVehicle.driverName);
+          setDriverLastName('');
+        }
+        setReceiverName(initialVehicle.driverName);
+
+        // Find driver details if available
+        const found =
+          drivers.find((d) => d.name.trim() === initialVehicle.driverName?.trim()) ||
+          driverDirectory.find((d) => d.name.trim() === initialVehicle.driverName?.trim());
+        if (found) {
+          if (found.nationalId) setDriverNationalId(found.nationalId);
+          if ('fatherName' in found && found.fatherName) setDriverFatherName(found.fatherName);
+        }
+      }
+    }
+  }, [initialVehicle, drivers, driverDirectory]);
+
+  useEffect(() => {
+    if (initialDriver) {
+      setHandoverViewMode('FORM');
+      const parts = initialDriver.name.trim().split(' ');
+      if (parts.length > 1) {
+        setDriverName(parts[0]);
+        setDriverLastName(parts.slice(1).join(' '));
+      } else {
+        setDriverName(initialDriver.name);
+        setDriverLastName('');
+      }
+      setReceiverName(initialDriver.name);
+
+      if (initialDriver.nationalId) setDriverNationalId(initialDriver.nationalId);
+      if ('nationalCode' in initialDriver && initialDriver.nationalCode) {
+        setDriverNationalId(initialDriver.nationalCode);
+      }
+      if ('fatherName' in initialDriver && initialDriver.fatherName) {
+        setDriverFatherName(initialDriver.fatherName);
+      }
+
+      if ('vehiclePlate' in initialDriver && initialDriver.vehiclePlate) {
+        setVehiclePlate(initialDriver.vehiclePlate);
+        const matchV = vehicles.find((v) => v.plateNumber === initialDriver.vehiclePlate);
+        if (matchV) {
+          setVehicleCode(String(matchV.code));
+          setVehicleType(VEHICLE_TYPE_NAMES[matchV.vehicleType] || 'خاور کانتینردار');
+          if (matchV.color) setVehicleColor(matchV.color);
+        }
+      }
+    }
+  }, [initialDriver, vehicles]);
+
+  // Reset form to clear state
+  const handleResetForm = () => {
     const nextReceiptNum = String(Math.floor(10000 + Math.random() * 89999));
     const nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
 
@@ -173,7 +261,6 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     setVehicleColor('سفید');
     setVehiclePlate('');
 
-    // Default all items to HEALTHY
     const defaultCheck: Record<string, VehicleHandoverItemStatus> = {};
     HANDOVER_CHECKLIST_ITEMS.forEach((item) => {
       defaultCheck[item.id] = 'HEALTHY';
@@ -182,47 +269,18 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
 
     setDamages([]);
     setAffidavitText(DEFAULT_HANDOVER_AFFIDAVIT);
-    setDelivererName('مسئول ناوگان حامی');
+    setDelivererName('مسئول اعزام و ترابری حامی');
     setReceiverName('');
     setNotes('');
 
-    setIsFormModalOpen(true);
+    if (onShowToast) onShowToast('فرم تحویل جدید با شماره قبض جدید آماده شد.', 'info');
   };
 
-  // Open Form to Edit Existing Record
-  const handleOpenEdit = (rec: VehicleHandoverRecord) => {
-    setEditingRecordId(rec.id);
-    setReceiptNumber(rec.receiptNumber);
-    setHandoverDate(rec.date);
-    setHandoverTime(rec.time);
-    setAddress(rec.address);
-
-    setDriverName(rec.driverName);
-    setDriverLastName(rec.driverLastName);
-    setDriverFatherName(rec.driverFatherName || '');
-    setDriverNationalId(rec.driverNationalId || '');
-
-    setVehicleType(rec.vehicleType);
-    setVehicleCode(rec.vehicleCode);
-    setVehicleColor(rec.vehicleColor);
-    setVehiclePlate(rec.vehiclePlate);
-
-    setChecklist(rec.checklist || {});
-    setDamages(rec.damages || []);
-    setAffidavitText(rec.affidavitText || DEFAULT_HANDOVER_AFFIDAVIT);
-    setDelivererName(rec.delivererName);
-    setReceiverName(rec.receiverName);
-    setNotes(rec.notes || '');
-
-    setIsFormModalOpen(true);
-  };
-
-  // Auto-fill from Driver selection
+  // Quick auto-fill from Driver
   const handleSelectDriverQuick = (dId: string) => {
-    const driver = drivers.find((d) => d.id === dId);
+    const driver = drivers.find((d) => d.id === dId) || driverDirectory.find((d) => d.id === dId);
     if (!driver) return;
 
-    // Split name into first and last if possible
     const parts = driver.name.trim().split(' ');
     if (parts.length > 1) {
       setDriverName(parts[0]);
@@ -233,9 +291,11 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     }
 
     if (driver.nationalId) setDriverNationalId(driver.nationalId);
-    if (driver.vehiclePlate) {
+    if ('nationalCode' in driver && driver.nationalCode) setDriverNationalId(driver.nationalCode);
+    if ('fatherName' in driver && driver.fatherName) setDriverFatherName(driver.fatherName);
+
+    if ('vehiclePlate' in driver && driver.vehiclePlate) {
       setVehiclePlate(driver.vehiclePlate);
-      // Find matching vehicle
       const matchVehicle = vehicles.find((v) => v.plateNumber === driver.vehiclePlate);
       if (matchVehicle) {
         setVehicleCode(String(matchVehicle.code));
@@ -244,9 +304,10 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
       }
     }
     setReceiverName(driver.name);
+    if (onShowToast) onShowToast(`اطلاعات راننده «${driver.name}» درج شد.`, 'info');
   };
 
-  // Auto-fill from Vehicle selection
+  // Quick auto-fill from Vehicle
   const handleSelectVehicleQuick = (vId: string) => {
     const vehicle = vehicles.find((v) => v.id === vId);
     if (!vehicle) return;
@@ -256,7 +317,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     setVehicleType(VEHICLE_TYPE_NAMES[vehicle.vehicleType] || 'خاور کانتینردار');
     if (vehicle.color) setVehicleColor(vehicle.color);
 
-    if (vehicle.driverName && vehicle.driverName !== 'بدون راننده') {
+    if (vehicle.driverName && vehicle.driverName !== 'بدون راننده' && vehicle.driverName !== 'NONE') {
       const parts = vehicle.driverName.trim().split(' ');
       if (parts.length > 1) {
         setDriverName(parts[0]);
@@ -266,10 +327,21 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
         setDriverLastName('');
       }
       setReceiverName(vehicle.driverName);
+
+      // Find driver info if available
+      const found =
+        drivers.find((d) => d.name.trim() === vehicle.driverName.trim()) ||
+        driverDirectory.find((d) => d.name.trim() === vehicle.driverName.trim());
+      if (found) {
+        if (found.nationalId) setDriverNationalId(found.nationalId);
+        if ('nationalCode' in found && found.nationalCode) setDriverNationalId(found.nationalCode);
+        if ('fatherName' in found && found.fatherName) setDriverFatherName(found.fatherName);
+      }
     }
+    if (onShowToast) onShowToast(`اطلاعات خودروی کد ${toFaDigits(vehicle.code)} درج شد.`, 'info');
   };
 
-  // Toggle single item status
+  // Set single checklist item status
   const handleSetItemStatus = (itemId: string, status: VehicleHandoverItemStatus) => {
     setChecklist((prev) => ({
       ...prev,
@@ -277,20 +349,18 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     }));
   };
 
-  // Mark all 66 items healthy in one click
+  // Mark all 66 items healthy
   const handleMarkAllHealthy = () => {
     const allHealthy: Record<string, VehicleHandoverItemStatus> = {};
     HANDOVER_CHECKLIST_ITEMS.forEach((i) => {
       allHealthy[i.id] = 'HEALTHY';
     });
     setChecklist(allHealthy);
-    if (onShowToast) onShowToast('تمام ۶۶ قلم به عنوان «سالم» ثبت شدند.', 'info');
+    if (onShowToast) onShowToast('تمام ۶۶ قلم چک‌لیست به عنوان «سالم» ثبت شدند.', 'success');
   };
 
   // Save Handover Record
-  const handleSaveRecord = (e: FormEvent) => {
-    e.preventDefault();
-
+  const handleSaveForm = (openPrintModalAfterSave: boolean = false) => {
     if (!driverName.trim()) {
       if (onShowToast) onShowToast('لطفاً نام راننده را وارد نمایید.', 'error');
       return;
@@ -300,7 +370,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
       return;
     }
 
-    const newRecord: VehicleHandoverRecord = {
+    const recToSave: VehicleHandoverRecord = {
       id: editingRecordId || `handover-${Date.now()}`,
       receiptNumber: receiptNumber.trim(),
       date: handoverDate,
@@ -324,40 +394,62 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     };
 
     if (editingRecordId) {
-      saveRecords(records.map((r) => (r.id === editingRecordId ? newRecord : r)));
-      if (onShowToast) onShowToast('صورت‌جلسه تحویل با موفقیت ویرایش شد.', 'success');
+      const updatedList = records.map((r) => (r.id === editingRecordId ? recToSave : r));
+      saveRecords(updatedList);
+      if (onShowToast) onShowToast('صورت‌جلسه تحویل با موفقیت به‌روزرسانی شد.', 'success');
     } else {
-      saveRecords([newRecord, ...records]);
-      if (onShowToast) onShowToast(`صورت‌جلسه قبض ${toFaDigits(newRecord.receiptNumber)} ثبت گردید.`, 'success');
+      const updatedList = [recToSave, ...records];
+      saveRecords(updatedList);
+      if (onShowToast) onShowToast(`صورت‌جلسه قبض ${toFaDigits(recToSave.receiptNumber)} با موفقیت ثبت شد.`, 'success');
     }
 
-    setIsFormModalOpen(false);
+    setSelectedRecordIdForView(recToSave.id);
+
+    if (openPrintModalAfterSave) {
+      setActivePrintRecord(recToSave);
+    }
+  };
+
+  // Load record into Form for editing
+  const handleLoadRecordToForm = (rec: VehicleHandoverRecord) => {
+    setEditingRecordId(rec.id);
+    setReceiptNumber(rec.receiptNumber);
+    setHandoverDate(rec.date);
+    setHandoverTime(rec.time);
+    setAddress(rec.address);
+
+    setDriverName(rec.driverName);
+    setDriverLastName(rec.driverLastName);
+    setDriverFatherName(rec.driverFatherName || '');
+    setDriverNationalId(rec.driverNationalId || '');
+
+    setVehicleType(rec.vehicleType);
+    setVehicleCode(rec.vehicleCode);
+    setVehicleColor(rec.vehicleColor);
+    setVehiclePlate(rec.vehiclePlate);
+
+    setChecklist(rec.checklist || {});
+    setDamages(rec.damages || []);
+    setAffidavitText(rec.affidavitText || DEFAULT_HANDOVER_AFFIDAVIT);
+    setDelivererName(rec.delivererName);
+    setReceiverName(rec.receiverName);
+    setNotes(rec.notes || '');
+
+    setHandoverViewMode('FORM');
+    if (onShowToast) onShowToast(`صورت‌جلسه قبض ${toFaDigits(rec.receiptNumber)} جهت ویرایش بارگذاری شد.`, 'info');
   };
 
   // Delete Record
   const handleDeleteRecord = (id: string, num: string) => {
     if (window.confirm(`آیا از حذف صورت‌جلسه قبض شماره ${toFaDigits(num)} اطمینان دارید؟`)) {
-      saveRecords(records.filter((r) => r.id !== id));
-      if (onShowToast) onShowToast(`صورت‌جلسه قبض ${toFaDigits(num)} حذف شد.`, 'info');
+      const remaining = records.filter((r) => r.id !== id);
+      saveRecords(remaining);
+      if (selectedRecordIdForView === id && remaining.length > 0) {
+        setSelectedRecordIdForView(remaining[0].id);
+      }
+      if (onShowToast) onShowToast(`صورت‌جلسه قبض ${toFaDigits(num)} حذف گردید.`, 'info');
     }
   };
-
-  // Filtered Records
-  const filteredRecords = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return records;
-    return records.filter((r) => {
-      const fullDriver = `${r.driverName} ${r.driverLastName}`.toLowerCase();
-      return (
-        fullDriver.includes(q) ||
-        r.receiptNumber.includes(q) ||
-        toFaDigits(r.receiptNumber).includes(q) ||
-        r.vehiclePlate.toLowerCase().includes(q) ||
-        r.vehicleCode.includes(q) ||
-        r.driverNationalId.includes(q)
-      );
-    });
-  }, [records, searchQuery]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -367,7 +459,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     return { total, damagedVehiclesCount, cleanVehiclesCount };
   }, [records]);
 
-  // Checklist counts for active form
+  // Form Checklist Counts
   const formChecklistCounts = useMemo(() => {
     let healthy = 0;
     let damaged = 0;
@@ -380,9 +472,31 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     return { healthy, damaged, none };
   }, [checklist]);
 
-  const col1Items = useMemo(() => HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 1), []);
-  const col2Items = useMemo(() => HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 2), []);
-  const col3Items = useMemo(() => HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 3), []);
+  // Filtered Archive Records
+  const filteredRecords = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return records.filter((r) => {
+      const fullDriver = `${r.driverName} ${r.driverLastName}`.toLowerCase();
+      const matchSearch =
+        !q ||
+        fullDriver.includes(q) ||
+        r.receiptNumber.includes(q) ||
+        toFaDigits(r.receiptNumber).includes(q) ||
+        r.vehiclePlate.toLowerCase().includes(q) ||
+        r.vehicleCode.includes(q) ||
+        (r.driverNationalId && r.driverNationalId.includes(q));
+
+      if (!matchSearch) return false;
+
+      if (filterDamageStatus === 'DAMAGED') {
+        return r.damages && r.damages.length > 0;
+      }
+      if (filterDamageStatus === 'CLEAN') {
+        return !r.damages || r.damages.length === 0;
+      }
+      return true;
+    });
+  }, [records, searchQuery, filterDamageStatus]);
 
   const viewingRecord = useMemo(() => {
     return records.find((r) => r.id === selectedRecordIdForView) || records[0];
@@ -390,38 +504,46 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
 
   return (
     <div className="space-y-4" dir="rtl">
-      {/* 1. Header & KPI Banners */}
+      {/* 1. Header & Quick Overview */}
       <div className="bg-[#101b33] border border-[#1f2c45] rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
-              <FileCheck className="w-6 h-6" />
+            <div className="p-3 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-500/20">
+              <FileCheck className="w-6 h-6 stroke-[2.2]" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-black text-white text-base sm:text-lg">
-                  سامانه رسمی تحویل و تحول خودرو (چک‌لیست ۶۶ گانه و وضعیت بدنه)
-                </h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                  منطبق بر استاندارد حامی
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-black text-white text-base sm:text-lg">
+                  فرم رسمی تحویل و تحول کامیونت به رانندگان
+                </h2>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  چک‌لیست ۶۶ گانه + نقشه ۴ وجه بدنه
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                ثبت دقیق سلامت قطعات، نشانه‌گذاری تعاملی آسیب‌های بدنه در ۴ وجه کامیونت و صدور برگه A4
+              <p className="text-xs text-slate-300 mt-1">
+                ثبت دقیق مشخصات خودرو و راننده، بازرسی سلامت قطعات، نشانه‌گذاری تعاملی آسیب‌های بدنه و صدور نسخه رسمی چاپی A4
               </p>
             </div>
           </div>
 
-          <button
-            onClick={handleOpenCreateNew}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-black shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition-all hover:scale-[1.02] cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ صدور صورت‌جلسه جدید</span>
-          </button>
+          <div className="flex items-center gap-2 self-stretch sm:self-auto">
+            {handoverViewMode !== 'FORM' && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleResetForm();
+                  setHandoverViewMode('FORM');
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-black shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ صدور برگه تحویل جدید</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* 3 Metric Mini KPI Strip */}
+        {/* 3 Metrics Strip */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[#1b2b48]">
           <div className="bg-[#0a101f] border border-[#1b2b48] rounded-xl p-3 flex items-center justify-between">
             <span className="text-xs text-slate-400">کل صورت‌جلسات ثبت شده:</span>
@@ -438,7 +560,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
           </div>
 
           <div className="bg-[#0a101f] border border-[#1b2b48] rounded-xl p-3 flex items-center justify-between">
-            <span className="text-xs text-slate-400">خودروهای دارای ثبت آسیب بدنه:</span>
+            <span className="text-xs text-slate-400">خودروهای دارای آسیب ثبت‌شده:</span>
             <span className="font-mono font-black text-amber-400 text-sm">
               {toFaDigits(stats.damagedVehiclesCount)} دستگاه
             </span>
@@ -446,9 +568,27 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
         </div>
       </div>
 
-      {/* 2. Sub-Navigation Tabs */}
-      <div className="bg-[#0f1a30] border border-[#1f2c45] rounded-xl p-1.5 flex flex-wrap items-center justify-between gap-2 no-print">
-        <div className="flex items-center gap-1.5">
+      {/* 2. Main Navigation Tabs */}
+      <div className="bg-[#0f1a30] border border-[#1f2c45] rounded-xl p-1.5 flex flex-wrap items-center justify-between gap-2 no-print shadow-sm">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setHandoverViewMode('FORM')}
+            className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+              handoverViewMode === 'FORM'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Edit2 className="w-4 h-4 text-emerald-300" />
+            <span>فرم ثبت و صدور تحویل خودرو</span>
+            {editingRecordId && (
+              <span className="px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 text-[10px] font-bold">
+                در حال ویرایش
+              </span>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => setHandoverViewMode('SHEET_VIEW')}
@@ -459,7 +599,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
             }`}
           >
             <Printer className="w-4 h-4 text-cyan-300" />
-            <span>مشاهده مستقیم و چاپ برگه تحویل (A4)</span>
+            <span>مشاهده مستقیم و چاپ برگه رسمی (A4)</span>
           </button>
 
           <button
@@ -479,27 +619,517 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={handleOpenCreateNew}
-          className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ صدور برگه جدید</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {handoverViewMode === 'FORM' && (
+            <button
+              type="button"
+              onClick={handleResetForm}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>پاکسازی فرم و برگه جدید</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 3. Conditional View: Direct Sheet View OR Archive List */}
-      {handoverViewMode === 'SHEET_VIEW' && viewingRecord && (
+      {/* ========================================================================= */}
+      {/* 3. TAB 1: INTERACTIVE DIRECT HANDOVER FORM                                */}
+      {/* ========================================================================= */}
+      {handoverViewMode === 'FORM' && (
+        <div className="space-y-4">
+          {/* Quick Auto-Fill Bar */}
+          <div className="bg-gradient-to-r from-blue-950/70 via-slate-900 to-indigo-950/70 border border-blue-500/30 rounded-2xl p-4 shadow-md flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
+              <div>
+                <span className="font-bold text-white text-xs sm:text-sm">تکمیل هوشمند و سریع مشخصات:</span>
+                <p className="text-[11px] text-slate-400">خودرو یا راننده موردنظر را انتخاب کنید تا کلیه فیلدها خودکار تکمیل شوند</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Select Vehicle */}
+              {vehicles.length > 0 && (
+                <div className="flex items-center gap-1.5 bg-[#090f1e] border border-blue-500/40 rounded-xl px-2.5 py-1.5">
+                  <Truck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                  <select
+                    onChange={(e) => handleSelectVehicleQuick(e.target.value)}
+                    defaultValue=""
+                    className="bg-transparent text-blue-200 text-xs focus:outline-none cursor-pointer max-w-[200px]"
+                  >
+                    <option value="" disabled className="bg-slate-900 text-slate-400">
+                      انتخاب خودرو از ناوگان...
+                    </option>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id} className="bg-slate-900 text-slate-200">
+                        کد {toFaDigits(v.code)} - پلاک {v.plateNumber} ({VEHICLE_TYPE_NAMES[v.vehicleType] || v.vehicleType})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Select Driver */}
+              {(drivers.length > 0 || driverDirectory.length > 0) && (
+                <div className="flex items-center gap-1.5 bg-[#090f1e] border border-emerald-500/40 rounded-xl px-2.5 py-1.5">
+                  <User className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <select
+                    onChange={(e) => handleSelectDriverQuick(e.target.value)}
+                    defaultValue=""
+                    className="bg-transparent text-emerald-200 text-xs focus:outline-none cursor-pointer max-w-[190px]"
+                  >
+                    <option value="" disabled className="bg-slate-900 text-slate-400">
+                      انتخاب راننده از پرونده‌ها...
+                    </option>
+                    {drivers.map((d) => (
+                      <option key={d.id} value={d.id} className="bg-slate-900 text-slate-200">
+                        {d.name} {d.personnelCode ? `(کد: ${toFaDigits(d.personnelCode)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Form Container */}
+          <div className="bg-[#0b1324] border border-[#1b2b48] rounded-2xl p-4 sm:p-6 shadow-xl space-y-6">
+            {/* Box 1: Document Metadata & Identity Info */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <Hash className="w-4 h-4 text-amber-400" />
+                  <h3 className="font-bold text-white text-sm">مشخصات صورت‌جلسه، راننده و کامیونت</h3>
+                </div>
+                {editingRecordId && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                    شناسه ثبت: {editingRecordId}
+                  </span>
+                )}
+              </div>
+
+              {/* Top Row: Receipt, Date, Time, Location */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    شماره قبض رسمی <span className="text-rose-400">*</span>:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={receiptNumber}
+                    onChange={(e) => setReceiptNumber(e.target.value)}
+                    placeholder="مثال: 10482"
+                    className="w-full bg-[#080d19] border border-[#1e3052] rounded-xl px-3 py-2 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">تاریخ تحویل:</label>
+                  <input
+                    type="text"
+                    value={handoverDate}
+                    onChange={(e) => setHandoverDate(e.target.value)}
+                    placeholder="۱۴۰۳/۰۸/۰۵"
+                    className="w-full bg-[#080d19] border border-[#1e3052] rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">ساعت تحویل:</label>
+                  <input
+                    type="text"
+                    value={handoverTime}
+                    onChange={(e) => setHandoverTime(e.target.value)}
+                    placeholder="۰۸:۳۰"
+                    className="w-full bg-[#080d19] border border-[#1e3052] rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">محل و پایانه تحویل:</label>
+                  <input
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="پایانه مرکزی ناوگان حامی..."
+                    className="w-full bg-[#080d19] border border-[#1e3052] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Driver Details Row */}
+              <div className="bg-[#0f192e] border border-[#1a2b4b] rounded-xl p-3.5 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                  <User className="w-3.5 h-3.5" />
+                  <span>مشخصات فردی راننده (تحویل‌گیرنده)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">نام *:</label>
+                    <input
+                      type="text"
+                      required
+                      value={driverName}
+                      onChange={(e) => setDriverName(e.target.value)}
+                      placeholder="مثال: رحیم"
+                      className="w-full bg-[#070c17] border border-[#21355c] rounded-lg px-3 py-1.5 text-white font-bold focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">نام خانوادگی:</label>
+                    <input
+                      type="text"
+                      value={driverLastName}
+                      onChange={(e) => setDriverLastName(e.target.value)}
+                      placeholder="مثال: بدرلو"
+                      className="w-full bg-[#070c17] border border-[#21355c] rounded-lg px-3 py-1.5 text-white font-bold focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">نام پدر:</label>
+                    <input
+                      type="text"
+                      value={driverFatherName}
+                      onChange={(e) => setDriverFatherName(e.target.value)}
+                      placeholder="مثال: علی"
+                      className="w-full bg-[#070c17] border border-[#21355c] rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">شماره ملی (۱۰ رقمی):</label>
+                    <input
+                      type="text"
+                      value={driverNationalId}
+                      onChange={(e) => setDriverNationalId(e.target.value)}
+                      placeholder="۰۰۷۲۱۴۵۸۹۲"
+                      className="w-full bg-[#070c17] border border-[#21355c] rounded-lg px-3 py-1.5 text-white font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Vehicle Details Row */}
+              <div className="bg-[#0f192e] border border-[#1a2b4b] rounded-xl p-3.5 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-blue-400">
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>مشخصات کامیونت واگذار شده</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">نوع وسیله:</label>
+                    <input
+                      type="text"
+                      value={vehicleType}
+                      onChange={(e) => setVehicleType(e.target.value)}
+                      placeholder="خاور ۸۱۳، ایسوزو ۶ تن..."
+                      className="w-full bg-[#070c17] border border-[#21355c] rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">کد ناوگان خودرو:</label>
+                    <input
+                      type="text"
+                      value={vehicleCode}
+                      onChange={(e) => setVehicleCode(e.target.value)}
+                      placeholder="مثال: 1"
+                      className="w-full bg-[#070c17] border border-[#21355c] rounded-lg px-3 py-1.5 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">رنگ بدنه:</label>
+                    <input
+                      type="text"
+                      value={vehicleColor}
+                      onChange={(e) => setVehicleColor(e.target.value)}
+                      placeholder="سفید، زرد، آبی..."
+                      className="w-full bg-[#070c17] border border-[#21355c] rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">پلاک انتظامی ایران:</label>
+                    <input
+                      type="text"
+                      value={vehiclePlate}
+                      onChange={(e) => setVehiclePlate(e.target.value)}
+                      placeholder="۶۶-۵۳۳ع۲۵"
+                      className="w-full bg-[#070c17] border border-[#21355c] rounded-lg px-3 py-1.5 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {vehiclePlate && (
+                  <div className="flex justify-start pt-1">
+                    <IranianPlate plateNumber={vehiclePlate} scale={0.8} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Box 2: 66-Item Checklist */}
+            <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl p-4 sm:p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 font-bold text-white text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>چک‌لیست رسمی ۶۶ گانه سلامت قطعات و تجهیزات:</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 font-mono text-xs">
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      سالم: {toFaDigits(formChecklistCounts.healthy)}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                      خسارتی: {toFaDigits(formChecklistCounts.damaged)}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                      ندارد: {toFaDigits(formChecklistCounts.none)}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleMarkAllHealthy}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-xs shadow-md shadow-emerald-950/40 transition cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>علامت‌گذاری تمام ۶۶ قلم به عنوان «سالم»</span>
+                </button>
+              </div>
+
+              {/* 3 Columns Grid for 66 Items */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                {[1, 2, 3].map((colNum) => {
+                  const colItems = HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === colNum);
+                  const colTitle =
+                    colNum === 1
+                      ? 'ستون اول: موتور، ترمز و فنی'
+                      : colNum === 2
+                      ? 'ستون دوم: بدنه، کابین و چراغ‌ها'
+                      : 'ستون سوم: اسناد، تجهیزات و متعلقات';
+
+                  return (
+                    <div
+                      key={colNum}
+                      className="border border-[#1b2b48] rounded-xl overflow-hidden bg-[#090f1d] flex flex-col"
+                    >
+                      <div className="bg-[#070b16] px-3 py-2 font-bold text-slate-200 text-xs border-b border-[#1b2b48] flex items-center justify-between">
+                        <span>{colTitle}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {toFaDigits(colItems.length)} قلم
+                        </span>
+                      </div>
+
+                      <div className="divide-y divide-[#15233c] max-h-[460px] overflow-y-auto custom-scrollbar">
+                        {colItems.map((item) => {
+                          const currentStatus = checklist[item.id] || 'HEALTHY';
+                          return (
+                            <div
+                              key={item.id}
+                              className={`px-3 py-2 flex items-center justify-between gap-2 transition-colors ${
+                                currentStatus === 'DAMAGED'
+                                  ? 'bg-rose-950/25 border-r-2 border-rose-500'
+                                  : currentStatus === 'NONE'
+                                  ? 'bg-slate-900/40 text-slate-500'
+                                  : 'hover:bg-[#0d1627]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                                  {toFaDigits(item.id)}.
+                                </span>
+                                <span
+                                  className={`text-xs truncate font-medium ${
+                                    currentStatus === 'DAMAGED'
+                                      ? 'text-rose-300 font-bold'
+                                      : 'text-slate-200'
+                                  }`}
+                                  title={item.label}
+                                >
+                                  {item.label}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetItemStatus(item.id, 'HEALTHY')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                    currentStatus === 'HEALTHY'
+                                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                                      : 'bg-[#060a14] text-slate-400 border-[#1a2845] hover:text-white'
+                                  }`}
+                                >
+                                  سالم
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetItemStatus(item.id, 'DAMAGED')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                    currentStatus === 'DAMAGED'
+                                      ? 'bg-rose-600 text-white border-rose-500 shadow-xs'
+                                      : 'bg-[#060a14] text-slate-400 border-[#1a2845] hover:text-white'
+                                  }`}
+                                >
+                                  نقص
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetItemStatus(item.id, 'NONE')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                    currentStatus === 'NONE'
+                                      ? 'bg-slate-700 text-white border-slate-600'
+                                      : 'bg-[#060a14] text-slate-500 border-[#1a2845] hover:text-white'
+                                  }`}
+                                >
+                                  ندارد
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Box 3: 4-View Interactive Truck Body Schematic */}
+            <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                  <h3 className="font-bold text-white text-sm">
+                    دیاگرام تعاملی ۴ وجه بدنه کامیونت (جلو، عقب، راست، چپ)
+                  </h3>
+                </div>
+                <span className="text-xs text-slate-400">
+                  جهت ثبت دقیق آسیب، روی بدنه خودرو در هر وجه کلیک کنید
+                </span>
+              </div>
+
+              <Truck4ViewBodyInspector
+                damages={damages}
+                onChangeDamages={setDamages}
+                readOnly={false}
+              />
+            </div>
+
+            {/* Box 4: Official Undertaking & Signatures */}
+            <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl p-4 sm:p-5 space-y-4">
+              <div className="font-bold text-amber-300 text-xs border-b border-slate-800 pb-2">
+                متن تعهدنامه رسمی و امضای طرفین تحویل خودرو
+              </div>
+
+              <div>
+                <textarea
+                  rows={3}
+                  value={affidavitText}
+                  onChange={(e) => setAffidavitText(e.target.value)}
+                  className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-3 text-slate-200 leading-relaxed focus:outline-none focus:border-amber-400 text-xs resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    نام نماینده تحویل‌دهنده (شرکت):
+                  </label>
+                  <input
+                    type="text"
+                    value={delivererName}
+                    onChange={(e) => setDelivererName(e.target.value)}
+                    placeholder="مسئول اعزام و ترابری حامی"
+                    className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    نام تحویل‌گیرنده (راننده):
+                  </label>
+                  <input
+                    type="text"
+                    value={receiverName}
+                    onChange={(e) => setReceiverName(e.target.value)}
+                    placeholder={driverName ? `${driverName} ${driverLastName}` : 'نام راننده...'}
+                    className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1 text-xs">
+                  ملاحظات و توضیحات تکمیلی تحویل:
+                </label>
+                <input
+                  type="text"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="هرگونه شرط خاص، کسری مدارک یا هماهنگی ویژه..."
+                  className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Bottom Form Actions Bar */}
+            <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-[#1a2b4b]">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetForm}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer"
+                >
+                  پاکسازی و فرم جدید
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleSaveForm(false)}
+                  className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition cursor-pointer"
+                >
+                  ذخیره در آرشیو
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveForm(true)}
+                  className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-xs shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>ثبت صورت‌جلسه و چاپ رسمی A4</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 4. TAB 2: DIRECT OFFICIAL A4 SHEET PREVIEW & PRINT                        */}
+      {/* ========================================================================= */}
+      {handoverViewMode === 'SHEET_VIEW' && (
         <div className="space-y-3">
-          {/* Sheet Selector & Quick Actions Strip */}
+          {/* Record Selector & Actions */}
           <div className="bg-[#0f192e] border border-[#22365e] rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs no-print">
             <div className="flex items-center gap-2">
               <span className="text-slate-400 font-medium">انتخاب برگه جهت مشاهده:</span>
               <select
                 value={selectedRecordIdForView}
                 onChange={(e) => setSelectedRecordIdForView(e.target.value)}
-                className="bg-[#09101f] border border-[#233862] text-white rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-blue-500"
+                className="bg-[#09101f] border border-[#233862] text-white rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-blue-500 max-w-[280px]"
               >
                 {records.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -509,825 +1139,476 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActivePrintRecord(viewingRecord)}
-                className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black shadow-md flex items-center gap-1.5 transition cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                <span>چاپ رسمی این برگه A4</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenEdit(viewingRecord)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold flex items-center gap-1.5 transition cursor-pointer"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                <span>ویرایش برگه</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Inline A4 Sheet Display */}
-          <div className="bg-slate-900/60 p-2 sm:p-6 rounded-2xl border border-slate-800 flex justify-center overflow-x-auto">
-            <div
-              dir="rtl"
-              className="bg-white text-slate-900 p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[11px] font-sans leading-tight border border-slate-300"
-              style={{ boxSizing: 'border-box' }}
-            >
-              {/* HEADER SECTION */}
-              <div className="border border-slate-900 rounded-lg p-3 mb-2 flex items-center justify-between">
-                <div className="w-1/3 flex flex-col items-start justify-center">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-base">
-                      ح
-                    </div>
-                    <div>
-                      <div className="font-black text-slate-900 text-sm tracking-tight">
-                        ترابری و لجستیک حامی
-                      </div>
-                      <div className="text-[9px] text-slate-600 font-mono">
-                        تلفن تماس: ۱۷۸۶
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="w-1/3 text-center border-x border-slate-300 px-2">
-                  <div className="inline-block px-4 py-1 border border-slate-900 rounded font-black text-base text-slate-950 mb-1 bg-slate-50">
-                    تحویل خودرو
-                  </div>
-                  <div className="text-[10px] text-slate-700 font-bold flex items-center justify-center gap-3">
-                    <span>تاریخ: <strong className="font-mono">{toFaDigits(viewingRecord.date)}</strong></span>
-                    <span>ساعت: <strong className="font-mono">{toFaDigits(viewingRecord.time)}</strong></span>
-                  </div>
-                </div>
-
-                <div className="w-1/3 text-left space-y-1 font-mono text-[10.5px]">
-                  <div className="text-right">
-                    <span className="font-bold text-slate-800">شماره قبض: </span>
-                    <span className="font-black text-slate-950 text-xs">{toFaDigits(viewingRecord.receiptNumber)}</span>
-                  </div>
-                  <div className="text-right text-[10px] text-slate-600 truncate">
-                    <span className="font-bold">آدرس: </span>
-                    <span>{viewingRecord.address || 'پایانه مرکزی ناوگان حامی'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* DRIVER & VEHICLE INFO */}
-              <div className="border border-slate-900 rounded-lg p-2.5 mb-2 relative">
-                <div className="grid grid-cols-4 gap-2 text-slate-900 text-[11px] mb-2 pb-2 border-b border-slate-200">
-                  <div>
-                    <span className="text-slate-600 font-medium">نام راننده: </span>
-                    <strong className="font-bold text-slate-950">{viewingRecord.driverName}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-600 font-medium">نام خانوادگی: </span>
-                    <strong className="font-bold text-slate-950">{viewingRecord.driverLastName}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-600 font-medium">نام پدر: </span>
-                    <strong className="font-bold text-slate-950">{viewingRecord.driverFatherName || '---'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-600 font-medium">کد ملی: </span>
-                    <strong className="font-mono font-bold text-slate-950">{toFaDigits(viewingRecord.driverNationalId) || '---'}</strong>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-2 items-center text-[11px]">
-                  <div>
-                    <span className="text-slate-600 font-medium">نوع وسیله: </span>
-                    <strong className="font-bold text-slate-950">{viewingRecord.vehicleType || 'کامیونت'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-600 font-medium">کد وسیله: </span>
-                    <strong className="font-mono font-bold text-slate-950">{toFaDigits(viewingRecord.vehicleCode) || '---'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-600 font-medium">رنگ: </span>
-                    <strong className="font-bold text-slate-950">{viewingRecord.vehicleColor || 'سفید'}</strong>
-                  </div>
-                  <div className="flex items-center justify-end">
-                    {viewingRecord.vehiclePlate ? (
-                      <div className="scale-85 origin-left inline-block">
-                        <IranianPlate plateNumber={viewingRecord.vehiclePlate} size="sm" />
-                      </div>
-                    ) : (
-                      <span className="text-slate-400 font-mono">بدون پلاک</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* 3-COLUMN 66-ITEM CHECKLIST TABLE */}
-              <div className="border border-slate-900 rounded-lg overflow-hidden mb-2">
-                <table className="w-full border-collapse text-[9.5px]">
-                  <thead>
-                    <tr className="bg-slate-100 border-b border-slate-900 text-slate-900 font-black text-center">
-                      <th className="py-1 px-1 border-l border-slate-400 text-right w-[15%]">شرح</th>
-                      <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
-                      <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
-                      <th className="py-1 px-1 border-l-2 border-slate-900 w-[6%]">ندارد</th>
-
-                      <th className="py-1 px-1 border-l border-slate-400 text-right w-[15%]">شرح</th>
-                      <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
-                      <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
-                      <th className="py-1 px-1 border-l-2 border-slate-900 w-[6%]">ندارد</th>
-
-                      <th className="py-1 px-1 border-l border-slate-400 text-right w-[16%]">شرح</th>
-                      <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
-                      <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
-                      <th className="py-1 px-1 w-[6%]">ندارد</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: 22 }).map((_, rowIdx) => {
-                      const item1 = col1Items[rowIdx];
-                      const item2 = col2Items[rowIdx];
-                      const item3 = col3Items[rowIdx];
-
-                      const st1 = item1 ? viewingRecord.checklist[item1.id] || 'HEALTHY' : 'HEALTHY';
-                      const st2 = item2 ? viewingRecord.checklist[item2.id] || 'HEALTHY' : 'HEALTHY';
-                      const st3 = item3 ? viewingRecord.checklist[item3.id] || 'HEALTHY' : 'HEALTHY';
-
-                      const isEven = rowIdx % 2 === 0;
-
-                      return (
-                        <tr
-                          key={rowIdx}
-                          className={`border-b border-slate-300 text-center ${
-                            isEven ? 'bg-white' : 'bg-slate-50/50'
-                          }`}
-                        >
-                          <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                            {item1 ? item1.label : ''}
-                          </td>
-                          <td className="py-0.8 px-1 border-l border-slate-300">
-                            {st1 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
-                          </td>
-                          <td className="py-0.8 px-1 border-l border-slate-300">
-                            {st1 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
-                          </td>
-                          <td className="py-0.8 px-1 border-l-2 border-slate-900">
-                            {st1 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
-                          </td>
-
-                          <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                            {item2 ? item2.label : ''}
-                          </td>
-                          <td className="py-0.8 px-1 border-l border-slate-300">
-                            {st2 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
-                          </td>
-                          <td className="py-0.8 px-1 border-l border-slate-300">
-                            {st2 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
-                          </td>
-                          <td className="py-0.8 px-1 border-l-2 border-slate-900">
-                            {st2 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
-                          </td>
-
-                          <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                            {item3 ? item3.label : ''}
-                          </td>
-                          <td className="py-0.8 px-1 border-l border-slate-300">
-                            {st3 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
-                          </td>
-                          <td className="py-0.8 px-1 border-l border-slate-300">
-                            {st3 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
-                          </td>
-                          <td className="py-0.8 px-1">
-                            {st3 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 4-VIEW BODY DAMAGES SECTION */}
-              <div className="border border-slate-900 rounded-lg p-2.5 mb-2 bg-slate-50/50">
-                <div className="flex items-center justify-between mb-1.5 border-b border-slate-200 pb-1">
-                  <span className="font-black text-slate-900 text-[10.5px]">
-                    وضعیت بدنه و آسیب‌های مشهود در ۴ وجه کامیونت (جلو، عقب، راست، چپ):
-                  </span>
-                  <span className="text-[10px] text-slate-600 font-mono">
-                    تعداد موارد آسیب: <strong>{toFaDigits(viewingRecord.damages.length)}</strong>
-                  </span>
-                </div>
-
-                {viewingRecord.damages.length === 0 ? (
-                  <div className="text-center py-1 text-slate-500 text-[10px] font-bold">
-                    بدنه خودرو در هر ۴ وجه فاقد هرگونه خط و خش، قِری، شکستگی و تصادف قبلی رویت گردید (کاملاً سالم).
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[9.5px]">
-                    {viewingRecord.damages.map((dmg, idx) => (
-                      <div
-                        key={dmg.id}
-                        className="bg-white border border-slate-300 p-1.5 rounded flex items-start gap-1"
-                      >
-                        <span className="w-4 h-4 rounded-full bg-slate-900 text-white font-mono text-[9px] flex items-center justify-center shrink-0">
-                          {toFaDigits(idx + 1)}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="font-bold text-slate-900 truncate">
-                            {dmg.partName || (dmg.view === 'FRONT' ? 'جلو' : dmg.view === 'REAR' ? 'عقب' : dmg.view === 'RIGHT' ? 'راست' : 'چپ')}
-                          </div>
-                          <div className="text-slate-600 text-[8.5px]">
-                            {dmg.damageType === 'SCRATCH'
-                              ? 'خط و خش'
-                              : dmg.damageType === 'DENT'
-                              ? 'قِری و فرورفتگی'
-                              : dmg.damageType === 'CRACK'
-                              ? 'شکستگی'
-                              : dmg.damageType === 'PAINT_CHIP'
-                              ? 'رنگ‌پریدگی'
-                              : 'آسیب بدنه'}
-                            {dmg.description ? ` (${dmg.description})` : ''}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* AFFIDAVIT TEXT SECTION */}
-              <div className="border border-slate-900 rounded-lg p-2.5 mb-3 bg-white">
-                <p className="text-justify text-[10.5px] leading-relaxed text-slate-900 font-medium">
-                  اینجانب <strong className="font-black text-slate-950 underline px-1">{viewingRecord.driverName} {viewingRecord.driverLastName}</strong> فرزند <strong className="font-black text-slate-950 underline px-1">{viewingRecord.driverFatherName || '................'}</strong> به شماره ملی <strong className="font-mono font-black text-slate-950 underline px-1">{toFaDigits(viewingRecord.driverNationalId) || '................'}</strong> طبق مندرجات جدول بالا ماشین فوق را رویت و تحویل گرفتم و از تاریخ <strong className="font-mono font-black text-slate-950 underline px-1">{toFaDigits(viewingRecord.date)}</strong> مسئولیت نگهداری و عواقب جانبی و خلافی خودروی مذکور به عهده اینجانب می‌باشد.
-                </p>
-              </div>
-
-              {/* SIGNATURES SECTION */}
-              <div className="grid grid-cols-2 gap-4 text-xs font-bold text-slate-900 pt-2 border-t-2 border-slate-900">
-                <div className="flex flex-col items-center justify-between min-h-[60px]">
-                  <div>تحویل دهنده: <span className="font-normal">{viewingRecord.delivererName || 'مسئول ناوگان ترابری'}</span></div>
-                  <div className="text-[10px] text-slate-500 font-normal">امضا و اثر انگشت:</div>
-                </div>
-
-                <div className="flex flex-col items-center justify-between min-h-[60px]">
-                  <div>تحویل گیرنده: <span className="font-normal">{viewingRecord.receiverName || `${viewingRecord.driverName} ${viewingRecord.driverLastName}`}</span></div>
-                  <div className="text-[10px] text-slate-500 font-normal">امضا و اثر انگشت:</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Archive List Mode */}
-      {handoverViewMode === 'ARCHIVE_LIST' && (
-      <div className="bg-[#0d1627] border border-[#1f2c45] rounded-2xl p-4 shadow-md space-y-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="جستجو بر اساس نام راننده، شماره قبض، شماره پلاک یا کد ملی..."
-              className="w-full bg-[#080e1b] border border-[#1e2f52] rounded-xl pr-9 pl-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute left-2.5 top-2 text-slate-400 hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <span className="text-xs text-slate-400">
-            نمایش {toFaDigits(filteredRecords.length)} مورد از {toFaDigits(records.length)} صورت‌جلسه
-          </span>
-        </div>
-
-        {/* Table of Records */}
-        {filteredRecords.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 space-y-2">
-            <FileText className="w-10 h-10 text-slate-600 mx-auto" />
-            <div className="text-white font-bold text-sm">هیچ صورت‌جلسه تحویلی یافت نشد</div>
-            <p className="text-xs text-slate-500">
-              با کلیک روی دکمه «+ صدور صورت‌جلسه جدید» اولین قبض تحویل ناوگان را ایجاد کنید.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto border border-[#1b2b48] rounded-xl">
-            <table className="w-full text-right text-xs">
-              <thead className="bg-[#09101e] text-slate-300 font-bold border-b border-[#1b2b48]">
-                <tr>
-                  <th className="py-2.5 px-3">شماره قبض</th>
-                  <th className="py-2.5 px-3">تاریخ و ساعت</th>
-                  <th className="py-2.5 px-3">نام و مشخصات راننده</th>
-                  <th className="py-2.5 px-3">وسیله و پلاک</th>
-                  <th className="py-2.5 px-3 text-center">آسیب‌های بدنه</th>
-                  <th className="py-2.5 px-3 text-center">وضعیت اقلام</th>
-                  <th className="py-2.5 px-3 text-center">عملیات</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#172542] bg-[#0b1426]">
-                {filteredRecords.map((rec) => {
-                  const damagesCount = rec.damages?.length || 0;
-                  return (
-                    <tr key={rec.id} className="hover:bg-[#121e38] transition-colors">
-                      <td className="py-2.5 px-3 font-mono font-bold text-blue-400">
-                        {toFaDigits(rec.receiptNumber)}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-300 font-mono">
-                        <div>{toFaDigits(rec.date)}</div>
-                        <div className="text-[10px] text-slate-500">{toFaDigits(rec.time)}</div>
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <div className="font-bold text-white flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{rec.driverName} {rec.driverLastName}</span>
-                        </div>
-                        {rec.driverNationalId && (
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            کد ملی: {toFaDigits(rec.driverNationalId)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <div className="text-white font-medium flex items-center gap-1">
-                          <Truck className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{rec.vehicleType}</span>
-                          {rec.vehicleCode && (
-                            <span className="text-[10px] px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded font-mono">
-                              کد {toFaDigits(rec.vehicleCode)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-0.5">
-                          {rec.vehiclePlate ? (
-                            <span className="scale-75 origin-right inline-block">
-                              <IranianPlate plateNumber={rec.vehiclePlate} size="xs" />
-                            </span>
-                          ) : (
-                            <span className="text-slate-500">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        {damagesCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                            <AlertTriangle className="w-3 h-3 text-amber-400" />
-                            {toFaDigits(damagesCount)} آسیب ثبت‌شده
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                            بدون آسیب (سالم)
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-center text-[10px] text-slate-400 font-mono">
-                        ۶۶ قلم چک‌لیست
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* Print A4 */}
-                          <button
-                            type="button"
-                            onClick={() => setActivePrintRecord(rec)}
-                            className="p-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/35 text-blue-300 border border-blue-500/30 transition cursor-pointer"
-                            title="مشاهده و چاپ رسمی A4"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-                          {/* Edit */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(rec)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                            title="ویرایش صورت‌جلسه"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          {/* Delete */}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRecord(rec.id, rec.receiptNumber)}
-                            className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition cursor-pointer"
-                            title="حذف صورت‌جلسه"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      )}
-
-      {/* 3. Modal: Create / Edit Handover Session (Full Width Modal) */}
-      {isFormModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="bg-[#0c1424] border border-[#21355c] rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95">
-            {/* Modal Header */}
-            <div className="px-5 py-3.5 bg-[#080d19] border-b border-[#1c2a47] flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold">
-                  <FileCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-sm sm:text-base">
-                    {editingRecordId ? 'ویرایش صورت‌جلسه تحویل خودرو' : 'صدور فرم و صورت‌جلسه رسمی تحویل خودرو'}
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    چک‌لیست کامل ۶۶ گانه، شماتیک ۴ وجهی بدنه و متن تعهدنامه راننده
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsFormModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Scrollable Body */}
-            <form onSubmit={handleSaveRecord} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 text-xs custom-scrollbar">
-              {/* Box 1: Receipt Header & Quick Auto-Fill Pickers */}
-              <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl p-4 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4" />
-                    مشخصات سربرگ و اطلاعات فردی و خودرو
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {/* Auto-fill from drivers */}
-                    {drivers.length > 0 && (
-                      <select
-                        onChange={(e) => handleSelectDriverQuick(e.target.value)}
-                        defaultValue=""
-                        className="bg-[#090e1b] border border-blue-500/40 text-blue-300 rounded-lg px-2 py-1 text-xs focus:outline-none"
-                      >
-                        <option value="" disabled>انتخاب سریع از لیست رانندگان...</option>
-                        {drivers.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name} {d.personnelCode ? `(کد: ${toFaDigits(d.personnelCode)})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-
-                    {/* Auto-fill from vehicles */}
-                    {vehicles.length > 0 && (
-                      <select
-                        onChange={(e) => handleSelectVehicleQuick(e.target.value)}
-                        defaultValue=""
-                        className="bg-[#090e1b] border border-emerald-500/40 text-emerald-300 rounded-lg px-2 py-1 text-xs focus:outline-none"
-                      >
-                        <option value="" disabled>انتخاب سریع از ناوگان...</option>
-                        {vehicles.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            کد {toFaDigits(v.code)} - پلاک {v.plateNumber}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                </div>
-
-                {/* Top Row: Receipt, Date, Time, Address */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">شماره قبض *:</label>
-                    <input
-                      type="text"
-                      required
-                      value={receiptNumber}
-                      onChange={(e) => setReceiptNumber(e.target.value)}
-                      placeholder="مثلاً: 10482"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">تاریخ تحویل:</label>
-                    <input
-                      type="text"
-                      value={handoverDate}
-                      onChange={(e) => setHandoverDate(e.target.value)}
-                      placeholder="۱۴۰۳/۰۸/۰۵"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">ساعت تحویل:</label>
-                    <input
-                      type="text"
-                      value={handoverTime}
-                      onChange={(e) => setHandoverTime(e.target.value)}
-                      placeholder="۰۸:۳۰"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">آدرس پایانه / مبدا:</label>
-                    <input
-                      type="text"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      placeholder="پایانه مرکزی حامی..."
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Driver Info Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-[#1a2742]">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">نام راننده *:</label>
-                    <input
-                      type="text"
-                      required
-                      value={driverName}
-                      onChange={(e) => setDriverName(e.target.value)}
-                      placeholder="مثال: رحیم"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white focus:outline-none focus:border-blue-500 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">نام خانوادگی راننده:</label>
-                    <input
-                      type="text"
-                      value={driverLastName}
-                      onChange={(e) => setDriverLastName(e.target.value)}
-                      placeholder="مثال: بدرلو"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white focus:outline-none focus:border-blue-500 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">نام پدر:</label>
-                    <input
-                      type="text"
-                      value={driverFatherName}
-                      onChange={(e) => setDriverFatherName(e.target.value)}
-                      placeholder="مثال: علی"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">کد ملی راننده:</label>
-                    <input
-                      type="text"
-                      value={driverNationalId}
-                      onChange={(e) => setDriverNationalId(e.target.value)}
-                      placeholder="۱۰ رقم کد ملی..."
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Vehicle Info Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-[#1a2742]">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">نوع وسیله:</label>
-                    <input
-                      type="text"
-                      value={vehicleType}
-                      onChange={(e) => setVehicleType(e.target.value)}
-                      placeholder="خاور ۸۱۳، ایسوزو ۶ تن..."
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">کد وسیله:</label>
-                    <input
-                      type="text"
-                      value={vehicleCode}
-                      onChange={(e) => setVehicleCode(e.target.value)}
-                      placeholder="مثلاً: 1"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">رنگ بدنه:</label>
-                    <input
-                      type="text"
-                      value={vehicleColor}
-                      onChange={(e) => setVehicleColor(e.target.value)}
-                      placeholder="سفید، زرد..."
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">پلاک انتظامی ایران:</label>
-                    <input
-                      type="text"
-                      value={vehiclePlate}
-                      onChange={(e) => setVehiclePlate(e.target.value)}
-                      placeholder="۶۶-۵۳۳ع۲۵"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white font-mono focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Box 2: 3-Column 66-Item Checklist Table */}
-              <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl p-4 space-y-3">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white text-xs">
-                      چک‌لیست کامل ۶۶ گانه سلامت خودرو و تجهیزات:
-                    </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono">
-                      سالم: {toFaDigits(formChecklistCounts.healthy)}
-                    </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded bg-rose-500/15 text-rose-400 font-mono">
-                      خسارتی: {toFaDigits(formChecklistCounts.damaged)}
-                    </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
-                      ندارد: {toFaDigits(formChecklistCounts.none)}
-                    </span>
-                  </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {viewingRecord && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadRecordToForm(viewingRecord)}
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>ویرایش در فرم</span>
+                  </button>
 
                   <button
                     type="button"
-                    onClick={handleMarkAllHealthy}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow cursor-pointer"
+                    onClick={() => setActivePrintRecord(viewingRecord)}
+                    className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black shadow-md flex items-center gap-1.5 transition cursor-pointer"
                   >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>علامت‌گذاری تمام ۶۶ قلم به عنوان «سالم»</span>
+                    <Printer className="w-4 h-4" />
+                    <span>چاپ رسمی این برگه A4</span>
                   </button>
-                </div>
+                </>
+              )}
+            </div>
+          </div>
 
-                {/* 3 Columns Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {[1, 2, 3].map((colNum) => {
-                    const colItems = HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === colNum);
-                    return (
-                      <div key={colNum} className="border border-[#1b2b48] rounded-xl overflow-hidden bg-[#090f1d]">
-                        <div className="bg-[#070b16] px-3 py-1.5 font-bold text-slate-300 text-xs border-b border-[#1b2b48] flex items-center justify-between">
-                          <span>ستون {colNum === 1 ? 'اول' : colNum === 2 ? 'دوم' : 'سوم'} ({toFaDigits(colItems.length)} قلم)</span>
-                          <span className="text-[10px] text-slate-500">سالم | خسارتی | ندارد</span>
+          {/* Paper View */}
+          {viewingRecord ? (
+            <div className="bg-slate-900/60 p-2 sm:p-6 rounded-2xl border border-slate-800 flex justify-center overflow-x-auto">
+              <div
+                dir="rtl"
+                className="bg-white text-slate-900 p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[11px] font-sans leading-tight border border-slate-300"
+                style={{ boxSizing: 'border-box' }}
+              >
+                {/* Header */}
+                <div className="border border-slate-900 rounded-lg p-3 mb-2 flex items-center justify-between">
+                  <div className="w-1/3 flex flex-col items-start justify-center">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-base">
+                        ح
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-900 text-sm tracking-tight">
+                          ترابری و لجستیک حامی
                         </div>
-
-                        <div className="divide-y divide-[#15233c] max-h-[380px] overflow-y-auto custom-scrollbar">
-                          {colItems.map((item) => {
-                            const currentStatus = checklist[item.id] || 'HEALTHY';
-                            return (
-                              <div
-                                key={item.id}
-                                className={`px-2.5 py-1.5 flex items-center justify-between transition-colors ${
-                                  currentStatus === 'DAMAGED'
-                                    ? 'bg-rose-950/20'
-                                    : currentStatus === 'NONE'
-                                    ? 'bg-slate-900/40'
-                                    : 'hover:bg-[#0d1627]'
-                                }`}
-                              >
-                                <span className={`text-[11.5px] truncate max-w-[140px] font-medium ${
-                                  currentStatus === 'DAMAGED' ? 'text-rose-300 font-bold' : 'text-slate-200'
-                                }`}>
-                                  {item.label}
-                                </span>
-
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {/* Healthy */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSetItemStatus(item.id, 'HEALTHY')}
-                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                                      currentStatus === 'HEALTHY'
-                                        ? 'bg-emerald-600 text-white border-emerald-500'
-                                        : 'bg-[#060a14] text-slate-400 border-[#1a2845] hover:text-white'
-                                    }`}
-                                  >
-                                    سالم
-                                  </button>
-
-                                  {/* Damaged */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSetItemStatus(item.id, 'DAMAGED')}
-                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                                      currentStatus === 'DAMAGED'
-                                        ? 'bg-rose-600 text-white border-rose-500'
-                                        : 'bg-[#060a14] text-slate-400 border-[#1a2845] hover:text-white'
-                                    }`}
-                                  >
-                                    خسارتی
-                                  </button>
-
-                                  {/* None */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSetItemStatus(item.id, 'NONE')}
-                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                                      currentStatus === 'NONE'
-                                        ? 'bg-slate-700 text-white border-slate-600'
-                                        : 'bg-[#060a14] text-slate-500 border-[#1a2845] hover:text-white'
-                                    }`}
-                                  >
-                                    ندارد
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
+                        <div className="text-[9px] text-slate-600 font-mono">
+                          تلفن تماس: ۱۷۸۶
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  </div>
+
+                  <div className="w-1/3 text-center border-x border-slate-300 px-2">
+                    <div className="inline-block px-4 py-1 border border-slate-900 rounded font-black text-base text-slate-950 mb-1 bg-slate-50">
+                      صورت‌جلسه تحویل خودرو
+                    </div>
+                    <div className="text-[10px] text-slate-700 font-bold flex items-center justify-center gap-3">
+                      <span>
+                        تاریخ: <strong className="font-mono">{toFaDigits(viewingRecord.date)}</strong>
+                      </span>
+                      <span>
+                        ساعت: <strong className="font-mono">{toFaDigits(viewingRecord.time)}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="w-1/3 text-left space-y-1 font-mono text-[10.5px]">
+                    <div className="text-right">
+                      <span className="font-bold text-slate-800">شماره قبض: </span>
+                      <span className="font-black text-slate-950 text-xs">{toFaDigits(viewingRecord.receiptNumber)}</span>
+                    </div>
+                    <div className="text-right text-[10px] text-slate-600 truncate">
+                      <span className="font-bold">آدرس: </span>
+                      <span>{viewingRecord.address || 'پایانه مرکزی ناوگان حامی'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Driver & Vehicle Box */}
+                <div className="border border-slate-900 rounded-lg p-2.5 mb-2 relative">
+                  <div className="grid grid-cols-4 gap-2 text-slate-900 text-[11px] mb-2 pb-2 border-b border-slate-200">
+                    <div>
+                      <span className="text-slate-600 font-medium">نام راننده: </span>
+                      <strong className="font-bold text-slate-950">{viewingRecord.driverName}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-600 font-medium">نام خانوادگی: </span>
+                      <strong className="font-bold text-slate-950">{viewingRecord.driverLastName}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-600 font-medium">نام پدر: </span>
+                      <strong className="font-bold text-slate-950">{viewingRecord.driverFatherName || '---'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-600 font-medium">کد ملی: </span>
+                      <strong className="font-mono font-bold text-slate-950">
+                        {toFaDigits(viewingRecord.driverNationalId) || '---'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 text-slate-900 text-[11px] items-center">
+                    <div>
+                      <span className="text-slate-600 font-medium">نوع خودرو: </span>
+                      <strong className="font-bold text-slate-950">{viewingRecord.vehicleType}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-600 font-medium">کد ناوگان: </span>
+                      <strong className="font-mono font-bold text-slate-950">
+                        {toFaDigits(viewingRecord.vehicleCode) || '---'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-600 font-medium">رنگ بدنه: </span>
+                      <strong className="font-bold text-slate-950">{viewingRecord.vehicleColor || 'سفید'}</strong>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-600 font-medium">پلاک: </span>
+                      {viewingRecord.vehiclePlate ? (
+                        <IranianPlate plateNumber={viewingRecord.vehiclePlate} scale={0.65} />
+                      ) : (
+                        <span className="text-slate-400">---</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 66 Checklist Items Table */}
+                <div className="border border-slate-900 rounded-lg p-2 mb-2">
+                  <div className="bg-slate-100 border border-slate-300 rounded px-2 py-1 text-center font-bold text-[11.5px] text-slate-900 mb-2">
+                    چک‌لیست سلامت قطعات، تجهیزات، ادوات فنی و اسناد خودرو (۶۶ قلم استاندارد)
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {[1, 2, 3].map((colNum) => {
+                      const colItems = HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === colNum);
+                      return (
+                        <div key={colNum} className="border border-slate-300 rounded overflow-hidden">
+                          <table className="w-full border-collapse text-[9.5px]">
+                            <thead>
+                              <tr className="bg-slate-200 border-b border-slate-300 text-slate-800">
+                                <th className="py-1 px-1 text-right font-bold">شرح قطعه</th>
+                                <th className="py-1 px-0.5 text-center font-bold w-7">سالم</th>
+                                <th className="py-1 px-0.5 text-center font-bold w-7">نقص</th>
+                                <th className="py-1 px-0.5 text-center font-bold w-7">ندارد</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {colItems.map((item, idx) => {
+                                const st = viewingRecord.checklist?.[item.id] || 'HEALTHY';
+                                return (
+                                  <tr
+                                    key={item.id}
+                                    className={`border-b border-slate-200 ${
+                                      idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'
+                                    }`}
+                                  >
+                                    <td className="py-0.5 px-1 truncate max-w-[110px] text-slate-900 font-medium">
+                                      {item.label}
+                                    </td>
+                                    <td className="py-0.5 text-center">
+                                      {st === 'HEALTHY' && (
+                                        <span className="font-bold text-emerald-700">✓</span>
+                                      )}
+                                    </td>
+                                    <td className="py-0.5 text-center">
+                                      {st === 'DAMAGED' && (
+                                        <span className="font-bold text-rose-700">✗</span>
+                                      )}
+                                    </td>
+                                    <td className="py-0.5 text-center">
+                                      {st === 'NONE' && (
+                                        <span className="text-slate-400 font-bold">-</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 4-View Body Damage Summary */}
+                <div className="border border-slate-900 rounded-lg p-2 mb-2">
+                  <div className="bg-slate-100 border border-slate-300 rounded px-2 py-1 text-center font-bold text-[11px] text-slate-900 mb-1.5 flex items-center justify-between">
+                    <span>وضعیت و خسارات بدنه کامیونت در ۴ وجه (جلو، عقب، راست، چپ)</span>
+                    <span className="text-[10px] text-slate-600">
+                      تعداد عارضه‌های ثبت‌شده:{' '}
+                      <strong className="font-mono">
+                        {toFaDigits(viewingRecord.damages?.length || 0)}
+                      </strong>
+                    </span>
+                  </div>
+
+                  {viewingRecord.damages && viewingRecord.damages.length > 0 ? (
+                    <div className="space-y-1">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {viewingRecord.damages.map((dmg, idx) => (
+                          <div
+                            key={dmg.id || idx}
+                            className="bg-slate-50 border border-slate-300 rounded p-1.5 text-[9.5px] flex items-center justify-between"
+                          >
+                            <div>
+                              <strong className="text-slate-900">
+                                وجه{' '}
+                                {dmg.view === 'FRONT'
+                                  ? 'جلو'
+                                  : dmg.view === 'REAR'
+                                  ? 'عقب'
+                                  : dmg.view === 'RIGHT'
+                                  ? 'راست'
+                                  : 'چپ'}
+                                :{' '}
+                              </strong>
+                              <span>{dmg.partName || 'بدنه'}</span>
+                              {dmg.description && (
+                                <span className="text-slate-600"> ({dmg.description})</span>
+                              )}
+                            </div>
+                            <span className="font-bold text-rose-700">
+                              {dmg.damageType === 'SCRATCH'
+                                ? 'خط و خش'
+                                : dmg.damageType === 'DENT'
+                                ? 'قِری'
+                                : dmg.damageType === 'CRACK'
+                                ? 'شکستگی'
+                                : 'خسارت'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-2 text-slate-600 font-bold text-[10px] bg-emerald-50 border border-emerald-200 rounded">
+                      بدنه خودرو کاملاً سالم و بدون هرگونه خط و خش، قرشدگی یا آسیب تحویل گردید.
+                    </div>
+                  )}
+                </div>
+
+                {/* Affidavit Text */}
+                <div className="border border-slate-900 rounded-lg p-2.5 mb-2 bg-slate-50">
+                  <div className="font-bold text-slate-950 text-[10.5px] mb-1">
+                    تعهدنامه و اقرارنامه رسمی راننده:
+                  </div>
+                  <p className="text-slate-800 text-[9.5px] leading-relaxed text-justify">
+                    {viewingRecord.affidavitText || DEFAULT_HANDOVER_AFFIDAVIT}
+                  </p>
+                </div>
+
+                {/* Signatures */}
+                <div className="border border-slate-900 rounded-lg p-3 grid grid-cols-2 gap-6 text-[10.5px]">
+                  <div className="text-center border-l border-slate-300 pl-4 space-y-8">
+                    <div className="font-bold text-slate-900">
+                      نماینده تحویل‌دهنده (شرکت ترابری حامی):
+                    </div>
+                    <div className="text-slate-700 font-semibold">{viewingRecord.delivererName}</div>
+                    <div className="text-[9.5px] text-slate-500">امضا و اثر انگشت:</div>
+                  </div>
+
+                  <div className="text-center pr-4 space-y-8">
+                    <div className="font-bold text-slate-900">تحویل‌گیرنده (راننده خودرو):</div>
+                    <div className="text-slate-700 font-semibold">{viewingRecord.receiverName}</div>
+                    <div className="text-[9.5px] text-slate-500">امضا و اثر انگشت:</div>
+                  </div>
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-slate-400">
+              صورت‌جلسه‌ای جهت نمایش یافت نشد.
+            </div>
+          )}
+        </div>
+      )}
 
-              {/* Box 3: 4-View Interactive Truck Body Damage Inspector */}
-              <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl p-4">
-                <Truck4ViewBodyInspector
-                  damages={damages}
-                  onChangeDamages={setDamages}
-                  readOnly={false}
+      {/* ========================================================================= */}
+      {/* 5. TAB 3: ARCHIVE LIST                                                    */}
+      {/* ========================================================================= */}
+      {handoverViewMode === 'ARCHIVE_LIST' && (
+        <div className="space-y-4">
+          {/* Search & Filter Toolbar */}
+          <div className="bg-[#101b33] border border-[#1f2c45] rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="جستجو با نام راننده، شماره قبض، پلاک خودرو یا کدملی..."
+                  className="w-full bg-[#0a101f] border border-[#1b2b48] rounded-lg pr-9 pl-3 py-2 text-white text-xs focus:outline-none focus:border-blue-500"
                 />
               </div>
+            </div>
 
-              {/* Box 4: Affidavit, Deliverer & Receiver */}
-              <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl p-4 space-y-3">
-                <div className="font-bold text-amber-300 text-xs border-b border-slate-800 pb-1.5">
-                  متن تعهدنامه و امضای طرفین تحویل
-                </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setFilterDamageStatus('ALL')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                  filterDamageStatus === 'ALL'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-[#0a101f] text-slate-400 hover:text-white'
+                }`}
+              >
+                همه ({toFaDigits(records.length)})
+              </button>
 
-                <div>
-                  <textarea
-                    rows={2}
-                    value={affidavitText}
-                    onChange={(e) => setAffidavitText(e.target.value)}
-                    className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2.5 text-white leading-relaxed focus:outline-none focus:border-amber-400 text-xs resize-none"
-                  />
-                </div>
+              <button
+                type="button"
+                onClick={() => setFilterDamageStatus('CLEAN')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                  filterDamageStatus === 'CLEAN'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-[#0a101f] text-slate-400 hover:text-white'
+                }`}
+              >
+                بدون آسیب ({toFaDigits(stats.cleanVehiclesCount)})
+              </button>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#1a2742]">
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">نام نماینده تحویل‌دهنده:</label>
-                    <input
-                      type="text"
-                      value={delivererName}
-                      onChange={(e) => setDelivererName(e.target.value)}
-                      placeholder="مسئول اعزام و ترابری حامی"
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
+              <button
+                type="button"
+                onClick={() => setFilterDamageStatus('DAMAGED')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                  filterDamageStatus === 'DAMAGED'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-[#0a101f] text-slate-400 hover:text-white'
+                }`}
+              >
+                دارای خسارت ({toFaDigits(stats.damagedVehiclesCount)})
+              </button>
+            </div>
+          </div>
 
-                  <div>
-                    <label className="block text-slate-300 font-bold mb-1">نام تحویل‌گیرنده (راننده):</label>
-                    <input
-                      type="text"
-                      value={receiverName}
-                      onChange={(e) => setReceiverName(e.target.value)}
-                      placeholder={`${driverName} ${driverLastName}`}
-                      className="w-full bg-[#080d19] border border-[#1b2b48] rounded-xl p-2 text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
+          {/* Table */}
+          <div className="bg-[#0b1324] border border-[#1b2b48] rounded-2xl overflow-hidden shadow-lg">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr className="bg-[#0e172a] border-b border-[#1b2b48] text-slate-300 font-bold">
+                    <th className="py-3 px-3 text-center w-12">#</th>
+                    <th className="py-3 px-3 text-center">شماره قبض</th>
+                    <th className="py-3 px-3">تاریخ و ساعت</th>
+                    <th className="py-3 px-3">نام راننده</th>
+                    <th className="py-3 px-3 text-center">پلاک و خودرو</th>
+                    <th className="py-3 px-3 text-center">وضعیت ۶۶ قلم</th>
+                    <th className="py-3 px-3 text-center">آسیب‌های بدنه</th>
+                    <th className="py-3 px-3 text-center w-52">عملیات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#15233c] text-slate-200">
+                  {filteredRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-500">
+                        موردی یافت نشد.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRecords.map((rec, idx) => {
+                      const damagedCount = rec.damages?.length || 0;
+                      return (
+                        <tr key={rec.id} className="hover:bg-[#121e36] transition-colors">
+                          <td className="py-3 px-3 text-center font-mono text-slate-500">
+                            {toFaDigits(idx + 1)}
+                          </td>
 
-              {/* Action Buttons */}
-              <div className="sticky bottom-0 bg-[#0c1424] border-t border-[#1e2f52] pt-3 flex items-center justify-end gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsFormModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black shadow-lg shadow-emerald-950/40 transition cursor-pointer"
-                >
-                  ذخیره و ثبت نهایی صورت‌جلسه
-                </button>
-              </div>
-            </form>
+                          <td className="py-3 px-3 text-center font-mono font-bold text-amber-400">
+                            {toFaDigits(rec.receiptNumber)}
+                          </td>
+
+                          <td className="py-3 px-3">
+                            <div className="font-mono text-white text-xs">{toFaDigits(rec.date)}</div>
+                            <div className="text-[10px] text-slate-500">{toFaDigits(rec.time)}</div>
+                          </td>
+
+                          <td className="py-3 px-3 font-bold text-white">
+                            {rec.driverName} {rec.driverLastName}
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              {rec.vehiclePlate ? (
+                                <IranianPlate plateNumber={rec.vehiclePlate} scale={0.7} />
+                              ) : (
+                                <span className="font-bold text-slate-300">{rec.vehicleType}</span>
+                              )}
+                              <span className="text-[10px] text-slate-400">
+                                کد {toFaDigits(rec.vehicleCode)} - {rec.vehicleType}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>بازرسی کامل</span>
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            {damagedCount > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>{toFaDigits(damagedCount)} آسیب</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <span>کاملاً سالم</span>
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRecordIdForView(rec.id);
+                                  setHandoverViewMode('SHEET_VIEW');
+                                }}
+                                className="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                                title="مشاهده برگه رسمی A4"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>برگه A4</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setActivePrintRecord(rec)}
+                                className="p-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition cursor-pointer"
+                                title="چاپ فوری"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleLoadRecordToForm(rec)}
+                                className="p-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 transition cursor-pointer"
+                                title="ویرایش در فرم"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRecord(rec.id, rec.receiptNumber)}
+                                className="p-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 transition cursor-pointer"
+                                title="حذف صورت‌جلسه"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 4. A4 Printable Modal */}
+      {/* 6. A4 Printable Modal */}
       {activePrintRecord && (
         <VehicleHandoverA4PrintModal
           record={activePrintRecord}

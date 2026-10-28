@@ -19,6 +19,7 @@ import {
   Sparkles,
   HelpCircle,
   FileSpreadsheet,
+  FileCheck,
   List,
   LayoutGrid,
   ArrowUp,
@@ -47,6 +48,7 @@ interface VehicleAssignmentHubViewProps {
     plateNumber?: string;
     vehicleType?: string;
   }) => void;
+  onOpenHandover?: (vehicle: VehicleItem, driverName?: string) => void;
   theme?: 'dark' | 'light';
 }
 
@@ -73,6 +75,7 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
   onUpdateVehicle,
   showToast,
   onOpenBaleForDriver,
+  onOpenHandover,
   theme = 'dark',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -406,12 +409,25 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
             </div>
           </div>
 
-          {/* Quick Layout View Mode Switcher */}
-          <div
-            className={`flex items-center p-1 rounded-xl border self-start md:self-auto ${
-              isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-800/80 border-slate-700'
-            }`}
-          >
+          {/* Quick Actions & Layout View Mode Switcher */}
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            {onOpenHandover && (
+              <button
+                type="button"
+                onClick={() => onOpenHandover(vehicles[0])}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-emerald-950/30 cursor-pointer transition-all"
+                title="صدور یا ویرایش فرم و برگه تحویل خودرو"
+              >
+                <FileCheck className="w-4 h-4" />
+                <span>صدور برگه تحویل خودرو</span>
+              </button>
+            )}
+
+            <div
+              className={`flex items-center p-1 rounded-xl border ${
+                isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-800/80 border-slate-700'
+              }`}
+            >
             <button
               type="button"
               onClick={() => setViewLayout('TABLE')}
@@ -925,6 +941,18 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                         {/* Actions */}
                         <td className="py-3 px-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
+                            {onOpenHandover && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenHandover(vehicle, isAssigned ? vehicle.driverName : undefined)}
+                                className="px-2 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                                title="صدور یا ویرایش برگه تحویل خودرو و بازرسی سلامت ۶۶ قلم"
+                              >
+                                <FileCheck className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>برگه تحویل</span>
+                              </button>
+                            )}
+
                             {isAssigned ? (
                               <>
                                 <button
@@ -1120,7 +1148,7 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                   </div>
 
                   {/* Actions Bar */}
-                  <div className="mt-3.5 pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-2">
+                  <div className="mt-3.5 pt-3 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-2 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setAssigningVehicle(vehicle)}
@@ -1133,6 +1161,22 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                       <ArrowLeftRight className="w-3.5 h-3.5" />
                       <span>{isAssigned ? 'تغییر راننده' : 'تخصیص راننده به خودرو'}</span>
                     </button>
+
+                    {onOpenHandover && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenHandover(vehicle, isAssigned ? vehicle.driverName : undefined)}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                          isLight
+                            ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300'
+                            : 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
+                        }`}
+                        title="صدور فرم رسمی تحویل و تحول کامیونت به راننده"
+                      >
+                        <FileCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>برگه تحویل</span>
+                      </button>
+                    )}
 
                     {isAssigned && (
                       <button

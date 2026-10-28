@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { DriverRegulationsA4PrintModal } from './DriverRegulationsA4PrintModal';
-import { VehicleItem } from '../utils/fleetSeedData';
+import { VehicleItem, DriverDirectoryItem } from '../utils/fleetSeedData';
 import { Driver } from '../types';
 import { VehicleHandoverManager } from './VehicleHandoverManager';
 

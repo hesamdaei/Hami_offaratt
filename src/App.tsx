@@ -98,6 +98,34 @@ export const App: FC = () => {
     }
   };
 
+  // Preselected Vehicle / Driver for Vehicle Handover Form
+  const [preselectedHandoverVehicle, setPreselectedHandoverVehicle] = useState<VehicleItem | null>(null);
+  const [preselectedHandoverDriver, setPreselectedHandoverDriver] = useState<Driver | DriverDirectoryItem | null>(null);
+
+  const handleOpenHandoverForVehicle = (vehicle: VehicleItem, driverName?: string) => {
+    setPreselectedHandoverVehicle(vehicle);
+    if (driverName) {
+      const foundDriver =
+        drivers.find((d) => d.name.trim() === driverName.trim()) ||
+        driverDirectory.find((d) => d.name.trim() === driverName.trim());
+      setPreselectedHandoverDriver(foundDriver || null);
+    } else {
+      setPreselectedHandoverDriver(null);
+    }
+    setActiveTab('HANDOVER');
+  };
+
+  const handleOpenHandoverForDriver = (driver: DriverDirectoryItem) => {
+    setPreselectedHandoverDriver(driver);
+    if (driver.assignedVehicles && driver.assignedVehicles.length > 0) {
+      const v = vehicles.find((veh) => veh.plateNumber === driver.assignedVehicles[0]);
+      setPreselectedHandoverVehicle(v || null);
+    } else {
+      setPreselectedHandoverVehicle(null);
+    }
+    setActiveTab('HANDOVER');
+  };
+
   // Active viewing period (Jalaali Year & Month)
   const [activeYear, setActiveYear] = useState<number>(today.jy);
   const [activeMonth, setActiveMonth] = useState<number>(today.jm);
