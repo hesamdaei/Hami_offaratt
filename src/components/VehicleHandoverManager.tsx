@@ -24,6 +24,7 @@ import {
   MapPin,
   ShieldCheck,
   Download,
+  Square,
 } from 'lucide-react';
 import {
   VehicleHandoverRecord,
@@ -33,6 +34,7 @@ import {
   DEFAULT_HANDOVER_AFFIDAVIT,
 } from '../types/vehicleHandover';
 import { Truck4ViewBodyInspector } from './Truck4ViewBodyInspector';
+import { Truck4ViewPrintableSchematic } from './Truck4ViewPrintableSchematic';
 import { VehicleHandoverA4PrintModal } from './VehicleHandoverA4PrintModal';
 import { IranianPlate } from './IranianPlate';
 import { VehicleItem, DriverDirectoryItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
@@ -140,6 +142,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
 
   // Active print record for A4 Modal
   const [activePrintRecord, setActivePrintRecord] = useState<VehicleHandoverRecord | null>(null);
+  const [activePrintIsBlank, setActivePrintIsBlank] = useState<boolean>(false);
 
   // Form Fields State
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
@@ -619,7 +622,20 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setActivePrintIsBlank(true);
+              setActivePrintRecord(viewingRecord || records[0]);
+            }}
+            className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            title="چاپ فرم سفید و خام بدون علامت جهت بازرسی میدانی و تکمیل دستی با خودکار"
+          >
+            <Square className="w-3.5 h-3.5" />
+            <span>چاپ فرم خام (سفید)</span>
+          </button>
+
           {handoverViewMode === 'FORM' && (
             <button
               type="button"
@@ -1153,7 +1169,22 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setActivePrintRecord(viewingRecord)}
+                    onClick={() => {
+                      setActivePrintIsBlank(true);
+                      setActivePrintRecord(viewingRecord);
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Square className="w-3.5 h-3.5" />
+                    <span>چاپ فرم خام (سفید)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePrintIsBlank(false);
+                      setActivePrintRecord(viewingRecord);
+                    }}
                     className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black shadow-md flex items-center gap-1.5 transition cursor-pointer"
                   >
                     <Printer className="w-4 h-4" />
@@ -1324,61 +1355,12 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
                   </div>
                 </div>
 
-                {/* 4-View Body Damage Summary */}
-                <div className="border border-slate-900 rounded-lg p-2 mb-2">
-                  <div className="bg-slate-100 border border-slate-300 rounded px-2 py-1 text-center font-bold text-[11px] text-slate-900 mb-1.5 flex items-center justify-between">
-                    <span>وضعیت و خسارات بدنه کامیونت در ۴ وجه (جلو، عقب، راست، چپ)</span>
-                    <span className="text-[10px] text-slate-600">
-                      تعداد عارضه‌های ثبت‌شده:{' '}
-                      <strong className="font-mono">
-                        {toFaDigits(viewingRecord.damages?.length || 0)}
-                      </strong>
-                    </span>
-                  </div>
-
-                  {viewingRecord.damages && viewingRecord.damages.length > 0 ? (
-                    <div className="space-y-1">
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {viewingRecord.damages.map((dmg, idx) => (
-                          <div
-                            key={dmg.id || idx}
-                            className="bg-slate-50 border border-slate-300 rounded p-1.5 text-[9.5px] flex items-center justify-between"
-                          >
-                            <div>
-                              <strong className="text-slate-900">
-                                وجه{' '}
-                                {dmg.view === 'FRONT'
-                                  ? 'جلو'
-                                  : dmg.view === 'REAR'
-                                  ? 'عقب'
-                                  : dmg.view === 'RIGHT'
-                                  ? 'راست'
-                                  : 'چپ'}
-                                :{' '}
-                              </strong>
-                              <span>{dmg.partName || 'بدنه'}</span>
-                              {dmg.description && (
-                                <span className="text-slate-600"> ({dmg.description})</span>
-                              )}
-                            </div>
-                            <span className="font-bold text-rose-700">
-                              {dmg.damageType === 'SCRATCH'
-                                ? 'خط و خش'
-                                : dmg.damageType === 'DENT'
-                                ? 'قِری'
-                                : dmg.damageType === 'CRACK'
-                                ? 'شکستگی'
-                                : 'خسارت'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-2 text-slate-600 font-bold text-[10px] bg-emerald-50 border border-emerald-200 rounded">
-                      بدنه خودرو کاملاً سالم و بدون هرگونه خط و خش، قرشدگی یا آسیب تحویل گردید.
-                    </div>
-                  )}
+                {/* 4-View Body Damage Schematic */}
+                <div className="mb-2">
+                  <Truck4ViewPrintableSchematic
+                    damages={viewingRecord.damages}
+                    isBlankForm={false}
+                  />
                 </div>
 
                 {/* Affidavit Text */}
@@ -1571,11 +1553,26 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
 
                               <button
                                 type="button"
-                                onClick={() => setActivePrintRecord(rec)}
+                                onClick={() => {
+                                  setActivePrintIsBlank(false);
+                                  setActivePrintRecord(rec);
+                                }}
                                 className="p-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition cursor-pointer"
-                                title="چاپ فوری"
+                                title="چاپ برگه تکمیل‌شده"
                               >
                                 <Printer className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActivePrintIsBlank(true);
+                                  setActivePrintRecord(rec);
+                                }}
+                                className="p-1 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-300 border border-slate-600/40 transition cursor-pointer"
+                                title="چاپ فرم سفید (خام)"
+                              >
+                                <Square className="w-3.5 h-3.5" />
                               </button>
 
                               <button
@@ -1612,7 +1609,11 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
       {activePrintRecord && (
         <VehicleHandoverA4PrintModal
           record={activePrintRecord}
-          onClose={() => setActivePrintRecord(null)}
+          defaultBlank={activePrintIsBlank}
+          onClose={() => {
+            setActivePrintRecord(null);
+            setActivePrintIsBlank(false);
+          }}
           onShowToast={onShowToast}
         />
       )}

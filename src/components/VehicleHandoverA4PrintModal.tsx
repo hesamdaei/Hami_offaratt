@@ -1,23 +1,28 @@
-import { FC } from 'react';
-import { Printer, X, Download, ShieldCheck, Check } from 'lucide-react';
+import { FC, useState } from 'react';
+import { Printer, X, FileText, CheckSquare, Square, RotateCcw } from 'lucide-react';
 import {
   VehicleHandoverRecord,
   HANDOVER_CHECKLIST_ITEMS,
 } from '../types/vehicleHandover';
 import { toFaDigits } from '../utils/jalaali';
 import { IranianPlate } from './IranianPlate';
+import { Truck4ViewPrintableSchematic } from './Truck4ViewPrintableSchematic';
 
 interface VehicleHandoverA4PrintModalProps {
   record: VehicleHandoverRecord;
   onClose: () => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  defaultBlank?: boolean;
 }
 
 export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> = ({
   record,
   onClose,
   onShowToast,
+  defaultBlank = false,
 }) => {
+  const [isBlankForm, setIsBlankForm] = useState<boolean>(defaultBlank);
+
   const handlePrint = () => {
     window.print();
   };
@@ -28,29 +33,60 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
   const col3Items = HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 3);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-start p-2 sm:p-4 overflow-y-auto">
-      {/* Top Action Toolbar (Hidden during print) */}
-      <div className="no-print sticky top-2 z-30 w-full max-w-4xl bg-[#0f192e] border border-[#22365e] rounded-2xl p-3 mb-3 shadow-2xl flex items-center justify-between text-xs">
+    <div className="print-modal-container fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-start p-2 sm:p-4 overflow-y-auto print:p-0 print:m-0 print:bg-white print:static print:block print:w-full print:shadow-none print:border-none">
+      {/* Top Action Toolbar (Hidden completely during print) */}
+      <div className="no-print sticky top-2 z-30 w-full max-w-4xl bg-[#0f192e] border border-[#22365e] rounded-2xl p-3 mb-3 shadow-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-bold text-white">
             پیش‌نمایش فرم استاندارد A4 تحویل خودرو
           </span>
           <span className="text-slate-400 font-mono">
-            (قبض شماره: {toFaDigits(record.receiptNumber)})
+            {isBlankForm ? '(نسخه خام و سفید بدون علامت)' : `(قبض: ${toFaDigits(record.receiptNumber)})`}
           </span>
+        </div>
+
+        {/* Mode Switcher: Blank vs Filled */}
+        <div className="flex items-center gap-1.5 bg-[#080d19] p-1 rounded-xl border border-slate-700">
+          <button
+            type="button"
+            onClick={() => setIsBlankForm(false)}
+            className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              !isBlankForm
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            <span>چاپ برگه تکمیل‌شده</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsBlankForm(true)}
+            className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              isBlankForm
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Square className="w-3.5 h-3.5" />
+            <span>چاپ فرم خام (سفید / بدون علامت)</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={handlePrint}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black shadow-lg shadow-blue-900/40 flex items-center gap-1.5 transition cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>چاپ برگه A4</span>
           </button>
 
           <button
+            type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
             title="بستن"
@@ -60,27 +96,27 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
         </div>
       </div>
 
-      {/* A4 Sheet Container */}
+      {/* A4 Sheet Container - Starts strictly at the top of the page */}
       <div
         id="handover-a4-sheet"
         dir="rtl"
-        className="a4-print-sheet bg-white text-slate-900 p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[11px] font-sans leading-tight border border-slate-300 print:border-none print:shadow-none print:m-0 print:p-6"
+        className="a4-print-sheet bg-white text-slate-900 p-4 sm:p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[10.5px] font-sans leading-tight border border-slate-300 print:border-none print:shadow-none print:m-0 print:p-0 print:pt-0 print:w-full print:max-w-none print:top-0"
         style={{ boxSizing: 'border-box' }}
       >
-        {/* ================= HEADER SECTION ================= */}
-        <div className="border border-slate-900 rounded-lg p-3 mb-2 flex items-center justify-between">
+        {/* ================= 1. HEADER SECTION ================= */}
+        <div className="border border-slate-900 rounded-lg p-2.5 mb-2 flex items-center justify-between">
           {/* Right Logo / Brand */}
           <div className="w-1/3 flex flex-col items-start justify-center">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-base">
+              <div className="w-8 h-8 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-base shrink-0">
                 ح
               </div>
               <div>
-                <div className="font-black text-slate-900 text-sm tracking-tight">
-                  ترابری و لجستیک حامی
+                <div className="font-black text-slate-950 text-xs sm:text-sm tracking-tight">
+                  شرکت ترابری و لجستیک حامی
                 </div>
                 <div className="text-[9px] text-slate-600 font-mono">
-                  تلفن تماس: ۱۷۸۶
+                  تلفن تماس: ۱۷۸۶ | پشتیبانی ناوگان
                 </div>
               </div>
             </div>
@@ -88,96 +124,125 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
 
           {/* Center Title & Date/Time */}
           <div className="w-1/3 text-center border-x border-slate-300 px-2">
-            <div className="inline-block px-4 py-1 border border-slate-900 rounded font-black text-base text-slate-950 mb-1 bg-slate-50">
-              تحویل خودرو
+            <div className="inline-block px-3 py-0.5 border border-slate-900 rounded font-black text-sm text-slate-950 mb-0.5 bg-slate-50">
+              صورت‌جلسه تحویل و تحول خودرو
             </div>
-            <div className="text-[10px] text-slate-700 font-bold flex items-center justify-center gap-3">
-              <span>تاریخ: <strong className="font-mono">{toFaDigits(record.date)}</strong></span>
-              <span>ساعت: <strong className="font-mono">{toFaDigits(record.time)}</strong></span>
+            <div className="text-[9.5px] text-slate-700 font-bold flex items-center justify-center gap-2">
+              <span>تاریخ: <strong className="font-mono">{isBlankForm ? '.... / .... / ....' : toFaDigits(record.date)}</strong></span>
+              <span>•</span>
+              <span>ساعت: <strong className="font-mono">{isBlankForm ? '.... : ....' : toFaDigits(record.time)}</strong></span>
             </div>
           </div>
 
           {/* Left Receipt & Address */}
-          <div className="w-1/3 text-left space-y-1 font-mono text-[10.5px]">
+          <div className="w-1/3 text-left space-y-0.5 font-mono text-[10px]">
             <div className="text-right">
               <span className="font-bold text-slate-800">شماره قبض: </span>
-              <span className="font-black text-slate-950 text-xs">{toFaDigits(record.receiptNumber)}</span>
+              <span className="font-black text-slate-950 text-xs">
+                {isBlankForm ? '................' : toFaDigits(record.receiptNumber)}
+              </span>
             </div>
-            <div className="text-right text-[10px] text-slate-600 truncate">
-              <span className="font-bold">آدرس: </span>
-              <span>{record.address || 'پایانه مرکزی ناوگان حامی'}</span>
+            <div className="text-right text-[9.5px] text-slate-600 truncate">
+              <span className="font-bold">محل تحویل: </span>
+              <span>{isBlankForm ? 'پایانه مرکزی ناوگان ترابری حامی' : (record.address || 'پایانه مرکزی حامی')}</span>
             </div>
           </div>
         </div>
 
-        {/* ================= DRIVER & VEHICLE INFO SECTION ================= */}
-        <div className="border border-slate-900 rounded-lg p-2.5 mb-2 relative">
-          <div className="grid grid-cols-4 gap-2 text-slate-900 text-[11px] mb-2 pb-2 border-b border-slate-200">
+        {/* ================= 2. DRIVER & VEHICLE INFO SECTION ================= */}
+        <div className="border border-slate-900 rounded-lg p-2 mb-2 bg-slate-50/50">
+          <div className="grid grid-cols-4 gap-2 text-slate-900 text-[10.5px] mb-1.5 pb-1.5 border-b border-slate-200">
             <div>
               <span className="text-slate-600 font-medium">نام راننده: </span>
-              <strong className="font-bold text-slate-950">{record.driverName}</strong>
+              <strong className="font-bold text-slate-950">
+                {isBlankForm ? '........................' : (record.driverName || '........................')}
+              </strong>
             </div>
             <div>
               <span className="text-slate-600 font-medium">نام خانوادگی: </span>
-              <strong className="font-bold text-slate-950">{record.driverLastName}</strong>
+              <strong className="font-bold text-slate-950">
+                {isBlankForm ? '........................' : (record.driverLastName || '........................')}
+              </strong>
             </div>
             <div>
               <span className="text-slate-600 font-medium">نام پدر: </span>
-              <strong className="font-bold text-slate-950">{record.driverFatherName || '---'}</strong>
+              <strong className="font-bold text-slate-950">
+                {isBlankForm ? '........................' : (record.driverFatherName || '........................')}
+              </strong>
             </div>
             <div>
               <span className="text-slate-600 font-medium">کد ملی: </span>
-              <strong className="font-mono font-bold text-slate-950">{toFaDigits(record.driverNationalId) || '---'}</strong>
+              <strong className="font-mono font-bold text-slate-950">
+                {isBlankForm ? '........................' : (toFaDigits(record.driverNationalId) || '........................')}
+              </strong>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-2 items-center text-[11px]">
+          <div className="grid grid-cols-4 gap-2 items-center text-[10.5px]">
             <div>
               <span className="text-slate-600 font-medium">نوع وسیله: </span>
-              <strong className="font-bold text-slate-950">{record.vehicleType || 'کامیونت'}</strong>
+              <strong className="font-bold text-slate-950">
+                {isBlankForm ? 'خاور / کامیونت کانتینردار' : (record.vehicleType || 'خاور کانتینردار')}
+              </strong>
             </div>
             <div>
-              <span className="text-slate-600 font-medium">کد وسیله: </span>
-              <strong className="font-mono font-bold text-slate-950">{toFaDigits(record.vehicleCode) || '---'}</strong>
+              <span className="text-slate-600 font-medium">کد ناوگان: </span>
+              <strong className="font-mono font-bold text-slate-950">
+                {isBlankForm ? '................' : (toFaDigits(record.vehicleCode) || '................')}
+              </strong>
             </div>
             <div>
-              <span className="text-slate-600 font-medium">رنگ: </span>
-              <strong className="font-bold text-slate-950">{record.vehicleColor || 'سفید'}</strong>
+              <span className="text-slate-600 font-medium">رنگ بدنه: </span>
+              <strong className="font-bold text-slate-950">
+                {isBlankForm ? 'سفید روغنی' : (record.vehicleColor || 'سفید')}
+              </strong>
             </div>
-            <div className="flex items-center justify-end">
-              {record.vehiclePlate ? (
-                <div className="scale-85 origin-left inline-block">
+            <div className="flex items-center gap-1 justify-end">
+              <span className="text-slate-600 font-medium text-[10px]">پلاک انتظامی: </span>
+              {!isBlankForm && record.vehiclePlate ? (
+                <div className="scale-75 origin-left inline-block">
                   <IranianPlate plateNumber={record.vehiclePlate} size="sm" />
                 </div>
               ) : (
-                <span className="text-slate-400 font-mono">بدون پلاک</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {record.vehiclePlate ? record.vehiclePlate : 'ایران ..... - ..... ع .....'}
+                </span>
               )}
             </div>
           </div>
         </div>
 
-        {/* ================= 3-COLUMN 66-ITEM CHECKLIST TABLE ================= */}
+        {/* ================= 3. 3-COLUMN 66-ITEM CHECKLIST TABLE ================= */}
         <div className="border border-slate-900 rounded-lg overflow-hidden mb-2">
-          <table className="w-full border-collapse text-[9.5px]">
+          <div className="bg-slate-100 border-b border-slate-900 py-0.5 px-2 text-center font-bold text-[10px] text-slate-900 flex items-center justify-between">
+            <span>چک‌لیست رسمی سلامت قطعات، تجهیزات، ادوات فنی و اسناد خودرو (۶۶ قلم استاندارد حامی)</span>
+            {isBlankForm && (
+              <span className="text-[9px] text-slate-600 font-normal">
+                (جهت بازرسی حضوری: داخل مربع مربوطه را با خودکار علامت بزنید)
+              </span>
+            )}
+          </div>
+
+          <table className="w-full border-collapse text-[9px]">
             <thead>
-              <tr className="bg-slate-100 border-b border-slate-900 text-slate-900 font-black text-center">
+              <tr className="bg-slate-200 border-b border-slate-900 text-slate-900 font-black text-center">
                 {/* Column 1 Headers */}
-                <th className="py-1 px-1 border-l border-slate-400 text-right w-[15%]">شرح</th>
-                <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
-                <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
-                <th className="py-1 px-1 border-l-2 border-slate-900 w-[6%]">ندارد</th>
+                <th className="py-1 px-1 border-l border-slate-400 text-right w-[15%]">شرح قطعه (فنی و موتور)</th>
+                <th className="py-1 px-0.5 border-l border-slate-400 w-[5%]">سالم</th>
+                <th className="py-1 px-0.5 border-l border-slate-400 w-[6%]">نقص</th>
+                <th className="py-1 px-0.5 border-l-2 border-slate-900 w-[6%]">ندارد</th>
 
                 {/* Column 2 Headers */}
-                <th className="py-1 px-1 border-l border-slate-400 text-right w-[15%]">شرح</th>
-                <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
-                <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
-                <th className="py-1 px-1 border-l-2 border-slate-900 w-[6%]">ندارد</th>
+                <th className="py-1 px-1 border-l border-slate-400 text-right w-[15%]">شرح قطعه (بدنه و کابین)</th>
+                <th className="py-1 px-0.5 border-l border-slate-400 w-[5%]">سالم</th>
+                <th className="py-1 px-0.5 border-l border-slate-400 w-[6%]">نقص</th>
+                <th className="py-1 px-0.5 border-l-2 border-slate-900 w-[6%]">ندارد</th>
 
                 {/* Column 3 Headers */}
-                <th className="py-1 px-1 border-l border-slate-400 text-right w-[16%]">شرح</th>
-                <th className="py-1 px-1 border-l border-slate-400 w-[5%]">سالم</th>
-                <th className="py-1 px-1 border-l border-slate-400 w-[7%]">خسارتی</th>
-                <th className="py-1 px-1 w-[6%]">ندارد</th>
+                <th className="py-1 px-1 border-l border-slate-400 text-right w-[16%]">شرح قطعه (اسناد و ادوات)</th>
+                <th className="py-1 px-0.5 border-l border-slate-400 w-[5%]">سالم</th>
+                <th className="py-1 px-0.5 border-l border-slate-400 w-[6%]">نقص</th>
+                <th className="py-1 px-0.5 w-[6%]">ندارد</th>
               </tr>
             </thead>
             <tbody>
@@ -186,9 +251,9 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
                 const item2 = col2Items[rowIdx];
                 const item3 = col3Items[rowIdx];
 
-                const st1 = item1 ? record.checklist[item1.id] || 'HEALTHY' : 'HEALTHY';
-                const st2 = item2 ? record.checklist[item2.id] || 'HEALTHY' : 'HEALTHY';
-                const st3 = item3 ? record.checklist[item3.id] || 'HEALTHY' : 'HEALTHY';
+                const st1 = !isBlankForm && item1 ? record.checklist[item1.id] || 'HEALTHY' : null;
+                const st2 = !isBlankForm && item2 ? record.checklist[item2.id] || 'HEALTHY' : null;
+                const st3 = !isBlankForm && item3 ? record.checklist[item3.id] || 'HEALTHY' : null;
 
                 const isEven = rowIdx % 2 === 0;
 
@@ -196,49 +261,103 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
                   <tr
                     key={rowIdx}
                     className={`border-b border-slate-300 text-center ${
-                      isEven ? 'bg-white' : 'bg-slate-50/50'
+                      isEven ? 'bg-white' : 'bg-slate-50/60'
                     }`}
                   >
                     {/* Item 1 */}
-                    <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                      {item1 ? item1.label : ''}
+                    <td className="py-0.5 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
+                      {item1 ? `${toFaDigits(item1.id)}. ${item1.label}` : ''}
                     </td>
-                    <td className="py-0.8 px-1 border-l border-slate-300">
-                      {st1 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
+                    <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-500 rounded-xs" />
+                      ) : st1 === 'HEALTHY' ? (
+                        <span className="font-black text-slate-900">✓</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
-                    <td className="py-0.8 px-1 border-l border-slate-300">
-                      {st1 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
+                    <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-500 rounded-xs" />
+                      ) : st1 === 'DAMAGED' ? (
+                        <span className="font-black text-red-700">✗</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
-                    <td className="py-0.8 px-1 border-l-2 border-slate-900">
-                      {st1 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
+                    <td className="py-0.5 px-0.5 border-l-2 border-slate-900">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-400 rounded-xs" />
+                      ) : st1 === 'NONE' ? (
+                        <span className="font-bold text-slate-500">—</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
 
                     {/* Item 2 */}
-                    <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                      {item2 ? item2.label : ''}
+                    <td className="py-0.5 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
+                      {item2 ? `${toFaDigits(item2.id)}. ${item2.label}` : ''}
                     </td>
-                    <td className="py-0.8 px-1 border-l border-slate-300">
-                      {st2 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
+                    <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-500 rounded-xs" />
+                      ) : st2 === 'HEALTHY' ? (
+                        <span className="font-black text-slate-900">✓</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
-                    <td className="py-0.8 px-1 border-l border-slate-300">
-                      {st2 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
+                    <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-500 rounded-xs" />
+                      ) : st2 === 'DAMAGED' ? (
+                        <span className="font-black text-red-700">✗</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
-                    <td className="py-0.8 px-1 border-l-2 border-slate-900">
-                      {st2 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
+                    <td className="py-0.5 px-0.5 border-l-2 border-slate-900">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-400 rounded-xs" />
+                      ) : st2 === 'NONE' ? (
+                        <span className="font-bold text-slate-500">—</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
 
                     {/* Item 3 */}
-                    <td className="py-0.8 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
-                      {item3 ? item3.label : ''}
+                    <td className="py-0.5 px-1 text-right font-medium text-slate-900 border-l border-slate-300 truncate">
+                      {item3 ? `${toFaDigits(item3.id)}. ${item3.label}` : ''}
                     </td>
-                    <td className="py-0.8 px-1 border-l border-slate-300">
-                      {st3 === 'HEALTHY' ? <span className="font-black text-slate-900">✓</span> : ''}
+                    <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-500 rounded-xs" />
+                      ) : st3 === 'HEALTHY' ? (
+                        <span className="font-black text-slate-900">✓</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
-                    <td className="py-0.8 px-1 border-l border-slate-300">
-                      {st3 === 'DAMAGED' ? <span className="font-black text-slate-900">✗</span> : ''}
+                    <td className="py-0.5 px-0.5 border-l border-slate-300 font-bold">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-500 rounded-xs" />
+                      ) : st3 === 'DAMAGED' ? (
+                        <span className="font-black text-red-700">✗</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
-                    <td className="py-0.8 px-1">
-                      {st3 === 'NONE' ? <span className="font-bold text-slate-900">—</span> : ''}
+                    <td className="py-0.5 px-0.5">
+                      {isBlankForm ? (
+                        <span className="inline-block w-2.5 h-2.5 border border-slate-400 rounded-xs" />
+                      ) : st3 === 'NONE' ? (
+                        <span className="font-bold text-slate-500">—</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
                   </tr>
                 );
@@ -247,71 +366,55 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
           </table>
         </div>
 
-        {/* ================= 4-VIEW BODY DAMAGES SUMMARY SECTION ================= */}
-        <div className="border border-slate-900 rounded-lg p-2.5 mb-2 bg-slate-50/50">
-          <div className="flex items-center justify-between mb-1.5 border-b border-slate-200 pb-1">
-            <span className="font-black text-slate-900 text-[10.5px]">
-              وضعیت بدنه و آسیب‌های مشهود در ۴ وجه کامیونت (جلو، عقب، راست، چپ):
-            </span>
-            <span className="text-[10px] text-slate-600 font-mono">
-              تعداد موارد آسیب: <strong>{toFaDigits(record.damages.length)}</strong>
-            </span>
-          </div>
-
-          {record.damages.length === 0 ? (
-            <div className="text-center py-1 text-slate-500 text-[10px] font-bold">
-              بدنه خودرو در هر ۴ وجه فاقد هرگونه خط و خش، قِری، شکستگی و تصادف قبلی رویت گردید (کاملاً سالم).
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[9.5px]">
-              {record.damages.map((dmg, idx) => (
-                <div
-                  key={dmg.id}
-                  className="bg-white border border-slate-300 p-1.5 rounded flex items-start gap-1"
-                >
-                  <span className="w-4 h-4 rounded-full bg-slate-900 text-white font-mono text-[9px] flex items-center justify-center shrink-0">
-                    {toFaDigits(idx + 1)}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="font-bold text-slate-900 truncate">
-                      {dmg.partName || (dmg.view === 'FRONT' ? 'جلو' : dmg.view === 'REAR' ? 'عقب' : dmg.view === 'RIGHT' ? 'راست' : 'چپ')}
-                    </div>
-                    <div className="text-slate-600 text-[8.5px]">
-                      {dmg.damageType === 'SCRATCH'
-                        ? 'خط و خش'
-                        : dmg.damageType === 'DENT'
-                        ? 'قِری و فرورفتگی'
-                        : dmg.damageType === 'CRACK'
-                        ? 'شکستگی'
-                        : dmg.damageType === 'PAINT_CHIP'
-                        ? 'رنگ‌پریدگی'
-                        : 'آسیب بدنه'}
-                      {dmg.description ? ` (${dmg.description})` : ''}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* ================= 4. PRINTABLE 4-VIEW TRUCK BODY SCHEMATIC ================= */}
+        <div className="mb-2">
+          <Truck4ViewPrintableSchematic
+            damages={record.damages}
+            isBlankForm={isBlankForm}
+          />
         </div>
 
-        {/* ================= AFFIDAVIT TEXT SECTION ================= */}
-        <div className="border border-slate-900 rounded-lg p-2.5 mb-3 bg-white">
-          <p className="text-justify text-[10.5px] leading-relaxed text-slate-900 font-medium">
-            اینجانب <strong className="font-black text-slate-950 underline px-1">{record.driverName} {record.driverLastName}</strong> فرزند <strong className="font-black text-slate-950 underline px-1">{record.driverFatherName || '................'}</strong> به شماره ملی <strong className="font-mono font-black text-slate-950 underline px-1">{toFaDigits(record.driverNationalId) || '................'}</strong> طبق مندرجات جدول بالا ماشین فوق را رویت و تحویل گرفتم و از تاریخ <strong className="font-mono font-black text-slate-950 underline px-1">{toFaDigits(record.date)}</strong> مسئولیت نگهداری و عواقب جانبی و خلافی خودروی مذکور به عهده اینجانب می‌باشد.
+        {/* ================= 5. AFFIDAVIT TEXT SECTION ================= */}
+        <div className="border border-slate-900 rounded-lg p-2 mb-2 bg-white">
+          <p className="text-justify text-[9.5px] leading-relaxed text-slate-900 font-medium">
+            اینجانب{' '}
+            <strong className="font-black text-slate-950 underline px-1">
+              {isBlankForm ? '........................................................' : `${record.driverName} ${record.driverLastName}`}
+            </strong>{' '}
+            فرزند{' '}
+            <strong className="font-black text-slate-950 underline px-1">
+              {isBlankForm ? '........................' : (record.driverFatherName || '........................')}
+            </strong>{' '}
+            به شماره ملی{' '}
+            <strong className="font-mono font-black text-slate-950 underline px-1">
+              {isBlankForm ? '........................' : (toFaDigits(record.driverNationalId) || '........................')}
+            </strong>{' '}
+            طبق مندرجات چک‌لیست و شماتیک ۴ وجه فوق، خودروی مذکور را با کلیه متعلقات سالم تحویل گرفتم و از تاریخ{' '}
+            <strong className="font-mono font-black text-slate-950 underline px-1">
+              {isBlankForm ? '.... / .... / ....' : toFaDigits(record.date)}
+            </strong>{' '}
+            مسئولیت حفظ، نگهداری فنی، بدنه، عواقب جانبی، خلافی و جرایم رانندگی خودروی موصوف تماماً به عهده اینجانب می‌باشد.
           </p>
         </div>
 
-        {/* ================= SIGNATURES SECTION ================= */}
-        <div className="grid grid-cols-2 gap-4 text-xs font-bold text-slate-900 pt-2 border-t-2 border-slate-900">
-          <div className="flex flex-col items-center justify-between min-h-[60px]">
-            <div>تحویل دهنده: <span className="font-normal">{record.delivererName || 'مسئول ناوگان ترابری'}</span></div>
-            <div className="text-[10px] text-slate-500 font-normal">امضا و اثر انگشت:</div>
+        {/* ================= 6. SIGNATURES SECTION ================= */}
+        <div className="border border-slate-900 rounded-lg p-2.5 grid grid-cols-2 gap-4 text-[10px] font-bold text-slate-900 bg-slate-50/50">
+          <div className="flex flex-col items-center justify-between min-h-[50px] border-l border-slate-300 pl-3">
+            <div>
+              نماینده تحویل‌دهنده (شرکت ترابری حامی):{' '}
+              <span className="font-normal">{record.delivererName || 'مسئول ترابری و اعزام'}</span>
+            </div>
+            <div className="text-[9px] text-slate-600 font-normal">امضا و مهر شرکت:</div>
           </div>
 
-          <div className="flex flex-col items-center justify-between min-h-[60px]">
-            <div>تحویل گیرنده: <span className="font-normal">{record.receiverName || `${record.driverName} ${record.driverLastName}`}</span></div>
-            <div className="text-[10px] text-slate-500 font-normal">امضا و اثر انگشت:</div>
+          <div className="flex flex-col items-center justify-between min-h-[50px] pr-3">
+            <div>
+              تحویل‌گیرنده (راننده کامیونت):{' '}
+              <span className="font-normal">
+                {isBlankForm ? '............................................' : (record.receiverName || `${record.driverName} ${record.driverLastName}`)}
+              </span>
+            </div>
+            <div className="text-[9px] text-slate-600 font-normal">امضا و اثر انگشت:</div>
           </div>
         </div>
       </div>
