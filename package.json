@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "hamibar-fleet-management",
+  "version": "2.4.0",
+  "description": "سامانه سازمانی و متمرکز مدیریت ناوگان، تردد رانندگان و پرسنل، سرویس روغن و کنترل ترابری حامی بار",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "main": "electron-main.js",
   "scripts": {
