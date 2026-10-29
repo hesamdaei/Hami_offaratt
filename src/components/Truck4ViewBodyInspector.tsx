@@ -133,7 +133,7 @@ export const Truck4ViewBodyInspector: FC<Truck4ViewBodyInspectorProps> = ({
       {[90, 130, 170, 230, 270, 310].map((x) => (
         <line key={x} x1={x} y1="15" x2={x} y2="100" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" />
       ))}
-      <text x="200" y="45" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="bold">کانتینر بار ترابری حامی</text>
+      <text x="200" y="45" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="bold">کانتینر بار صداقت بار پیشرو</text>
 
       {/* Isuzu Roof Wind Deflector / Aerodynamic Spoiler */}
       <path

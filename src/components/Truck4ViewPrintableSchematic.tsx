@@ -55,7 +55,7 @@ export const Truck4ViewPrintableSchematic: FC<Truck4ViewPrintableSchematicProps>
               {[90, 130, 170, 230, 270, 310].map((x) => (
                 <line key={x} x1={x} y1="15" x2={x} y2="100" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 3" />
               ))}
-              <text x="200" y="45" textAnchor="middle" fill="#475569" fontSize="11" fontWeight="bold">کانتینر بار ترابری حامی</text>
+              <text x="200" y="45" textAnchor="middle" fill="#475569" fontSize="11" fontWeight="bold">کانتینر بار صداقت بار پیشرو</text>
 
               {/* Roof Wind Deflector (Aerodynamic Isuzu Spoiler) */}
               <path
