@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Download,
   Square,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   VehicleHandoverRecord,
@@ -37,6 +38,7 @@ import { Truck4ViewBodyInspector } from './Truck4ViewBodyInspector';
 import { Truck4ViewPrintableSchematic } from './Truck4ViewPrintableSchematic';
 import { VehicleHandoverA4PrintModal } from './VehicleHandoverA4PrintModal';
 import { IranianPlate } from './IranianPlate';
+import { exportHandoverToWord, exportHandoverToExcel } from '../utils/handoverDocExporter';
 import { VehicleItem, DriverDirectoryItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
 import { Driver } from '../types';
 import { toFaDigits, getTodayJalaali, formatPersianDateKey } from '../utils/jalaali';
@@ -1170,6 +1172,32 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
                   <button
                     type="button"
                     onClick={() => {
+                      exportHandoverToWord(viewingRecord, false);
+                      if (onShowToast) onShowToast('فایل Word صورت‌جلسه دانلود شد.', 'success');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                    title="دانلود فایل Word قابل ویرایش (.doc)"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-blue-400" />
+                    <span>خروجی Word</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      exportHandoverToExcel(viewingRecord, false);
+                      if (onShowToast) onShowToast('فایل اکسل صورت‌جلسه دانلود شد.', 'success');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                    title="دانلود فایل اکسل رسمی (.xlsx)"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>خروجی اکسل</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
                       setActivePrintIsBlank(true);
                       setActivePrintRecord(viewingRecord);
                     }}
@@ -1288,7 +1316,9 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
                     <div className="flex items-center gap-1">
                       <span className="text-slate-600 font-medium">پلاک: </span>
                       {viewingRecord.vehiclePlate ? (
-                        <IranianPlate plateNumber={viewingRecord.vehiclePlate} scale={0.65} />
+                        <div className="scale-75 origin-left inline-block">
+                          <IranianPlate plateNumber={viewingRecord.vehiclePlate} size="sm" />
+                        </div>
                       ) : (
                         <span className="text-slate-400">---</span>
                       )}

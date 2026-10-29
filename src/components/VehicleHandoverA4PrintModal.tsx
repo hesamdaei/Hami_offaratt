@@ -1,5 +1,5 @@
 import { FC, useState } from 'react';
-import { Printer, X, FileText, CheckSquare, Square, RotateCcw } from 'lucide-react';
+import { Printer, X, FileText, CheckSquare, Square, FileSpreadsheet, Download } from 'lucide-react';
 import {
   VehicleHandoverRecord,
   HANDOVER_CHECKLIST_ITEMS,
@@ -7,6 +7,7 @@ import {
 import { toFaDigits } from '../utils/jalaali';
 import { IranianPlate } from './IranianPlate';
 import { Truck4ViewPrintableSchematic } from './Truck4ViewPrintableSchematic';
+import { exportHandoverToWord, exportHandoverToExcel } from '../utils/handoverDocExporter';
 
 interface VehicleHandoverA4PrintModalProps {
   record: VehicleHandoverRecord;
@@ -75,11 +76,40 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Download Word Document */}
+          <button
+            type="button"
+            onClick={() => {
+              exportHandoverToWord(record, isBlankForm);
+              if (onShowToast) onShowToast(isBlankForm ? 'فایل Word فرم خام تحویل دانلود شد.' : 'فایل Word فرم تحویل دانلود شد.', 'success');
+            }}
+            className="px-3 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            title="دانلود دقیق این صورت‌جلسه در قالب فایل Word (.doc / .docx)"
+          >
+            <FileText className="w-3.5 h-3.5 text-blue-400" />
+            <span>خروجی Word (DOC)</span>
+          </button>
+
+          {/* Download Excel Sheet */}
+          <button
+            type="button"
+            onClick={() => {
+              exportHandoverToExcel(record, isBlankForm);
+              if (onShowToast) onShowToast(isBlankForm ? 'فایل اکسل فرم خام تحویل دانلود شد.' : 'فایل اکسل فرم تحویل دانلود شد.', 'success');
+            }}
+            className="px-3 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            title="دانلود دقیق این صورت‌جلسه در قالب فایل اکسل (.xlsx)"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span>خروجی اکسل (XLSX)</span>
+          </button>
+
+          {/* Print A4 Sheet */}
           <button
             type="button"
             onClick={handlePrint}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>چاپ برگه A4</span>
@@ -88,7 +118,7 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
+            className="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
             title="بستن"
           >
             <X className="w-4 h-4" />
@@ -149,65 +179,77 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
           </div>
         </div>
 
-        {/* ================= 2. DRIVER & VEHICLE INFO SECTION ================= */}
-        <div className="border border-slate-900 rounded-lg p-2 mb-2 bg-slate-50/50">
-          <div className="grid grid-cols-4 gap-2 text-slate-900 text-[10.5px] mb-1.5 pb-1.5 border-b border-slate-200">
-            <div>
-              <span className="text-slate-600 font-medium">نام راننده: </span>
-              <strong className="font-bold text-slate-950">
-                {isBlankForm ? '........................' : (record.driverName || '........................')}
-              </strong>
+        {/* ================= 2. DRIVER & VEHICLE INFO SECTION (Coherent & Interlinked) ================= */}
+        <div className="border border-slate-900 rounded-lg p-2 mb-2 bg-slate-50/50 space-y-1.5">
+          {/* Section A: Driver Info */}
+          <div>
+            <div className="text-[9.5px] font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-900 inline-block" />
+              <span>الف) مشخصات فردی راننده (تحویل‌گیرنده خودرو):</span>
             </div>
-            <div>
-              <span className="text-slate-600 font-medium">نام خانوادگی: </span>
-              <strong className="font-bold text-slate-950">
-                {isBlankForm ? '........................' : (record.driverLastName || '........................')}
-              </strong>
-            </div>
-            <div>
-              <span className="text-slate-600 font-medium">نام پدر: </span>
-              <strong className="font-bold text-slate-950">
-                {isBlankForm ? '........................' : (record.driverFatherName || '........................')}
-              </strong>
-            </div>
-            <div>
-              <span className="text-slate-600 font-medium">کد ملی: </span>
-              <strong className="font-mono font-bold text-slate-950">
-                {isBlankForm ? '........................' : (toFaDigits(record.driverNationalId) || '........................')}
-              </strong>
+            <div className="grid grid-cols-4 gap-2 text-slate-900 text-[10.5px] bg-white p-1.5 rounded border border-slate-200">
+              <div>
+                <span className="text-slate-600 font-medium">نام: </span>
+                <strong className="font-bold text-slate-950">
+                  {isBlankForm ? '........................' : (record.driverName || '........................')}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-600 font-medium">نام خانوادگی: </span>
+                <strong className="font-bold text-slate-950">
+                  {isBlankForm ? '........................' : (record.driverLastName || '........................')}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-600 font-medium">نام پدر: </span>
+                <strong className="font-bold text-slate-950">
+                  {isBlankForm ? '........................' : (record.driverFatherName || '........................')}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-600 font-medium">شماره ملی: </span>
+                <strong className="font-mono font-bold text-slate-950">
+                  {isBlankForm ? '........................' : (toFaDigits(record.driverNationalId) || '........................')}
+                </strong>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-2 items-center text-[10.5px]">
-            <div>
-              <span className="text-slate-600 font-medium">نوع وسیله: </span>
-              <strong className="font-bold text-slate-950">
-                {record.vehicleType || 'کامیونت ایسوزو کانتینردار'}
-              </strong>
+          {/* Section B: Vehicle & Plate Info */}
+          <div>
+            <div className="text-[9.5px] font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-900 inline-block" />
+              <span>ب) مشخصات کامیونت و پلاک انتظامی (مورد تحویل):</span>
             </div>
-            <div>
-              <span className="text-slate-600 font-medium">کد ناوگان: </span>
-              <strong className="font-mono font-bold text-slate-950">
-                {record.vehicleCode ? toFaDigits(record.vehicleCode) : (isBlankForm ? '---' : '۱')}
-              </strong>
-            </div>
-            <div>
-              <span className="text-slate-600 font-medium">رنگ بدنه: </span>
-              <strong className="font-bold text-slate-950">
-                {record.vehicleColor || 'سفید روغنی'}
-              </strong>
-            </div>
-            <div className="flex items-center gap-1 justify-end">
-              <span className="text-slate-600 font-medium text-[10px]">پلاک انتظامی: </span>
-              {record.vehiclePlate ? (
+            <div className="grid grid-cols-4 gap-2 items-center text-[10.5px] bg-white p-1.5 rounded border border-slate-200">
+              <div>
+                <span className="text-slate-600 font-medium">نوع وسیله: </span>
+                <strong className="font-bold text-slate-950">
+                  {record.vehicleType || 'کامیونت کانتینردار ایسوزو'}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-600 font-medium">کد ناوگان: </span>
+                <strong className="font-mono font-bold text-slate-950">
+                  {record.vehicleCode ? toFaDigits(record.vehicleCode) : (isBlankForm ? '---' : '۱')}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-600 font-medium">رنگ بدنه: </span>
+                <strong className="font-bold text-slate-950">
+                  {record.vehicleColor || 'سفید روغنی'}
+                </strong>
+              </div>
+              <div className="flex items-center gap-1 justify-end">
+                <span className="text-slate-600 font-medium text-[10px]">پلاک انتظامی: </span>
                 <div className="scale-75 origin-left inline-block">
-                  <IranianPlate plateNumber={record.vehiclePlate} size="sm" />
+                  <IranianPlate
+                    plateNumber={record.vehiclePlate || '۶۶-۵۳۳ع۲۵'}
+                    size="sm"
+                    isBlank={isBlankForm}
+                  />
                 </div>
-              ) : (
-                <div className="scale-75 origin-left inline-block">
-                  <IranianPlate plateNumber="۶۶-۵۳۳ع۲۵" size="sm" />
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </div>

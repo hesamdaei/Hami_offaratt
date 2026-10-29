@@ -195,6 +195,7 @@ export interface IranianPlateProps {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   showScrew?: boolean;
   className?: string;
+  isBlank?: boolean;
 }
 
 export const IranianPlate: FC<IranianPlateProps> = ({
@@ -203,6 +204,7 @@ export const IranianPlate: FC<IranianPlateProps> = ({
   size = 'md',
   showScrew = true,
   className = '',
+  isBlank = false,
 }) => {
   const actualPlate = plateNumber || plate || '';
   const parsed = parseIranianPlate(actualPlate);
@@ -361,29 +363,41 @@ export const IranianPlate: FC<IranianPlateProps> = ({
 
       {/* 2. Main Plate Area: [2-Digits] [Letter] [3-Digits] (Standard Iranian LTR visual order) */}
       <div className={`flex-1 flex items-center justify-center font-extrabold ${sizeConfig.mainDigits}`}>
-        {/* Left 2 Digits (e.g., ۲۵) */}
-        <span
-          className="font-mono tracking-tight leading-none print:text-black"
-          style={{ fontFamily: 'Shabnam, Vazir, Tahoma, sans-serif' }}
-        >
-          {parsed.twoDigits}
-        </span>
+        {/* Left 2 Digits (e.g., ۲۵ or empty blank slot) */}
+        {isBlank ? (
+          <span className="font-mono tracking-tight leading-none print:text-black border-b border-dashed border-slate-900/40 min-w-[20px] text-center inline-block px-1 text-slate-400">
+            &nbsp;&nbsp;
+          </span>
+        ) : (
+          <span
+            className="font-mono tracking-tight leading-none print:text-black"
+            style={{ fontFamily: 'Shabnam, Vazir, Tahoma, sans-serif' }}
+          >
+            {parsed.twoDigits}
+          </span>
+        )}
 
         {/* Letter (e.g., ع or ک or ب) */}
         <span
           className={`leading-none flex items-center justify-center ${sizeConfig.letter} ${currentTheme.letterBadge} print:text-black`}
           style={{ fontFamily: 'Shabnam, Vazir, Tahoma, sans-serif' }}
         >
-          {parsed.letter}
+          {isBlank ? (parsed.letter || 'ع') : parsed.letter}
         </span>
 
-        {/* Right 3 Digits (e.g., ۵۳۳) */}
-        <span
-          className="font-mono tracking-tight leading-none print:text-black"
-          style={{ fontFamily: 'Shabnam, Vazir, Tahoma, sans-serif' }}
-        >
-          {parsed.threeDigits}
-        </span>
+        {/* Right 3 Digits (e.g., ۵۳۳ or empty blank slot) */}
+        {isBlank ? (
+          <span className="font-mono tracking-tight leading-none print:text-black border-b border-dashed border-slate-900/40 min-w-[28px] text-center inline-block px-1 text-slate-400">
+            &nbsp;&nbsp;&nbsp;
+          </span>
+        ) : (
+          <span
+            className="font-mono tracking-tight leading-none print:text-black"
+            style={{ fontFamily: 'Shabnam, Vazir, Tahoma, sans-serif' }}
+          >
+            {parsed.threeDigits}
+          </span>
+        )}
       </div>
 
       {/* 3. Right Province Box: "ایران" on Top, 2-Digit City Code on Bottom */}
@@ -399,12 +413,18 @@ export const IranianPlate: FC<IranianPlateProps> = ({
         >
           ایران
         </span>
-        <span
-          className={`font-extrabold font-mono leading-none mt-0.5 ${sizeConfig.provDigit} print:text-black`}
-          style={{ fontFamily: 'Shabnam, Vazir, Tahoma, sans-serif' }}
-        >
-          {parsed.provinceCode}
-        </span>
+        {isBlank ? (
+          <span className="font-extrabold font-mono leading-none mt-0.5 print:text-black border-b border-dashed border-slate-900/40 min-w-[16px] text-center inline-block text-slate-400">
+            &nbsp;&nbsp;
+          </span>
+        ) : (
+          <span
+            className={`font-extrabold font-mono leading-none mt-0.5 ${sizeConfig.provDigit} print:text-black`}
+            style={{ fontFamily: 'Shabnam, Vazir, Tahoma, sans-serif' }}
+          >
+            {parsed.provinceCode}
+          </span>
+        )}
       </div>
     </div>
   );
