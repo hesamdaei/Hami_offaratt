@@ -53,6 +53,7 @@ import { checkVehicleInsurance, getFleetInsuranceAlerts } from '../utils/insuran
 import { FleetInsuranceAlertsView } from './FleetInsuranceAlertsView';
 import { VehicleCard } from './VehicleCard';
 import { VehicleSpecPrintModal } from './VehicleSpecPrintModal';
+import { TableListA4PrintModal, TableListColumn } from './TableListA4PrintModal';
 import {
   ServiceRule,
   DEFAULT_SERVICE_RULES,
@@ -388,6 +389,115 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
     const servicedCount = enrichedVehicles.filter((v) => v._hasCompletedOilChange).length;
     return { total, critical, warning, healthy, withMileage, servicedCount };
   }, [enrichedVehicles]);
+
+  const [isPrintListOpen, setIsPrintListOpen] = useState(false);
+
+  // Print Columns for Fleet Specifications List
+  const fleetSpecPrintColumns: TableListColumn<VehicleItem>[] = useMemo(
+    () => [
+      {
+        key: 'code',
+        header: 'کد ناوگان',
+        width: '8%',
+        align: 'center',
+        render: (v) => <span className="font-bold text-slate-950 font-mono">{toFaDigits(v.code)}</span>,
+      },
+      {
+        key: 'plateNumber',
+        header: 'پلاک انتظامی',
+        width: '18%',
+        align: 'center',
+        render: (v) => <span className="font-bold font-mono">{toFaDigits(v.plateNumber)}</span>,
+      },
+      {
+        key: 'vehicleType',
+        header: 'نوع خودرو',
+        width: '12%',
+        align: 'center',
+        render: (v) => VEHICLE_TYPE_NAMES[v.vehicleType] || v.vehicleType,
+      },
+      {
+        key: 'driverName',
+        header: 'راننده تحت اختیار',
+        width: '18%',
+        align: 'right',
+        render: (v) => (
+          <span
+            className={`font-semibold ${
+              !v.driverName || v.driverName === 'بدون راننده' ? 'text-amber-800' : 'text-slate-950'
+            }`}
+          >
+            {v.driverName || 'بدون راننده'}
+          </span>
+        ),
+      },
+      {
+        key: 'driverPhone',
+        header: 'شماره تماس',
+        width: '13%',
+        align: 'center',
+        render: (v) => <span className="font-mono">{v.driverPhone ? toFaDigits(v.driverPhone) : '—'}</span>,
+      },
+      {
+        key: 'status',
+        header: 'وضعیت عملیاتی',
+        width: '11%',
+        align: 'center',
+        render: (v) =>
+          v.status === 'ACTIVE'
+            ? 'آماده به کار'
+            : v.status === 'IN_MISSION'
+            ? 'در مأموریت'
+            : v.status === 'PARKING'
+            ? 'پارکینگ'
+            : v.status === 'IN_MAINTENANCE'
+            ? 'تعمیرگاه'
+            : 'غیرفعال',
+      },
+      {
+        key: 'thirdPartyExpiry',
+        header: 'بیمه شخص ثالث',
+        width: '10%',
+        align: 'center',
+        render: (v) => <span className="font-mono">{toFaDigits(v.thirdPartyExpiry || '—')}</span>,
+      },
+      {
+        key: 'inspectionExpiry',
+        header: 'معاینه فنی',
+        width: '10%',
+        align: 'center',
+        render: (v) => <span className="font-mono">{toFaDigits(v.inspectionExpiry || '—')}</span>,
+      },
+    ],
+    []
+  );
+
+  const fleetSpecSummaryCards = useMemo(
+    () => [
+      { label: 'کل ناوگان ثبت‌شده', value: `${toFaDigits(vehicles.length)} دستگاه`, color: 'text-blue-900' },
+      {
+        label: 'آماده به کار',
+        value: `${toFaDigits(vehicles.filter((v) => v.status === 'ACTIVE').length)} دستگاه`,
+        color: 'text-emerald-900',
+      },
+      {
+        label: 'در مأموریت',
+        value: `${toFaDigits(vehicles.filter((v) => v.status === 'IN_MISSION').length)} دستگاه`,
+        color: 'text-sky-900',
+      },
+      {
+        label: 'تعمیرگاه و سرویس',
+        value: `${toFaDigits(vehicles.filter((v) => v.status === 'IN_MAINTENANCE').length)} دستگاه`,
+        color: 'text-amber-900',
+      },
+      {
+        label: 'بدون راننده',
+        value: `${toFaDigits(vehicles.filter((v) => !v.driverName || v.driverName === 'بدون راننده').length)} دستگاه`,
+        color: 'text-rose-900',
+      },
+    ],
+    [vehicles]
+  );
 
   // Open the Manual Oil Change Modal with pre-loaded values
   const handleOpenManualOilModal = (v: VehicleItem) => {
@@ -1030,12 +1140,12 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="چاپ کل صفحه و مشخصات ناوگان روی کاغذ سفید بدون پس‌زمینه تیره"
+                onClick={() => setIsPrintListOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                title="چاپ لیست مشخصات ناوگان با استایل رسمی A4 بدون هدرهای سایت"
               >
-                <Printer className="w-4 h-4 text-amber-400" />
-                <span>چاپ کارت‌ها و فهرست</span>
+                <Printer className="w-4 h-4 text-purple-400" />
+                <span>چاپ لیست</span>
               </button>
 
               <div className="relative min-w-[220px]">
@@ -3330,6 +3440,20 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
           onShowToast={showToast}
         />
       )}
+
+      {/* A4 Standard Print List Modal */}
+      <TableListA4PrintModal<VehicleItem>
+        isOpen={isPrintListOpen}
+        onClose={() => setIsPrintListOpen(false)}
+        title="فهرست و مشخصات فنی ناوگان خودرویی"
+        subtitle="گزارش رسمی مشخصات ناوگان، رانندگان و وضعیت آماده‌به‌کاری و سرویس"
+        categoryBadge="دایره تعمیرات و نگهداری ناوگان"
+        columns={fleetSpecPrintColumns}
+        data={filteredVehicles}
+        summaryCards={fleetSpecSummaryCards}
+        defaultOrientation="landscape"
+        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+      />
     </div>
   );
 };

@@ -43,6 +43,7 @@ import {
 import { StaffMember, StaffContractType } from '../types';
 import { AppUser, UserPermissions } from '../types/auth';
 import { getStoredUsers, saveStoredUsers } from '../utils/authService';
+import { TableListA4PrintModal, TableListColumn } from './TableListA4PrintModal';
 
 export type StaffSortField =
   | 'code'
@@ -129,6 +130,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   const [viewMode, setViewMode] = useState<'GRID' | 'TABLE'>('TABLE');
   const [sortField, setSortField] = useState<StaffSortField>('code');
   const [sortDirection, setSortDirection] = useState<StaffSortDirection>('asc');
+  const [isPrintListOpen, setIsPrintListOpen] = useState(false);
 
   const handleToggleSort = (field: StaffSortField) => {
     if (sortField === field) {
@@ -138,6 +140,82 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
       setSortDirection('asc');
     }
   };
+
+  const staffPrintColumns: TableListColumn<StaffMember>[] = useMemo(
+    () => [
+      {
+        key: 'code',
+        header: 'کد پرسنلی',
+        width: '9%',
+        align: 'center',
+        render: (s) => toFaDigits(s.code),
+      },
+      {
+        key: 'name',
+        header: 'نام و نام خانوادگی',
+        width: '18%',
+        align: 'right',
+        render: (s) => <span className="font-bold text-slate-950">{s.name}</span>,
+      },
+      {
+        key: 'department',
+        header: 'واحد سازمانی',
+        width: '15%',
+        align: 'right',
+        render: (s) => s.department,
+      },
+      {
+        key: 'role',
+        header: 'سمت شغلی',
+        width: '14%',
+        align: 'right',
+        render: (s) => s.role,
+      },
+      {
+        key: 'phone',
+        header: 'شماره تماس',
+        width: '12%',
+        align: 'center',
+        render: (s) => <span className="font-mono">{toFaDigits(s.phone)}</span>,
+      },
+      {
+        key: 'shift',
+        header: 'شیفت',
+        width: '9%',
+        align: 'center',
+        render: (s) => (s.shift === 'night' ? 'شیفت شب' : 'شیفت روز'),
+      },
+      {
+        key: 'contractType',
+        header: 'نوع قرارداد',
+        width: '11%',
+        align: 'center',
+        render: (s) =>
+          s.contractType === 'PERMANENT'
+            ? 'رسمی'
+            : s.contractType === 'CONTRACT'
+            ? 'قراردادی'
+            : s.contractType === 'TEMPORARY'
+            ? 'پاره‌وقت'
+            : 'آزمایشی',
+      },
+      {
+        key: 'status',
+        header: 'وضعیت',
+        width: '8%',
+        align: 'center',
+        render: (s) => (s.status === 'inactive' ? 'غیرفعال' : 'فعال'),
+      },
+      {
+        key: 'hireDate',
+        header: 'تاریخ استخدام',
+        width: '10%',
+        align: 'center',
+        render: (s) => toFaDigits(s.hireDate || '—'),
+      },
+    ],
+    []
+  );
 
   // Dossier View Modal (شناسنامه جامع کارمند)
   const [viewingDossier, setViewingDossier] = useState<StaffMember | null>(null);
@@ -844,10 +922,21 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
           {/* Excel Export */}
           <button
             onClick={handleExportExcel}
-            className="px-3 py-2 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="px-3 py-2 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
             <span>خروجی اکسل</span>
+          </button>
+
+          {/* Print List Button (Standard A4 Table List without web headers) */}
+          <button
+            type="button"
+            onClick={() => setIsPrintListOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            title="چاپ لیست جدول پرسنل با استایل رسمی A4 بدون هدرهای سایت"
+          >
+            <Printer className="w-4 h-4 text-purple-400" />
+            <span>چاپ لیست</span>
           </button>
 
           {/* Add Staff Dossier */}
@@ -2738,6 +2827,26 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
           onShowToast={onShowToast}
         />
       )}
+
+      {/* Official Table List A4 Print Modal (Zero Web Headers, Standard A4 Layout) */}
+      <TableListA4PrintModal<StaffMember>
+        isOpen={isPrintListOpen}
+        onClose={() => setIsPrintListOpen(false)}
+        title="فهرست و گزارش رسمی پرسنل اداری و عملیاتی"
+        subtitle="مشخصات هویتی، واحد سازمانی، سمت شغلی، شیفت کاری، وضعیت و نوع قرارداد"
+        categoryBadge="واحد منابع انسانی و اداری"
+        columns={staffPrintColumns}
+        data={sortedStaff}
+        defaultOrientation="landscape"
+        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+        summaryCards={[
+          { label: 'کل پرسنل', value: staffMembers.length },
+          { label: 'پرسنل فعال', value: staffMembers.filter((s) => s.status !== 'inactive').length },
+          { label: 'استخدام رسمی', value: staffMembers.filter((s) => s.contractType === 'PERMANENT').length },
+          { label: 'شیفت روز', value: staffMembers.filter((s) => s.shift === 'day').length },
+          { label: 'شیفت شب', value: staffMembers.filter((s) => s.shift === 'night').length },
+        ]}
+      />
     </div>
   );
 };

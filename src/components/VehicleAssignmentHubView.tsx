@@ -27,11 +27,13 @@ import {
   ArrowUpDown,
   UserPlus,
   UserMinus,
+  Printer,
 } from 'lucide-react';
 import { Driver } from '../types';
 import { VehicleItem, DriverDirectoryItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
 import { toFaDigits } from '../utils/jalaali';
 import { IranianPlate } from './IranianPlate';
+import { TableListA4PrintModal, TableListColumn } from './TableListA4PrintModal';
 
 interface VehicleAssignmentHubViewProps {
   vehicles: VehicleItem[];
@@ -213,6 +215,100 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
       assignmentRate: totalVehicles > 0 ? Math.round((assignedVehicles / totalVehicles) * 100) : 0,
     };
   }, [vehicles, activeDrivers]);
+
+  const [isPrintListOpen, setIsPrintListOpen] = useState(false);
+
+  // Print Columns for Fleet Assignment A4 List
+  const assignmentPrintColumns: TableListColumn<VehicleItem>[] = useMemo(
+    () => [
+      {
+        key: 'code',
+        header: 'کد خودرو',
+        width: '8%',
+        align: 'center',
+        render: (v) => <span className="font-bold text-slate-950 font-mono">{toFaDigits(v.code)}</span>,
+      },
+      {
+        key: 'plateNumber',
+        header: 'پلاک انتظامی',
+        width: '18%',
+        align: 'center',
+        render: (v) => <span className="font-bold font-mono">{toFaDigits(v.plateNumber)}</span>,
+      },
+      {
+        key: 'vehicleType',
+        header: 'نوع خودرو',
+        width: '12%',
+        align: 'center',
+        render: (v) => VEHICLE_TYPE_NAMES[v.vehicleType] || v.vehicleType,
+      },
+      {
+        key: 'assignmentStatus',
+        header: 'وضعیت واگذاری',
+        width: '14%',
+        align: 'center',
+        render: (v) => {
+          const isAssigned = isVehicleAssigned(v.driverName);
+          return isAssigned ? (
+            <span className="text-emerald-800 font-bold">دارای راننده</span>
+          ) : (
+            <span className="text-rose-700 font-bold">آزاد (بدون راننده)</span>
+          );
+        },
+      },
+      {
+        key: 'driverName',
+        header: 'نام راننده منتسب',
+        width: '18%',
+        align: 'right',
+        render: (v) => (
+          <span
+            className={`font-semibold ${
+              !isVehicleAssigned(v.driverName) ? 'text-amber-800' : 'text-slate-950'
+            }`}
+          >
+            {v.driverName || 'بدون راننده'}
+          </span>
+        ),
+      },
+      {
+        key: 'driverPhone',
+        header: 'شماره تماس',
+        width: '14%',
+        align: 'center',
+        render: (v) => <span className="font-mono">{v.driverPhone ? toFaDigits(v.driverPhone) : '—'}</span>,
+      },
+      {
+        key: 'status',
+        header: 'وضعیت عملیاتی',
+        width: '12%',
+        align: 'center',
+        render: (v) =>
+          v.status === 'ACTIVE'
+            ? 'آماده به کار'
+            : v.status === 'IN_MISSION'
+            ? 'در مأموریت'
+            : v.status === 'PARKING'
+            ? 'پارکینگ'
+            : v.status === 'IN_MAINTENANCE'
+            ? 'تعمیرگاه'
+            : 'غیرفعال',
+      },
+    ],
+    []
+  );
+
+  const assignmentPrintSummaryCards = useMemo(
+    () => [
+      { label: 'کل ناوگان', value: `${toFaDigits(stats.totalVehicles)} دستگاه`, color: 'text-blue-900' },
+      { label: 'دارای راننده', value: `${toFaDigits(stats.assignedVehicles)} دستگاه`, color: 'text-emerald-900' },
+      { label: 'فاقد راننده (آزاد)', value: `${toFaDigits(stats.unassignedVehicles)} دستگاه`, color: 'text-rose-900' },
+      { label: 'کل رانندگان فعال', value: `${toFaDigits(stats.totalActiveDrivers)} نفر`, color: 'text-indigo-900' },
+      { label: 'رانندگان بدون خودرو', value: `${toFaDigits(stats.driversWithoutVehicle)} نفر`, color: 'text-amber-900' },
+      { label: 'پوشش تخصیص ناوگان', value: `${toFaDigits(stats.assignmentRate)}٪`, color: 'text-teal-900' },
+    ],
+    [stats]
+  );
 
   // Filtered vehicles
   const filteredVehicles = useMemo(() => {
@@ -422,6 +518,16 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
                 <span>صدور برگه تحویل خودرو</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => setIsPrintListOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="چاپ لیست جدول تخصیص و واگذاری ناوگان با استایل رسمی A4"
+            >
+              <Printer className="w-4 h-4 text-purple-400" />
+              <span>چاپ لیست</span>
+            </button>
 
             <div
               className={`flex items-center p-1 rounded-xl border ${
@@ -717,6 +823,16 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
               {assignmentSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsPrintListOpen(true)}
+            className="px-3.5 py-1.5 rounded-lg bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs whitespace-nowrap self-start lg:self-auto"
+            title="چاپ لیست جدول تخصیص ناوگان با استایل رسمی A4 بدون هدرهای سایت"
+          >
+            <Printer className="w-4 h-4 text-purple-400" />
+            <span>چاپ لیست</span>
+          </button>
         </div>
       </div>
 
@@ -1789,6 +1905,20 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* A4 Standard Print List Modal */}
+      <TableListA4PrintModal<VehicleItem>
+        isOpen={isPrintListOpen}
+        onClose={() => setIsPrintListOpen(false)}
+        title="فهرست و کارنامه تخصیص و واگذاری ناوگان به رانندگان"
+        subtitle="گزارش رسمی انتساب خودروهای ملکی/استیجاری به رانندگان، خودروهای آزاد و وضعیت کاری"
+        categoryBadge="دایره دیسپچ و ترابری"
+        columns={assignmentPrintColumns}
+        data={sortedAssignmentVehicles}
+        summaryCards={assignmentPrintSummaryCards}
+        defaultOrientation="landscape"
+        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+      />
     </div>
   );
 };

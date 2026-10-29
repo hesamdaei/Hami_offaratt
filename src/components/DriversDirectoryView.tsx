@@ -32,6 +32,7 @@ import { DocumentUploaderModal, DocSlot } from './DocumentUploaderModal';
 import { DriverCard } from './DriverCard';
 import { DriverCardPrintModal } from './DriverCardPrintModal';
 import { IranianPlate } from './IranianPlate';
+import { TableListA4PrintModal, TableListColumn } from './TableListA4PrintModal';
 import * as XLSX from 'xlsx';
 
 export type DriverSortField =
@@ -136,6 +137,7 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
   const [viewMode, setViewMode] = useState<'TABLE' | 'CARDS'>('TABLE');
   const [sortField, setSortField] = useState<DriverSortField>('personnelCode');
   const [sortDirection, setSortDirection] = useState<DriverSortDirection>('asc');
+  const [isPrintListOpen, setIsPrintListOpen] = useState(false);
 
   const handleToggleSort = (field: DriverSortField) => {
     if (sortField === field) {
@@ -145,6 +147,81 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
       setSortDirection('asc');
     }
   };
+
+  const driverPrintColumns: TableListColumn<DriverDirectoryItem>[] = useMemo(
+    () => [
+      {
+        key: 'code',
+        header: 'کد پرسنلی',
+        width: '9%',
+        align: 'center',
+        render: (d) => toFaDigits(d.personnelCode || d.code),
+      },
+      {
+        key: 'name',
+        header: 'نام و نام خانوادگی',
+        width: '18%',
+        align: 'right',
+        render: (d) => <span className="font-bold text-slate-950">{d.name}</span>,
+      },
+      {
+        key: 'phone',
+        header: 'شماره تماس',
+        width: '13%',
+        align: 'center',
+        render: (d) => <span className="font-mono">{toFaDigits(d.phone)}</span>,
+      },
+      {
+        key: 'nationalCode',
+        header: 'کد ملی',
+        width: '12%',
+        align: 'center',
+        render: (d) => <span className="font-mono">{toFaDigits(d.nationalCode)}</span>,
+      },
+      {
+        key: 'licenseNumber',
+        header: 'شماره گواهینامه',
+        width: '12%',
+        align: 'center',
+        render: (d) => <span className="font-mono">{d.licenseNumber || '—'}</span>,
+      },
+      {
+        key: 'driverType',
+        header: 'نوع قرارداد',
+        width: '11%',
+        align: 'center',
+        render: (d) =>
+          d.driverType === 'EMPLOYED'
+            ? 'استخدامی رسمی'
+            : d.driverType === 'CONTRACTOR'
+            ? 'پیمانکاری'
+            : 'راننده کمکی',
+      },
+      {
+        key: 'status',
+        header: 'وضعیت',
+        width: '10%',
+        align: 'center',
+        render: (d) =>
+          d.status === 'AVAILABLE'
+            ? 'آماده به کار'
+            : d.status === 'ON_MISSION'
+            ? 'در مأموریت'
+            : 'در مرخصی',
+      },
+      {
+        key: 'assignedVehicles',
+        header: 'خودروی تحت اختیار',
+        width: '15%',
+        align: 'center',
+        render: (d) =>
+          d.assignedVehicles && d.assignedVehicles.length > 0
+            ? d.assignedVehicles.join(' - ')
+            : 'بدون خودرو',
+      },
+    ],
+    []
+  );
 
   const filtered = useMemo(() => {
     return drivers.filter((d) => {
@@ -447,13 +524,15 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
             <span>خروجی اکسل</span>
           </button>
 
+          {/* Print List Button (Standard A4 Table List without web headers) */}
           <button
-            onClick={() => window.print()}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="چاپ کل صفحه و کارت‌های رانندگان روی کاغذ سفید بدون پس‌زمینه تیره"
+            type="button"
+            onClick={() => setIsPrintListOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            title="چاپ لیست جدول رانندگان با استایل رسمی A4 بدون هدرهای سایت"
           >
-            <Printer className="w-4 h-4 text-sky-400" />
-            <span>چاپ کارت‌ها و فهرست</span>
+            <Printer className="w-4 h-4 text-purple-400" />
+            <span>چاپ لیست</span>
           </button>
 
           <button
@@ -1167,6 +1246,30 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
           onShowToast={onShowToast}
         />
       )}
+
+      {/* Official Table List A4 Print Modal (Zero Web Headers, Standard A4 Layout) */}
+      <TableListA4PrintModal<DriverDirectoryItem>
+        isOpen={isPrintListOpen}
+        onClose={() => setIsPrintListOpen(false)}
+        title="فهرست و گزارش رسمی رانندگان ناوگان"
+        subtitle="مشخصات فردی، احراز هویت، شماره تماس، وضعیت کاری و خودروی تحت اختیار"
+        categoryBadge="واحد ترابری و لجستیک"
+        columns={driverPrintColumns}
+        data={sortedDrivers}
+        defaultOrientation="landscape"
+        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+        summaryCards={[
+          { label: 'کل رانندگان', value: drivers.length },
+          { label: 'آماده به کار', value: drivers.filter((d) => d.status === 'AVAILABLE').length },
+          { label: 'در مأموریت', value: drivers.filter((d) => d.status === 'ON_MISSION').length },
+          { label: 'در مرخصی', value: drivers.filter((d) => d.status === 'ON_LEAVE').length },
+          { label: 'استخدامی رسمی', value: drivers.filter((d) => d.driverType === 'EMPLOYED').length },
+          {
+            label: 'دارای خودرو',
+            value: drivers.filter((d) => d.assignedVehicles && d.assignedVehicles.length > 0).length,
+          },
+        ]}
+      />
     </div>
   );
 };

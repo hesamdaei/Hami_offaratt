@@ -1670,7 +1670,8 @@ html, body {
     width: 100% !important;
   }
 
-  /* 3. Printable Sheets (Handover Form, Leave Calendar, Attendance Audit) */
+  /* 3. Printable Sheets (Handover Form, Leave Calendar, Attendance Audit, Table Lists) */
+  #table-list-a4-sheet,
   #handover-a4-sheet,
   #printable-a4-area,
   .a4-print-sheet,

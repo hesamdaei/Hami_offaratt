@@ -28,6 +28,7 @@ import {
   ArrowDown,
   List,
   LayoutGrid,
+  Printer,
 } from 'lucide-react';
 import {
   VehicleItem,
@@ -42,6 +43,7 @@ import { DocumentUploaderModal, DocSlot, VEHICLE_FULL_SLOTS } from './DocumentUp
 import { EndOfWorkModal } from './EndOfWorkModal';
 import { VehicleStatusModal, SearchableDriverSelect } from './VehicleStatusModal';
 import { PersianDatePicker } from './PersianDatePicker';
+import { TableListA4PrintModal, TableListColumn } from './TableListA4PrintModal';
 import * as XLSX from 'xlsx';
 
 const VEHICLE_DOC_SLOTS = VEHICLE_FULL_SLOTS;
@@ -232,6 +234,99 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
 
     return { total, active, inMission, inParking, inRepair, unassigned, expiringCount };
   }, [vehicles]);
+
+  const [isPrintListOpen, setIsPrintListOpen] = useState(false);
+
+  // Print Columns for Fleet A4 List
+  const fleetPrintColumns: TableListColumn<VehicleItem>[] = useMemo(
+    () => [
+      {
+        key: 'code',
+        header: 'کد ناوگان',
+        width: '8%',
+        align: 'center',
+        render: (v) => <span className="font-bold text-slate-950 font-mono">{toFaDigits(v.code)}</span>,
+      },
+      {
+        key: 'plateNumber',
+        header: 'پلاک انتظامی',
+        width: '18%',
+        align: 'center',
+        render: (v) => <span className="font-bold font-mono">{toFaDigits(v.plateNumber)}</span>,
+      },
+      {
+        key: 'vehicleType',
+        header: 'نوع خودرو',
+        width: '12%',
+        align: 'center',
+        render: (v) => VEHICLE_TYPE_NAMES[v.vehicleType] || v.vehicleType,
+      },
+      {
+        key: 'driverName',
+        header: 'راننده تحت اختیار',
+        width: '18%',
+        align: 'right',
+        render: (v) => (
+          <span
+            className={`font-semibold ${
+              !v.driverName || v.driverName === 'بدون راننده' ? 'text-amber-800' : 'text-slate-950'
+            }`}
+          >
+            {v.driverName || 'بدون راننده'}
+          </span>
+        ),
+      },
+      {
+        key: 'driverPhone',
+        header: 'شماره تماس',
+        width: '13%',
+        align: 'center',
+        render: (v) => <span className="font-mono">{v.driverPhone ? toFaDigits(v.driverPhone) : '—'}</span>,
+      },
+      {
+        key: 'status',
+        header: 'وضعیت عملیاتی',
+        width: '11%',
+        align: 'center',
+        render: (v) =>
+          v.status === 'ACTIVE'
+            ? 'آماده به کار'
+            : v.status === 'IN_MISSION'
+            ? 'در مأموریت'
+            : v.status === 'PARKING'
+            ? 'پارکینگ'
+            : v.status === 'IN_MAINTENANCE'
+            ? 'تعمیرگاه'
+            : 'غیرفعال',
+      },
+      {
+        key: 'thirdPartyExpiry',
+        header: 'بیمه شخص ثالث',
+        width: '10%',
+        align: 'center',
+        render: (v) => <span className="font-mono">{toFaDigits(v.thirdPartyExpiry || '—')}</span>,
+      },
+      {
+        key: 'inspectionExpiry',
+        header: 'معاینه فنی',
+        width: '10%',
+        align: 'center',
+        render: (v) => <span className="font-mono">{toFaDigits(v.inspectionExpiry || '—')}</span>,
+      },
+    ],
+    []
+  );
+
+  const fleetPrintSummaryCards = useMemo(
+    () => [
+      { label: 'کل ناوگان', value: `${toFaDigits(stats.total)} دستگاه`, color: 'text-blue-900' },
+      { label: 'آماده به کار', value: `${toFaDigits(stats.active)} دستگاه`, color: 'text-emerald-900' },
+      { label: 'در مأموریت', value: `${toFaDigits(stats.inMission)} دستگاه`, color: 'text-sky-900' },
+      { label: 'تعمیرگاه / سرویس', value: `${toFaDigits(stats.inRepair)} دستگاه`, color: 'text-amber-900' },
+      { label: 'بدون راننده', value: `${toFaDigits(stats.unassigned)} دستگاه`, color: 'text-rose-900' },
+    ],
+    [stats]
+  );
 
   // Aggregate fleet history across all vehicles (matching legacy Sedaqat Bar history ledger)
   const allFleetHistory = useMemo(() => {
@@ -640,6 +735,16 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
               <span>خروجی اکسل</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsPrintListOpen(true)}
+              className="px-3.5 py-2 rounded-lg bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="چاپ لیست جدول ناوگان با استایل رسمی A4 بدون هدرهای سایت"
+            >
+              <Printer className="w-4 h-4 text-purple-400" />
+              <span>چاپ لیست</span>
             </button>
 
             <button
@@ -1554,6 +1659,20 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
           onClose={() => setStatusVehicle(null)}
         />
       )}
+
+      {/* A4 Standard Print List Modal */}
+      <TableListA4PrintModal<VehicleItem>
+        isOpen={isPrintListOpen}
+        onClose={() => setIsPrintListOpen(false)}
+        title="فهرست و مشخصات جامع ناوگان خودرویی"
+        subtitle="گزارش رسمی مشخصات فنی، پلاک انتظامی، رانندگان منتسب و وضعیت عملیاتی ناوگان"
+        categoryBadge="دایره ترابری و لجستیک"
+        columns={fleetPrintColumns}
+        data={sortedVehicles}
+        summaryCards={fleetPrintSummaryCards}
+        defaultOrientation="landscape"
+        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+      />
     </div>
   );
 };
