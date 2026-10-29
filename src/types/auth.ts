@@ -17,6 +17,7 @@ export interface UserPermissions {
 export interface AppUser {
   id: string;
   username: string; // unique
+  email?: string; // for password recovery & notifications
   password?: string; // deprecated plaintext (auto-migrated to PBKDF2)
   passwordHash?: string; // PBKDF2-SHA256 hashed password
   fullName: string;
@@ -32,16 +33,20 @@ export interface AppUser {
   sessionToken?: string;
   expiresAt?: string; // ISO 8601 session expiration timestamp
   isRevoked?: boolean;
+  recoveryCode?: string;
+  recoveryCodeExpiresAt?: string;
 }
 
-export type SafeAppUser = Omit<AppUser, 'password' | 'passwordHash'>;
+export type SafeAppUser = Omit<AppUser, 'password' | 'passwordHash' | 'recoveryCode'>;
 
 export const DEFAULT_MASTER_USER: AppUser = {
   id: 'usr-master-admin',
   username: 'admin',
+  email: 'hesam.daei@gmail.com',
   password: 'hesam1090',
   fullName: 'مدیر ارشد سامانه',
   roleTitle: 'مدیریت ارشد سیستم',
+  phoneNumber: '09120000000',
   isMasterAdmin: true,
   isActive: true,
   permissions: {

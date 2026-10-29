@@ -75,8 +75,8 @@ const STORAGE_KEY_DRIVER_DIRECTORY = 'hamibar_driver_directory_v1';
 const STORAGE_KEY_STAFF_MEMBERS = 'hamibar_staff_members_v1';
 const STORAGE_KEY_STAFF_RECORDS = 'hamibar_staff_records_v1';
 const STORAGE_KEY_ATTENDANCE_NOTES = 'hamibar_attendance_notes_v1';
-const BACKUP_APPLIED_KEY = 'hami_backup_applied_v2';
-const PDF_SYNC_KEY = 'hamibar_fleet_pdf_14050722_sync_v4';
+const BACKUP_APPLIED_KEY = 'hami_backup_applied_14050806_v5';
+const PDF_SYNC_KEY = 'hamibar_backup_14050806_sync_v6';
 
 export const App: FC = () => {
   const today = useMemo(() => getTodayJalaali(), []);
@@ -217,7 +217,7 @@ export const App: FC = () => {
     } catch {
       // ignore
     }
-    return INITIAL_STAFF_MEMBERS;
+    return DECODED_BACKUP.staffMembers.length > 0 ? DECODED_BACKUP.staffMembers : INITIAL_STAFF_MEMBERS;
   });
 
   const [staffRecords, setStaffRecords] = useState<AttendanceRecords>(() => {
@@ -230,7 +230,7 @@ export const App: FC = () => {
     } catch {
       // ignore
     }
-    return getInitialStaffAttendanceRecords();
+    return Object.keys(DECODED_BACKUP.staffRecords).length > 0 ? DECODED_BACKUP.staffRecords : getInitialStaffAttendanceRecords();
   });
 
   // Daily Attendance Notes state (Right-click day notes per person)
@@ -468,7 +468,7 @@ export const App: FC = () => {
     return { regulations: savedRegulations, affidavit: savedAffidavit, rules: savedRules };
   };
 
-  // One-time Sync for Fleet & Driver dataset from official PDF (14050722__c79532b9.pdf)
+  // One-time Sync for latest dataset from official backup (1405-08-06)
   useEffect(() => {
     try {
       const isPdfSynced = localStorage.getItem(PDF_SYNC_KEY);
@@ -476,9 +476,18 @@ export const App: FC = () => {
         setDrivers(DECODED_BACKUP.drivers);
         setVehicles(DECODED_BACKUP.vehicles);
         setDriverDirectory(DECODED_BACKUP.driverDirectory);
+        setRecords(DECODED_BACKUP.records);
+        setStaffMembers(DECODED_BACKUP.staffMembers);
+        setStaffRecords(DECODED_BACKUP.staffRecords);
         localStorage.setItem(STORAGE_KEY_DRIVERS, JSON.stringify(DECODED_BACKUP.drivers));
         localStorage.setItem(STORAGE_KEY_VEHICLES, JSON.stringify(DECODED_BACKUP.vehicles));
         localStorage.setItem(STORAGE_KEY_DRIVER_DIRECTORY, JSON.stringify(DECODED_BACKUP.driverDirectory));
+        localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(DECODED_BACKUP.records));
+        localStorage.setItem(STORAGE_KEY_STAFF_MEMBERS, JSON.stringify(DECODED_BACKUP.staffMembers));
+        localStorage.setItem(STORAGE_KEY_STAFF_RECORDS, JSON.stringify(DECODED_BACKUP.staffRecords));
+        if (DECODED_BACKUP.rules && Object.keys(DECODED_BACKUP.rules).length > 0) {
+          localStorage.setItem('hamibar_service_rules_v1', JSON.stringify(DECODED_BACKUP.rules));
+        }
         localStorage.setItem(BACKUP_APPLIED_KEY, 'true');
         localStorage.setItem(PDF_SYNC_KEY, 'true');
       }

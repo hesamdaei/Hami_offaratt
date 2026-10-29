@@ -28,6 +28,7 @@ export interface SharedLanDatabasePayload {
   driverDirectory: any[];
   staffMembers: any[];
   staffRecords: Record<string, any>;
+  users?: any[];
   rules?: any;
   regulations?: any;
   affidavit?: string;
@@ -272,3 +273,133 @@ export async function saveSharedLanDatabase(payload: SharedLanDatabasePayload): 
     error: 'سرور شبکه در دسترس نیست',
   };
 }
+
+/**
+ * دریافت لیست کاربران از سرور متمرکز شبکه
+ */
+export async function fetchServerUsers(): Promise<any[] | null> {
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(`${baseUrl}/api/users`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.users)) {
+        return data.users;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * ذخیره و همگام‌سازی کاربران در سرور شبکه
+ */
+export async function saveServerUsers(users: any[]): Promise<boolean> {
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${baseUrl}/api/users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ users }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * درخواست ارسال کد بازیابی رمز عبور به ایمیل
+ */
+export async function requestForgotPasswordCode(emailOrUsername: string): Promise<{
+  ok: boolean;
+  message?: string;
+  maskedEmail?: string;
+  expiresInMinutes?: number;
+  sentViaSmtp?: boolean;
+  devCodeFallback?: string;
+  error?: string;
+}> {
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailOrUsername }),
+    });
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return { ok: false, error: err.message || 'خطا در ارتباط با سرور' };
+  }
+}
+
+/**
+ * تأیید کد و تغییر رمز عبور
+ */
+export async function resetPasswordWithCode(
+  emailOrUsername: string,
+  recoveryCode: string,
+  newPassword: string
+): Promise<{ ok: boolean; message?: string; username?: string; error?: string }> {
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailOrUsername, recoveryCode, newPassword }),
+    });
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return { ok: false, error: err.message || 'خطا در ارتباط با سرور' };
+  }
+}
+
+/**
+ * احراز هویت متمرکز از طریق سرور امن با محافظت ضد بروت‌فورس
+ */
+export async function loginWithServerApi(
+  username: string,
+  password: string
+): Promise<{
+  ok: boolean;
+  user?: any;
+  error?: string;
+  locked?: boolean;
+  retryAfterSeconds?: number;
+  remainingAttempts?: number;
+}> {
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    return { ok: false, error: err.message || 'خطا در برقراری ارتباط با سرور احراز هویت' };
+  }
+}
+
+

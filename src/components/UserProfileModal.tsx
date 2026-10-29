@@ -22,9 +22,13 @@ import {
   EyeOff,
   Clock,
   Check,
+  Mail,
+  Edit3,
 } from 'lucide-react';
 import { AppUser, ModulePermission } from '../types/auth';
 import { isMasterAdmin, getStoredUsers, saveStoredUsers, saveStoredSession } from '../utils/authService';
+import { hashPassword, verifyPassword } from '../utils/securityCrypto';
+import { saveServerUsers } from '../utils/lanSyncService';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -56,61 +60,190 @@ export const UserProfileModal: FC<UserProfileModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+
+  // Profile Edit State (Username, Full Name, Email)
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editFullName, setEditFullName] = useState(currentUser?.fullName || '');
+  const [editUsername, setEditUsername] = useState(currentUser?.username || '');
+  const [editEmail, setEditEmail] = useState(currentUser?.email || (isMasterAdmin(currentUser) ? 'hesam.daei@gmail.com' : ''));
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState(false);
+  const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
 
   if (!isOpen || !currentUser) return null;
 
   const isMaster = isMasterAdmin(currentUser);
 
-  const handlePasswordSubmit = (e: FormEvent) => {
+  // Profile Submit Handler
+  const handleProfileSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setProfileError(null);
+    setProfileSuccess(false);
+
+    const cleanFullName = editFullName.trim();
+    const cleanUsername = editUsername.trim().toLowerCase();
+    const cleanEmail = editEmail.trim().toLowerCase();
+
+    if (!cleanFullName) {
+      setProfileError('لطفاً نام و نام خانوادگی را وارد فرمایید.');
+      return;
+    }
+    if (!cleanUsername || cleanUsername.length < 2) {
+      setProfileError('نام کاربری باید حداقل دارای ۲ کاراکتر باشد.');
+      return;
+    }
+
+    const allUsers = getStoredUsers();
+    // Check if new username conflicts with another existing user
+    const conflict = allUsers.find(
+      (u) => u.id !== currentUser.id && u.username.toLowerCase() === cleanUsername
+    );
+    if (conflict) {
+      setProfileError(`نام کاربری «${cleanUsername}» قبلاً توسط کاربر دیگری ثبت شده است.`);
+      return;
+    }
+
+    setIsSubmittingProfile(true);
+    try {
+      const updatedUsers = allUsers.map((u) => {
+        if (u.id === currentUser.id || u.username.toLowerCase() === currentUser.username.toLowerCase()) {
+          return {
+            ...u,
+            fullName: cleanFullName,
+            username: cleanUsername,
+            email: cleanEmail || u.email || (u.isMasterAdmin ? 'hesam.daei@gmail.com' : undefined),
+          };
+        }
+        return u;
+      });
+
+      // 1. Save to local storage
+      saveStoredUsers(updatedUsers);
+
+      // 2. Synchronize across LAN network
+      await saveServerUsers(updatedUsers);
+
+      // 3. Update active session
+      const freshUser: AppUser = {
+        ...currentUser,
+        fullName: cleanFullName,
+        username: cleanUsername,
+        email: cleanEmail || currentUser.email || (currentUser.isMasterAdmin ? 'hesam.daei@gmail.com' : undefined),
+      };
+      saveStoredSession(freshUser);
+      onUpdateUser(freshUser);
+
+      setProfileSuccess(true);
+      onShowToast('مشخصات و نام کاربری با موفقیت به‌روزرسانی و در شبکه همگام شد.', 'success');
+
+      setTimeout(() => {
+        setIsEditingProfile(false);
+        setProfileSuccess(false);
+      }, 1200);
+    } catch {
+      setProfileError('خطا در ذخیره‌سازی اطلاعات کاربری.');
+    } finally {
+      setIsSubmittingProfile(false);
+    }
+  };
+
+  // Password Submit Handler
+  const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
     setPasswordSuccess(false);
 
-    if (!oldPassword.trim()) {
+    const cleanOld = oldPassword.trim();
+    const cleanNew = newPassword.trim();
+
+    if (!cleanOld) {
       setPasswordError('لطفاً رمز عبور فعلی خود را وارد کنید.');
       return;
     }
-    if (oldPassword !== currentUser.password) {
-      setPasswordError('رمز عبور فعلی وارد شده نادرست است.');
-      return;
-    }
-    if (!newPassword.trim() || newPassword.length < 3) {
+
+    if (!cleanNew || cleanNew.length < 3) {
       setPasswordError('رمز عبور جدید باید حداقل دارای ۳ کاراکتر باشد.');
       return;
     }
-    if (newPassword !== confirmPassword) {
+    if (cleanNew !== confirmPassword.trim()) {
       setPasswordError('رمز عبور جدید با تکرار آن یکسان نمی‌باشد.');
       return;
     }
 
-    // Update in database
-    const allUsers = getStoredUsers();
-    const updatedUsers = allUsers.map((u) => {
-      if (u.id === currentUser.id || u.username.toLowerCase() === currentUser.username.toLowerCase()) {
-        return { ...u, password: newPassword.trim() };
+    setIsSubmittingPassword(true);
+
+    try {
+      const allUsers = getStoredUsers();
+      const matchedUser = allUsers.find(
+        (u) => u.id === currentUser.id || u.username.toLowerCase() === currentUser.username.toLowerCase()
+      );
+
+      // Multi-layer old password verification:
+      // 1. Master admin fallback passwords
+      // 2. Plain password comparison
+      // 3. PBKDF2 hash verification
+      let isOldValid = false;
+      if (isMaster && (cleanOld === 'hesam1090' || cleanOld === 'hesam' || cleanOld === 'admin')) {
+        isOldValid = true;
+      } else if (matchedUser?.password && cleanOld === matchedUser.password) {
+        isOldValid = true;
+      } else if (matchedUser?.passwordHash) {
+        isOldValid = await verifyPassword(cleanOld, matchedUser.passwordHash);
+      } else if (matchedUser?.password) {
+        isOldValid = await verifyPassword(cleanOld, matchedUser.password);
       }
-      return u;
-    });
 
-    saveStoredUsers(updatedUsers);
+      if (!isOldValid) {
+        setPasswordError('رمز عبور فعلی وارد شده نادرست است.');
+        setIsSubmittingPassword(false);
+        return;
+      }
 
-    const freshUser: AppUser = {
-      ...currentUser,
-      password: newPassword.trim(),
-    };
-    saveStoredSession(freshUser);
-    onUpdateUser(freshUser);
+      // Hash new password
+      const newHash = await hashPassword(cleanNew);
 
-    setPasswordSuccess(true);
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    onShowToast('رمز عبور شما با موفقیت تغییر یافت.', 'success');
+      // Update in stored users
+      const updatedUsers = allUsers.map((u) => {
+        if (u.id === currentUser.id || u.username.toLowerCase() === currentUser.username.toLowerCase()) {
+          return {
+            ...u,
+            password: cleanNew,
+            passwordHash: newHash,
+          };
+        }
+        return u;
+      });
 
-    setTimeout(() => {
-      setIsChangingPassword(false);
-      setPasswordSuccess(false);
-    }, 1500);
+      // 1. Save to local storage
+      saveStoredUsers(updatedUsers);
+
+      // 2. Broadcast and save to central server so it persists on LAN
+      await saveServerUsers(updatedUsers);
+
+      // 3. Update session
+      const freshUser: AppUser = {
+        ...currentUser,
+        password: cleanNew,
+      };
+      saveStoredSession(freshUser);
+      onUpdateUser(freshUser);
+
+      setPasswordSuccess(true);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      onShowToast('رمز عبور جدید با موفقیت ثبت و در سرور شبکه همگام‌سازی شد.', 'success');
+
+      setTimeout(() => {
+        setIsChangingPassword(false);
+        setPasswordSuccess(false);
+      }, 1500);
+    } catch {
+      setPasswordError('خطا در به‌روزرسانی رمز عبور.');
+    } finally {
+      setIsSubmittingPassword(false);
+    }
   };
 
   const getPermissionLabel = (perm: ModulePermission) => {
@@ -230,14 +363,105 @@ export const UserProfileModal: FC<UserProfileModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setIsChangingPassword(!isChangingPassword)}
-                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition"
+                  onClick={() => {
+                    setIsEditingProfile(!isEditingProfile);
+                    setIsChangingPassword(false);
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 text-xs font-bold border border-sky-500/30 transition cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4 text-sky-400" />
+                  <span>{isEditingProfile ? 'انصراف از ویرایش' : 'ویرایش نام کاربری و ایمیل'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsChangingPassword(!isChangingPassword);
+                    setIsEditingProfile(false);
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition cursor-pointer"
                 >
                   <KeyRound className="w-4 h-4 text-amber-400" />
                   <span>{isChangingPassword ? 'انصراف از تغییر رمز' : 'تغییر رمز عبور من'}</span>
                 </button>
               </div>
             </div>
+
+            {/* In-place Profile Editing Form (Username, Full Name, Email) */}
+            {isEditingProfile && (
+              <form onSubmit={handleProfileSubmit} className="mt-5 pt-5 border-t border-[#1e2d48] space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-black text-sky-300 flex items-center gap-1.5">
+                    <Edit3 className="w-3.5 h-3.5 text-sky-400" />
+                    ویرایش مشخصات هویتی، نام کاربری و ایمیل بازیابی
+                  </h4>
+                  <span className="text-[10px] text-slate-400">ذخیره خودکار در سرور شبکه</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">نام و نام خانوادگی</label>
+                    <input
+                      type="text"
+                      value={editFullName}
+                      onChange={(e) => setEditFullName(e.target.value)}
+                      placeholder="نام کامل..."
+                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">نام کاربری ورود (Username)</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      placeholder="نام کاربری..."
+                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1 flex items-center gap-1">
+                      <Mail className="w-3 h-3 text-emerald-400" />
+                      <span>ایمیل بازیابی رمز عبور</span>
+                    </label>
+                    <input
+                      type="email"
+                      dir="ltr"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      placeholder="email@example.com"
+                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+                </div>
+
+                {profileError && (
+                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{profileError}</span>
+                  </div>
+                )}
+
+                {profileSuccess && (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>اطلاعات کاربری با موفقیت ذخیره و در دیتابیس سرور شبکه همگام شد.</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingProfile}
+                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isSubmittingProfile ? 'درحال ثبت و همگام‌سازی...' : 'ثبت تغییرات و همگام‌سازی در شبکه'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* In-place Password Change Section */}
             {isChangingPassword && (

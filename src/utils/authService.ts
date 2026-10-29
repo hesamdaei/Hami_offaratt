@@ -191,12 +191,12 @@ export function revokeSession(): void {
 }
 
 /**
- * Authenticate username and password with PBKDF2 hashing, master fallback & rate-limiting protection
+ * Authenticate username and password with server-side validation, PBKDF2 hashing & rate-limiting protection
  */
 export async function authenticateUser(
   usernameInput: string,
   passwordInput: string
-): Promise<{ success: boolean; user?: SafeAppUser; error?: string }> {
+): Promise<{ success: boolean; user?: SafeAppUser; error?: string; locked?: boolean; retryAfterSeconds?: number }> {
   const cleanUsername = usernameInput.trim().toLowerCase();
   const cleanPassword = passwordInput.trim();
 
@@ -204,12 +204,38 @@ export async function authenticateUser(
     return { success: false, error: UNIFORM_AUTH_ERROR };
   }
 
-  // Rate Limiting Protection (Max 10 attempts per 5 minutes per user)
-  const rateLimit = checkClientRateLimit(cleanUsername, 10);
+  // 1. Prioritize Server-Authoritative Authentication API with centralized brute-force tracking
+  try {
+    const { loginWithServerApi } = await import('./lanSyncService');
+    const serverRes = await loginWithServerApi(cleanUsername, cleanPassword);
+    if (serverRes && serverRes.ok && serverRes.user) {
+      saveStoredSession(serverRes.user);
+      resetClientRateLimit(cleanUsername);
+      return { success: true, user: serverRes.user as SafeAppUser };
+    }
+    if (serverRes && serverRes.locked) {
+      return {
+        success: false,
+        error: serverRes.error,
+        locked: true,
+        retryAfterSeconds: serverRes.retryAfterSeconds,
+      };
+    }
+    if (serverRes && serverRes.error && !serverRes.error.includes('ارتباط با سرور')) {
+      return { success: false, error: serverRes.error };
+    }
+  } catch {
+    // Network server unavailable - fallback to offline verification
+  }
+
+  // 2. Offline Fallback Authentication (strictly enforces rate-limiting & hash/password matching)
+  const rateLimit = checkClientRateLimit(cleanUsername, 5);
   if (!rateLimit.allowed) {
     return {
       success: false,
-      error: `تعداد تلاش‌های ناموفق بیش از حد مجاز است. لطفاً ${rateLimit.retryAfterSeconds} ثانیه دیگر مجدداً تلاش نمایید یا از دکمه بازیابی/ورود اضطراری مدیر استفاده فرمایید.`,
+      error: `تعداد دفعات تلاش ناموفق بیش از ۵ بار است. لطفاً ${rateLimit.retryAfterSeconds} ثانیه دیگر مجدداً تلاش نمایید.`,
+      locked: true,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
     };
   }
 
@@ -218,39 +244,26 @@ export async function authenticateUser(
     (u) =>
       u.username.toLowerCase() === cleanUsername ||
       ((cleanUsername === 'daei' || cleanUsername === 'admin' || cleanUsername === 'hesam') &&
-        (Boolean(u.isMasterAdmin) ||
-          u.username.toLowerCase() === 'admin' ||
-          u.username.toLowerCase() === 'daei' ||
-          u.username.toLowerCase() === 'hesam'))
+        (Boolean(u.isMasterAdmin) || u.username.toLowerCase() === 'admin'))
   );
 
   if (!foundUser) {
     return { success: false, error: UNIFORM_AUTH_ERROR };
   }
 
-  // Multi-tier authentication matching:
-  // 1. Master admin emergency passwords: 'hesam1090', 'admin', 'hesam' ALWAYS work for master admin!
-  // 2. Plaintext password if recently set/edited
-  // 3. PBKDF2 hash verification
-  // 4. Legacy password verification
+  // Strict Password Matching: Active password or PBKDF2 hash (ZERO BACKDOOR BYPASS)
   let isMatch = false;
-
-  if (
-    foundUser.isMasterAdmin &&
-    (cleanPassword === 'hesam1090' || cleanPassword === 'hesam' || cleanPassword === 'admin')
-  ) {
-    isMatch = true;
-  } else if (foundUser.password && cleanPassword === foundUser.password) {
+  if (foundUser.password && cleanPassword === foundUser.password) {
     isMatch = true;
   } else if (foundUser.passwordHash) {
     isMatch = await verifyPassword(cleanPassword, foundUser.passwordHash);
-  } else if (foundUser.password) {
-    isMatch = await verifyPassword(cleanPassword, foundUser.password);
   }
 
   if (!isMatch) {
     return { success: false, error: UNIFORM_AUTH_ERROR };
   }
+
+  resetClientRateLimit(cleanUsername);
 
   if (!foundUser.isActive) {
     return {

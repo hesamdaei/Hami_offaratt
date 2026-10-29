@@ -1,4 +1,4 @@
-import { FC, useState, useMemo, FormEvent } from 'react';
+import { FC, useState, useMemo, FormEvent, useEffect } from 'react';
 import {
   Users,
   Shield,
@@ -59,6 +59,9 @@ import {
   isMasterAdmin,
   canManageUsers,
 } from '../utils/authService';
+import { saveServerUsers, fetchServerUsers } from '../utils/lanSyncService';
+import { SqlArchitectureModal } from './SqlArchitectureModal';
+import { DECODED_BACKUP } from '../utils/backupDecoder';
 import { toFaDigits } from '../utils/jalaali';
 
 interface IntegratedUserAndAuditHubViewProps {
@@ -94,6 +97,19 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'MASTER' | 'OPERATOR' | 'FLEET'>('ALL');
   const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+
+  // SQL Architecture Modal State
+  const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
+
+  // Synchronize users with central network server on component mount
+  useEffect(() => {
+    fetchServerUsers().then((serverUsers) => {
+      if (serverUsers && Array.isArray(serverUsers) && serverUsers.length > 0) {
+        setUsers(serverUsers);
+        saveStoredUsers(serverUsers);
+      }
+    });
+  }, []);
 
   // Logs State
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>(() => getAuditLogs());
@@ -212,6 +228,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     const updated = [...users, newUser];
     setUsers(updated);
     saveStoredUsers(updated);
+    saveServerUsers(updated);
 
     // Record Audit Log
     recordAuditLog(currentUser, {
@@ -294,6 +311,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
 
     setUsers(updatedUsers);
     saveStoredUsers(updatedUsers);
+    saveServerUsers(updatedUsers);
 
     // If edited current user, update session
     if (currentUser && currentUser.id === editingUser.id && onUpdateCurrentUserSession) {
@@ -329,6 +347,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     const updatedUsers = users.map((u) => (u.id === user.id ? { ...u, isActive: nextStatus } : u));
     setUsers(updatedUsers);
     saveStoredUsers(updatedUsers);
+    saveServerUsers(updatedUsers);
 
     // Record Audit Log
     recordAuditLog(currentUser, {
@@ -361,6 +380,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     const updatedUsers = users.filter((u) => u.id !== userToDelete.id);
     setUsers(updatedUsers);
     saveStoredUsers(updatedUsers);
+    saveServerUsers(updatedUsers);
 
     // Record Audit Log
     recordAuditLog(currentUser, {
@@ -600,6 +620,16 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
             </div>
 
             {/* Quick Actions */}
+            <button
+              type="button"
+              onClick={() => setIsSqlModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white shadow-md shadow-sky-600/20 active:scale-95 transition cursor-pointer"
+              title="مشاهده ساختار مهندسی دیتابیس رابطه‌ای SQL و دریافت اسکریپت خروجی کامل"
+            >
+              <Database className="w-4 h-4 text-sky-200" />
+              <span>معماری و خروجی SQL</span>
+            </button>
+
             {activeTab === 'USERS' && hasUserManagementPermission && (
               <button
                 type="button"
@@ -1984,6 +2014,22 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
           </div>
         </div>
       )}
+
+      {/* Relational SQL Architecture & Dump Export Modal */}
+      <SqlArchitectureModal
+        isOpen={isSqlModalOpen}
+        onClose={() => setIsSqlModalOpen(false)}
+        dbData={{
+          users,
+          vehicles: DECODED_BACKUP.vehicles || [],
+          drivers: DECODED_BACKUP.drivers || [],
+          records: DECODED_BACKUP.records || {},
+          staffMembers: DECODED_BACKUP.staffMembers || [],
+          staffRecords: DECODED_BACKUP.staffRecords || {},
+          rules: DECODED_BACKUP.rules || {},
+        }}
+        onShowToast={onShowToast}
+      />
     </div>
   );
 };
