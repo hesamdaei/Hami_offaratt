@@ -77,33 +77,36 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Download Word Document */}
-          <button
-            type="button"
-            onClick={() => {
-              exportHandoverToWord(record, isBlankForm);
-              if (onShowToast) onShowToast(isBlankForm ? 'فایل Word فرم خام تحویل دانلود شد.' : 'فایل Word فرم تحویل دانلود شد.', 'success');
-            }}
-            className="px-3 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-            title="دانلود دقیق این صورت‌جلسه در قالب فایل Word (.doc / .docx)"
-          >
-            <FileText className="w-3.5 h-3.5 text-blue-400" />
-            <span>خروجی Word (DOC)</span>
-          </button>
+          {/* Download Word Document & Excel Sheet - Only available for completed forms, removed for blank form as requested */}
+          {!isBlankForm && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  exportHandoverToWord(record, false);
+                  if (onShowToast) onShowToast('فایل Word صورت‌جلسه تکمیل‌شده دانلود شد.', 'success');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                title="دانلود دقیق این صورت‌جلسه در قالب فایل Word (.doc)"
+              >
+                <FileText className="w-3.5 h-3.5 text-blue-400" />
+                <span>خروجی Word (DOC)</span>
+              </button>
 
-          {/* Download Excel Sheet */}
-          <button
-            type="button"
-            onClick={() => {
-              exportHandoverToExcel(record, isBlankForm);
-              if (onShowToast) onShowToast(isBlankForm ? 'فایل اکسل فرم خام تحویل دانلود شد.' : 'فایل اکسل فرم تحویل دانلود شد.', 'success');
-            }}
-            className="px-3 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-            title="دانلود دقیق این صورت‌جلسه در قالب فایل اکسل (.xlsx)"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-            <span>خروجی اکسل (XLSX)</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  exportHandoverToExcel(record, false);
+                  if (onShowToast) onShowToast('فایل اکسل صورت‌جلسه تکمیل‌شده دانلود شد.', 'success');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                title="دانلود دقیق این صورت‌جلسه در قالب فایل اکسل (.xlsx)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>خروجی اکسل (XLSX)</span>
+              </button>
+            </>
+          )}
 
           {/* Print A4 Sheet */}
           <button
@@ -130,8 +133,11 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
       <div
         id="handover-a4-sheet"
         dir="rtl"
-        className="a4-print-sheet bg-white text-slate-900 p-4 sm:p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[10.5px] font-sans leading-tight border border-slate-300 print:border-none print:shadow-none print:m-0 print:p-0 print:pt-0 print:w-full print:max-w-none print:top-0"
-        style={{ boxSizing: 'border-box' }}
+        className="a4-print-sheet bg-white text-slate-900 p-4 sm:p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[10.5px] leading-tight border border-slate-300 print:border-none print:shadow-none print:m-0 print:p-0 print:pt-0 print:w-full print:max-w-none print:top-0"
+        style={{
+          boxSizing: 'border-box',
+          fontFamily: "'B Nazanin', 'BNazanin', 'Vazirmatn', Tahoma, sans-serif",
+        }}
       >
         {/* ================= 1. HEADER SECTION ================= */}
         <div className="border border-slate-900 rounded-lg p-2.5 mb-2 flex items-center justify-between">

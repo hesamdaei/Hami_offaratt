@@ -178,7 +178,7 @@ export function exportHandoverToWord(
           mso-page-orientation: portrait;
         }
         body {
-          font-family: 'Vazirmatn', 'Shabnam', 'Tahoma', 'Arial', sans-serif;
+          font-family: 'B Nazanin', 'BNazanin', 'Vazirmatn', 'Shabnam', 'Tahoma', 'Arial', sans-serif;
           direction: rtl;
           text-align: right;
           font-size: 10pt;

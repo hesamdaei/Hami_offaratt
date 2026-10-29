@@ -3,6 +3,47 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* B Nazanin Font Definitions for Official Administrative Persian Typography */
+@font-face {
+  font-family: 'B Nazanin';
+  src: local('B Nazanin'), local('BNazanin'), local('B_Nazanin'), local('b nazanin'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Fonts-Collection/BNazanin.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Fonts-Collection/BNazanin.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Fonts-Collection/BNazanin.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'B Nazanin';
+  src: local('B Nazanin Bold'), local('BNazanin Bold'), local('BNazanin-Bold'), local('B_Nazanin_Bold'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Fonts-Collection/BNazaninBold.woff2') format('woff2'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Fonts-Collection/BNazaninBold.woff') format('woff'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Fonts-Collection/BNazaninBold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BNazanin';
+  src: local('B Nazanin'), local('BNazanin'), local('B_Nazanin'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Fonts-Collection/BNazanin.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BNazanin';
+  src: local('B Nazanin Bold'), local('BNazanin Bold'), local('BNazanin-Bold'),
+       url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/misc/Farsi-Fonts-Collection/BNazaninBold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Self-Hosted Vazirmatn Font Definitions for 100% Offline & High-Clarity Persian Display */
 @font-face {
   font-family: 'Vazirmatn';
@@ -52,7 +93,7 @@
   body {
     background-color: #0a101f;
     color: #f8fafc;
-    font-family: 'Vazirmatn', 'Shabnam', 'IRANSans', Tahoma, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'B Nazanin', 'BNazanin', 'Vazirmatn', 'Shabnam', 'IRANSans', Tahoma, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -1649,6 +1690,7 @@ html, body {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
+    font-family: 'B Nazanin', 'BNazanin', 'Vazirmatn', 'Shabnam', Tahoma, sans-serif !important;
     page-break-after: avoid !important;
     page-break-before: avoid !important;
     page-break-inside: avoid !important;

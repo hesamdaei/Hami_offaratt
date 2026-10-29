@@ -1228,8 +1228,11 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
             <div className="bg-slate-900/60 p-2 sm:p-6 rounded-2xl border border-slate-800 flex justify-center overflow-x-auto">
               <div
                 dir="rtl"
-                className="bg-white text-slate-900 p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[11px] font-sans leading-tight border border-slate-300"
-                style={{ boxSizing: 'border-box' }}
+                className="bg-white text-slate-900 p-6 rounded-sm shadow-2xl w-full max-w-[210mm] min-h-[297mm] mx-auto text-[11px] leading-tight border border-slate-300"
+                style={{
+                  boxSizing: 'border-box',
+                  fontFamily: "'B Nazanin', 'BNazanin', 'Vazirmatn', Tahoma, sans-serif",
+                }}
               >
                 {/* Header */}
                 <div className="border border-slate-900 rounded-lg p-3 mb-2 flex items-center justify-between">
