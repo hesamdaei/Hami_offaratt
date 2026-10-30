@@ -108,12 +108,12 @@ export const Toolbar: FC<ToolbarProps> = ({
         {/* Left / Date Capsule Navigation */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Unified Modern Date Capsule */}
-          <div className="flex items-center bg-[#18263e] border border-slate-700/80 rounded-xl p-1 shadow-xs">
+          <div className="flex items-center bg-[#18263e] border border-slate-600/90 rounded-xl p-1.5 shadow-xs">
             {/* Prev month button */}
             <button
               onClick={handlePrevMonth}
               title="ماه قبل"
-              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/60 transition"
+              className="p-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-700 transition cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -122,7 +122,7 @@ export const Toolbar: FC<ToolbarProps> = ({
             <select
               value={month}
               onChange={(e) => onMonthChange(Number(e.target.value))}
-              className="bg-transparent text-xs md:text-sm font-black text-white px-2 py-1 cursor-pointer focus:outline-none appearance-none text-center"
+              className="bg-transparent text-sm md:text-base font-black text-white px-2.5 py-1 cursor-pointer focus:outline-none appearance-none text-center"
             >
               {PERSIAN_MONTH_NAMES.map((name, i) => (
                 <option key={name} value={i + 1} className="bg-[#111b2e] text-white">
@@ -132,7 +132,7 @@ export const Toolbar: FC<ToolbarProps> = ({
             </select>
 
             {/* Year Input */}
-            <div className="flex items-center px-1 border-r border-slate-700/80">
+            <div className="flex items-center px-1.5 border-r border-slate-600">
               <input
                 type="number"
                 value={year}
@@ -144,7 +144,7 @@ export const Toolbar: FC<ToolbarProps> = ({
                 }}
                 min={1350}
                 max={1450}
-                className="w-13 bg-transparent text-xs md:text-sm font-mono font-bold text-amber-400 text-center focus:outline-none"
+                className="w-14 bg-transparent text-sm md:text-base font-mono font-bold text-amber-400 text-center focus:outline-none"
               />
             </div>
 
@@ -152,7 +152,7 @@ export const Toolbar: FC<ToolbarProps> = ({
             <button
               onClick={handleNextMonth}
               title="ماه بعد"
-              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/60 transition"
+              className="p-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-700 transition cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -161,17 +161,17 @@ export const Toolbar: FC<ToolbarProps> = ({
           {/* Today Button Pill */}
           <button
             onClick={handleGoToday}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition ${
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl border transition cursor-pointer ${
               isCurrentMonth
-                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                : 'bg-[#18263e] border-slate-700 text-slate-300 hover:bg-[#203150] hover:text-white'
+                ? 'bg-amber-500/25 border-amber-500/60 text-amber-300'
+                : 'bg-[#18263e] border-slate-600 text-slate-200 hover:bg-[#203150] hover:text-white'
             }`}
             title="پرش به تاریخ امروز"
           >
-            <CalendarDays className="w-3.5 h-3.5 text-amber-400" />
+            <CalendarDays className="w-4 h-4 text-amber-400" />
             <span>امروز</span>
             {isCurrentMonth && (
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             )}
           </button>
         </div>
@@ -181,39 +181,39 @@ export const Toolbar: FC<ToolbarProps> = ({
           {/* Timeline Chart */}
           <button
             onClick={onOpenTimeline}
-            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-[#18263e] hover:bg-[#203150] text-slate-200 border border-slate-700 transition flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#18263e] hover:bg-[#203150] text-slate-100 border border-slate-600 transition flex items-center gap-2 shadow-xs cursor-pointer"
             title="مشاهده نمودار و روند غیبت و مرخصی"
           >
-            <LineChart className="w-3.5 h-3.5 text-indigo-400" />
+            <LineChart className="w-4 h-4 text-indigo-400" />
             <span className="hidden sm:inline">تایم‌لاین</span>
           </button>
 
           {/* Range Batch Assignment */}
           <button
             onClick={onOpenBatchAssign}
-            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-[#18263e] hover:bg-[#203150] text-blue-300 border border-blue-800/60 transition flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#18263e] hover:bg-[#203150] text-blue-200 border border-blue-700/80 transition flex items-center gap-2 shadow-xs cursor-pointer"
             title="ثبت مرخصی یا تعمیرگاه برای چند روز همزمان"
           >
-            <Layers className="w-3.5 h-3.5 text-blue-400" />
+            <Layers className="w-4 h-4 text-blue-400" />
             <span>ثبت بازه‌ای</span>
           </button>
 
           {/* Export Excel */}
           <button
             onClick={onExportExcel}
-            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/60 transition flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 py-2 text-xs sm:text-sm font-bold rounded-xl bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-200 border border-emerald-700/80 transition flex items-center gap-2 shadow-xs cursor-pointer"
             title="دریافت فایل اکسل ماه جاری"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
             <span>اکسل</span>
           </button>
 
           {/* Add Driver Button */}
           <button
             onClick={onOpenAddDriver}
-            className="px-3.5 py-1.5 text-xs font-black rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 transition flex items-center gap-1.5 shadow-md shadow-amber-500/20"
+            className="px-4 py-2 text-xs sm:text-sm font-black rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 transition flex items-center gap-2 shadow-md shadow-amber-500/25 cursor-pointer"
           >
-            <UserPlus className="w-3.5 h-3.5 text-slate-950" />
+            <UserPlus className="w-4 h-4 text-slate-950" />
             <span>+ راننده جدید</span>
           </button>
 
@@ -280,60 +280,60 @@ export const Toolbar: FC<ToolbarProps> = ({
       {/* Lower Row: Search Bar & Status Filter Badges & Display Mode Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-[#1f2c45]">
         {/* Search input with live clear & counter */}
-        <div className="flex items-center gap-2 flex-1 min-w-[220px] max-w-sm">
+        <div className="flex items-center gap-2 flex-1 min-w-[240px] max-w-md">
           <div className="relative w-full">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="جستجوی سریع راننده، پلاک یا کد..."
-              className="w-full bg-[#18263e] border border-slate-700 rounded-xl pr-8 pl-8 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-[#1a2b47] transition"
+              className="w-full bg-[#18263e] border border-slate-600 rounded-xl pr-9 pl-9 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-[#1a2b47] transition font-medium"
             />
             {searchQuery && (
               <button
                 onClick={() => onSearchChange('')}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 cursor-pointer"
                 title="پاک کردن جستجو"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
           {searchQuery && (
-            <span className="text-[11px] font-mono text-slate-400 whitespace-nowrap bg-[#18263e] px-2 py-1 rounded-lg border border-slate-700">
+            <span className="text-xs font-mono text-slate-200 whitespace-nowrap bg-[#18263e] px-2.5 py-1.5 rounded-lg border border-slate-600 font-bold">
               {toFaDigits(filteredCount)} از {toFaDigits(totalCount)}
             </span>
           )}
         </div>
 
         {/* Filter Pills with Minimal Counters */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-          <span className="text-[11px] text-slate-400 font-semibold ml-1 hidden sm:flex items-center gap-1">
-            <SlidersHorizontal className="w-3 h-3 text-slate-400" />
+        <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+          <span className="text-xs text-slate-300 font-bold ml-1 hidden sm:flex items-center gap-1.5">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
             <span>فیلتر:</span>
           </span>
 
           <button
             onClick={() => onFilterViewChange('all')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-[13px] font-bold transition whitespace-nowrap cursor-pointer ${
               filterView === 'all'
                 ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-[#18263e] text-slate-300 hover:bg-[#203150] border border-slate-700'
+                : 'bg-[#18263e] text-slate-200 hover:bg-[#203150] border border-slate-600'
             }`}
           >
             <span>همه</span>
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-900/60 text-slate-300">
+            <span className="text-xs font-mono px-1.5 py-0.2 rounded-full bg-slate-900/60 text-slate-200">
               {toFaDigits(totalCount)}
             </span>
           </button>
 
           <button
             onClick={() => onFilterViewChange('has_leave')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap border ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-[13px] font-bold transition whitespace-nowrap border cursor-pointer ${
               filterView === 'has_leave'
                 ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-xs'
-                : 'bg-amber-950/30 text-amber-300 border-amber-800/60 hover:bg-amber-900/40'
+                : 'bg-amber-950/40 text-amber-200 border-amber-700/80 hover:bg-amber-900/50'
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-amber-400" />
@@ -342,10 +342,10 @@ export const Toolbar: FC<ToolbarProps> = ({
 
           <button
             onClick={() => onFilterViewChange('has_workshop')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap border ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-[13px] font-bold transition whitespace-nowrap border cursor-pointer ${
               filterView === 'has_workshop'
                 ? 'bg-orange-500 text-white border-orange-400 font-black shadow-xs'
-                : 'bg-orange-950/30 text-orange-300 border-orange-800/60 hover:bg-orange-900/40'
+                : 'bg-orange-950/40 text-orange-200 border-orange-700/80 hover:bg-orange-900/50'
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-orange-400" />

@@ -318,13 +318,13 @@ export const Header: FC<HeaderProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => handleTabClick(item.id)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13.5px] font-extrabold whitespace-nowrap transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-amber-500 text-slate-950 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/90 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <ItemIcon className="w-3.5 h-3.5 shrink-0" />
+                <ItemIcon className="w-4 h-4 shrink-0" />
                 <span>{item.shortTitle}</span>
               </button>
             );
