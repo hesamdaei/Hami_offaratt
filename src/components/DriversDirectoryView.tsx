@@ -33,6 +33,7 @@ import { DriverCard } from './DriverCard';
 import { DriverCardPrintModal } from './DriverCardPrintModal';
 import { IranianPlate } from './IranianPlate';
 import { TableListA4PrintModal, TableListColumn } from './TableListA4PrintModal';
+import { VoipPhoneButton } from './VoipPhoneButton';
 import * as XLSX from 'xlsx';
 
 export type DriverSortField =
@@ -91,6 +92,7 @@ interface DriversDirectoryViewProps {
   onOpenBaleForDriver?: (driver: DriverDirectoryItem) => void;
   onOpenEitaaForDriver?: (driver: DriverDirectoryItem) => void;
   onOpenHandover?: (driver: DriverDirectoryItem) => void;
+  onCallPhone?: (phone: string, name?: string, role?: string) => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -103,6 +105,7 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
   onOpenBaleForDriver,
   onOpenEitaaForDriver,
   onOpenHandover,
+  onCallPhone,
   onShowToast,
 }) => {
   const [search, setSearch] = useState('');
@@ -799,9 +802,16 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
                             : 'کمکی / آزاد'}
                         </td>
 
-                        {/* Phone */}
-                        <td className="py-3 px-3 text-center font-mono text-slate-300 text-xs dir-ltr">
-                          {toFaDigits(d.phone || '---')}
+                        {/* Phone with VoIP Click-to-Call */}
+                        <td className="py-3 px-3 text-center">
+                          <VoipPhoneButton
+                            phone={d.phone}
+                            name={d.name}
+                            role={`راننده (${toFaDigits(d.personnelCode || d.code || '')})`}
+                            variant="table-cell"
+                            showCopy={false}
+                            onCall={onCallPhone}
+                          />
                         </td>
 
                         {/* National ID */}
@@ -912,6 +922,7 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
               onOpenBale={onOpenBaleForDriver}
               onOpenEitaa={onOpenEitaaForDriver}
               onPrintCard={setPrintingDriver}
+              onCallPhone={onCallPhone}
               onShowToast={onShowToast}
             />
           ))}

@@ -25,6 +25,7 @@ import {
   Moon,
   Send,
   FileCheck,
+  PhoneCall,
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { QuickSearchSpotlight } from './QuickSearchSpotlight';
@@ -73,6 +74,7 @@ export interface HeaderProps {
   onOpenEitaa?: () => void;
   onOpenMasterAdmin?: (initialTab?: 'network' | 'bale' | 'eitaa' | 'users' | 'backup') => void;
   onNavigateToInsuranceAlerts?: () => void;
+  onOpenVoipSettings?: () => void;
   isMobileMenuOpen?: boolean;
   onToggleMobileMenu?: () => void;
   onCloseMobileMenu?: () => void;
@@ -111,6 +113,7 @@ export const Header: FC<HeaderProps> = ({
   onOpenEitaa,
   onOpenMasterAdmin,
   onNavigateToInsuranceAlerts,
+  onOpenVoipSettings,
   isMobileMenuOpen: propIsMobileMenuOpen,
   onToggleMobileMenu,
   onCloseMobileMenu,
@@ -394,6 +397,19 @@ export const Header: FC<HeaderProps> = ({
             </button>
           )}
 
+          {/* 4.1 VoIP Click-to-Call System Quick Button */}
+          {onOpenVoipSettings && (
+            <button
+              type="button"
+              onClick={onOpenVoipSettings}
+              className="relative w-8 h-8 rounded-lg flex items-center justify-center text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:text-emerald-300 dark:hover:bg-emerald-500/10 transition cursor-pointer"
+              title="تلفن ویپ سازمانی (VoIP Click-to-Call)"
+              aria-label="تلفن ویپ"
+            >
+              <PhoneCall className="w-4 h-4" />
+            </button>
+          )}
+
           {/* 5. Unified Operations, Tools & User Dropdown */}
           <div className="relative z-50" ref={masterMenuRef}>
             <button
@@ -511,6 +527,24 @@ export const Header: FC<HeaderProps> = ({
                       <div className="text-[10px] text-slate-500 dark:text-slate-400">چاپگر لیزری و متن سربرگ</div>
                     </div>
                   </button>
+
+                  {/* VoIP PBX & Click-to-Call */}
+                  {onOpenVoipSettings && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMasterMenuOpen(false);
+                        onOpenVoipSettings();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                    >
+                      <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <div>
+                        <div className="font-bold">تلفن ویپ (VoIP Click-to-Call)</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">اتصال به ایزابل/استریسک، سافت‌فون و تست</div>
+                      </div>
+                    </button>
+                  )}
 
                   {currentUser && isMasterAdmin(currentUser) && (
                     <>

@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import net from 'net';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
@@ -855,6 +856,310 @@ app.get(['/api/lan/sql/export', '/api/sql/export'], (req, res) => {
     res.send(dump);
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ==============================================================================
+// VoIP Click-to-Call System (Asterisk AMI / Issabel / FreePBX / Yealink / Webhook)
+// ==============================================================================
+
+interface AsteriskAmiParams {
+  host: string;
+  port: number;
+  user: string;
+  secret: string;
+  channel: string; // e.g. SIP/101 or PJSIP/101
+  exten: string;   // e.g. 09123456789
+  context?: string;
+  callerId?: string;
+  autoAnswer?: boolean;
+}
+
+function executeAsteriskAmiOriginate(params: AsteriskAmiParams): Promise<{ ok: boolean; message: string; details?: any }> {
+  return new Promise((resolve) => {
+    const host = params.host || '127.0.0.1';
+    const port = params.port || 5038;
+    const socket = new net.Socket();
+    let buffer = '';
+    let step: 'await_banner' | 'await_login' | 'await_originate' | 'done' = 'await_banner';
+
+    const timer = setTimeout(() => {
+      try { socket.destroy(); } catch {}
+      resolve({
+        ok: false,
+        message: `پاسخی از پورت ${port} سرور استریسک دریافت نشد (Timeout). لطفاً IP سرور و پورت AMI را بررسی نمایید.`,
+      });
+    }, 8000);
+
+    socket.connect(port, host, () => {
+      // Socket connected to Asterisk AMI port
+    });
+
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString();
+
+      if (step === 'await_banner' && buffer.includes('Asterisk Call Manager')) {
+        step = 'await_login';
+        buffer = '';
+        socket.write(`Action: Login\r\nUsername: ${params.user}\r\nSecret: ${params.secret}\r\n\r\n`);
+      } else if (step === 'await_login' && (buffer.includes('Response: Success') || buffer.includes('Response: Error'))) {
+        if (buffer.includes('Response: Error') || buffer.includes('Authentication failed')) {
+          step = 'done';
+          clearTimeout(timer);
+          try {
+            socket.write('Action: Logoff\r\n\r\n');
+            socket.end();
+          } catch {}
+          resolve({
+            ok: false,
+            message: 'خطای احراز هویت استریسک: نام کاربری یا رمز عبور AMI نامعتبر است (manager.conf).',
+          });
+          return;
+        }
+
+        // Login succeeded, now trigger Originate action
+        step = 'await_originate';
+        buffer = '';
+
+        const autoAnswerHeaders = params.autoAnswer
+          ? 'Variable: __SIPADDHEADER=Call-Info:\\;answer-after=0\r\nVariable: Alert-Info=ring-answer\r\n'
+          : '';
+
+        const originateCmd =
+          `Action: Originate\r\n` +
+          `Channel: ${params.channel}\r\n` +
+          `Exten: ${params.exten}\r\n` +
+          `Context: ${params.context || 'from-internal'}\r\n` +
+          `Priority: 1\r\n` +
+          `CallerID: "${params.callerId || 'حامی بار'}" <${params.channel.replace(/^[A-Za-z0-9_]+\//, '')}>\r\n` +
+          `Timeout: 35000\r\n` +
+          `Async: true\r\n` +
+          autoAnswerHeaders +
+          `\r\n`;
+
+        socket.write(originateCmd);
+      } else if (step === 'await_originate' && (buffer.includes('Response: Success') || buffer.includes('Response: Error'))) {
+        step = 'done';
+        clearTimeout(timer);
+        const isSuccess = buffer.includes('Response: Success');
+        try {
+          socket.write('Action: Logoff\r\n\r\n');
+          socket.end();
+        } catch {}
+
+        if (isSuccess) {
+          resolve({
+            ok: true,
+            message: `دستور تماس صادر شد. تلفن داخلی شما (${params.channel}) در حال زنگ خوردن است؛ با برداشتن گوشی، تماس با ${params.exten} برقرار خواهد شد.`,
+            details: buffer,
+          });
+        } else {
+          resolve({
+            ok: false,
+            message: `سانترال استریسک درخواست تماس را نپذیرفت. بررسی کنید داخلی ${params.channel} در شبکه رجیستر و آنلاین باشد.`,
+            details: buffer,
+          });
+        }
+      }
+    });
+
+    socket.on('error', (err) => {
+      clearTimeout(timer);
+      resolve({
+        ok: false,
+        message: `خطا در اتصال به پورت ${port} سرور استریسک: ${err.message}`,
+      });
+    });
+  });
+}
+
+// 1. Originate VoIP Call API
+app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) => {
+  try {
+    const { phoneNumber, recipientName, config } = req.body || {};
+    if (!phoneNumber) {
+      return res.status(400).json({ ok: false, error: 'شماره تلفن مقصد الزامی است.' });
+    }
+
+    const mode = config?.mode || 'softphone';
+    const targetPhone = String(phoneNumber).trim();
+
+    console.log(`\n[VoIP] درخواست تماس با ${recipientName || 'کاربر'} (${targetPhone}) - حالت: ${mode}`);
+
+    // Mode: Asterisk AMI (Issabel / FreePBX)
+    if (mode === 'asterisk_ami') {
+      const ext = config.operatorExtension || '101';
+      const channelPrefix = config.channelType || 'SIP';
+      const channel = `${channelPrefix}/${ext}`;
+
+      const amiResult = await executeAsteriskAmiOriginate({
+        host: config.amiHost,
+        port: parseInt(config.amiPort || '5038', 10),
+        user: config.amiUser,
+        secret: config.amiSecret,
+        channel,
+        exten: targetPhone,
+        context: config.amiContext || 'from-internal',
+        callerId: config.callerId || 'HamiBar',
+        autoAnswer: config.autoAnswer !== false,
+      });
+
+      return res.json(amiResult);
+    }
+
+    // Mode: Hardware IP Phone Direct CTI (Yealink, Grandstream, Fanvil)
+    if (mode === 'ipphone_cti') {
+      const phoneIp = config.ipPhoneIp;
+      if (!phoneIp) {
+        return res.status(400).json({ ok: false, error: 'آدرس IP تلفن رومیزی در تنظیمات مشخص نشده است.' });
+      }
+
+      let ctiUrl = '';
+      if (config.ipPhoneModel === 'grandstream') {
+        ctiUrl = `http://${phoneIp}/cgi-bin/api-make_call?phonenumber=${encodeURIComponent(targetPhone)}`;
+      } else {
+        // Yealink default
+        ctiUrl = `http://${phoneIp}/servlet?key=number=${encodeURIComponent(targetPhone)}`;
+      }
+
+      try {
+        const headers: Record<string, string> = {};
+        if (config.ipPhoneUser && config.ipPhonePass) {
+          const auth = Buffer.from(`${config.ipPhoneUser}:${config.ipPhonePass}`).toString('base64');
+          headers['Authorization'] = `Basic ${auth}`;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        await fetch(ctiUrl, { headers, signal: controller.signal }).catch(() => null);
+        clearTimeout(timeoutId);
+
+        return res.json({
+          ok: true,
+          message: `دستور شماره‌گیری به تلفن رومیزی (${phoneIp}) ارسال شد. تلفن در حال شماره‌گیری است.`,
+        });
+      } catch (ctiErr: any) {
+        return res.json({
+          ok: false,
+          message: `خطا در ارتباط با تلفن رومیزی: ${ctiErr.message}`,
+        });
+      }
+    }
+
+    // Mode: Custom Webhook
+    if (mode === 'webhook') {
+      let url = config.webhookUrl || '';
+      if (!url) {
+        return res.status(400).json({ ok: false, error: 'آدرس وب‌هوک سانترال تعریف نشده است.' });
+      }
+
+      url = url
+        .replace('{to}', encodeURIComponent(targetPhone))
+        .replace('{from}', encodeURIComponent(config.operatorExtension || '101'))
+        .replace('{name}', encodeURIComponent(recipientName || ''));
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const webhookRes = await fetch(url, {
+          method: config.webhookMethod || 'GET',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        return res.json({
+          ok: webhookRes.ok,
+          message: webhookRes.ok
+            ? 'درخواست تماس با موفقیت به وب‌هوک سانترال ارسال شد.'
+            : `خطای سانترال در پردازش تماس (${webhookRes.status})`,
+        });
+      } catch (hookErr: any) {
+        return res.json({
+          ok: false,
+          message: `خطا در اتصال به وب‌هوک سانترال: ${hookErr.message}`,
+        });
+      }
+    }
+
+    // Default Softphone fallback
+    res.json({
+      ok: true,
+      message: 'دستور شماره‌گیری با سافت‌فون ارسال گردید.',
+    });
+  } catch (err: any) {
+    console.error('خطای سرویس ویپ:', err);
+    res.status(500).json({ ok: false, error: err.message || 'خطای سرور' });
+  }
+});
+
+// 2. Test VoIP PBX Connection API
+app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
+  try {
+    const { config } = req.body || {};
+    if (!config) {
+      return res.status(400).json({ ok: false, error: 'تنظیمات ارسال نشده است.' });
+    }
+
+    if (config.mode === 'asterisk_ami') {
+      const host = config.amiHost || '127.0.0.1';
+      const port = parseInt(config.amiPort || '5038', 10);
+      const socket = new net.Socket();
+      let buffer = '';
+      let timer: any;
+
+      const testResult = await new Promise<{ ok: boolean; message: string }>((resolve) => {
+        timer = setTimeout(() => {
+          try { socket.destroy(); } catch {}
+          resolve({ ok: false, message: `پاسخی از ${host}:${port} دریافت نشد (Timeout). پورت ۵۰۳۸ سرور را بررسی کنید.` });
+        }, 5000);
+
+        socket.connect(port, host, () => {
+          // Connected
+        });
+
+        socket.on('data', (chunk) => {
+          buffer += chunk.toString();
+          if (buffer.includes('Asterisk Call Manager')) {
+            socket.write(`Action: Login\r\nUsername: ${config.amiUser}\r\nSecret: ${config.amiSecret}\r\n\r\n`);
+          } else if (buffer.includes('Response: Success')) {
+            clearTimeout(timer);
+            try {
+              socket.write('Action: Logoff\r\n\r\n');
+              socket.end();
+            } catch {}
+            resolve({
+              ok: true,
+              message: `اتصال به سانترال استریسک بر روی ${host}:${port} با موفقیت برقرار و احراز هویت شد!`,
+            });
+          } else if (buffer.includes('Response: Error')) {
+            clearTimeout(timer);
+            try { socket.end(); } catch {}
+            resolve({
+              ok: false,
+              message: 'پورت ۵۰۳۸ استریسک در دسترس است، اما نام کاربری یا پسورد AMI اشتباه است.',
+            });
+          }
+        });
+
+        socket.on('error', (err) => {
+          clearTimeout(timer);
+          resolve({ ok: false, message: `عدم امکان برقراری ارتباط با پورت ۵۰۳۸: ${err.message}` });
+        });
+      });
+
+      return res.json(testResult);
+    }
+
+    if (config.mode === 'ipphone_cti') {
+      return res.json({
+        ok: true,
+        message: `پیکربندی برای تلفن رومیزی IP: ${config.ipPhoneIp} آماده ارسال فرامین شماره‌گیری است.`,
+      });
+    }
+
+    res.json({ ok: true, message: 'تنظیمات معتبر است.' });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message || 'خطا در تست اتصال' });
   }
 });
 

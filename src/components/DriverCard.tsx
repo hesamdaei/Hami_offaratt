@@ -26,6 +26,7 @@ import { DriverDirectoryItem, VehicleItem } from '../utils/fleetSeedData';
 import { toFaDigits } from '../utils/jalaali';
 import { DriverCardPrintModal } from './DriverCardPrintModal';
 import { IranianPlate } from './IranianPlate';
+import { VoipPhoneButton } from './VoipPhoneButton';
 
 interface DriverCardProps {
   driver: DriverDirectoryItem;
@@ -38,6 +39,7 @@ interface DriverCardProps {
   onOpenBale?: (driver: DriverDirectoryItem) => void;
   onOpenEitaa?: (driver: DriverDirectoryItem) => void;
   onPrintCard?: (driver: DriverDirectoryItem) => void;
+  onCallPhone?: (phone: string, name?: string, role?: string) => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -52,6 +54,7 @@ export const DriverCard: FC<DriverCardProps> = ({
   onOpenBale,
   onOpenEitaa,
   onPrintCard,
+  onCallPhone,
   onShowToast,
 }) => {
   const [copiedPhone, setCopiedPhone] = useState(false);
@@ -157,29 +160,19 @@ export const DriverCard: FC<DriverCardProps> = ({
 
           {/* Core Driver Information Grid */}
           <div className="py-3.5 space-y-2.5 text-xs">
-            {/* Direct Phone Number Row */}
+            {/* Direct Phone Number Row with VoIP Click-to-Call */}
             <div className="flex items-center justify-between bg-[#0a1120] p-2.5 rounded-xl border border-[#1c2a44] print:bg-white print:border-black">
               <div className="flex items-center gap-2 text-slate-300 print:text-black">
-                <div className="w-6 h-6 rounded-md bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 print:hidden">
-                  <Phone className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-[11px] text-slate-400 print:text-black">تماس مستقیم:</span>
-                <span className="font-mono font-bold text-xs" style={{ direction: 'ltr' }}>
-                  {toFaDigits(driver.phone)}
-                </span>
+                <span className="text-[11px] text-slate-400 print:text-black">تماس VoIP:</span>
+                <VoipPhoneButton
+                  phone={driver.phone}
+                  name={driver.name}
+                  role={`راننده (${driver.code || '---'})`}
+                  variant="chip"
+                  showCopy={true}
+                  onCall={onCallPhone}
+                />
               </div>
-              <button
-                type="button"
-                onClick={handleCopyPhone}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer print:hidden"
-                title="کپی شماره تماس"
-              >
-                {copiedPhone ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5" />
-                )}
-              </button>
             </div>
 
             {/* Assigned Vehicles Box with Quick Assign & Unassign Controls */}

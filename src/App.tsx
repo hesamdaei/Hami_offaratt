@@ -65,6 +65,8 @@ import { recordAuditLog } from './utils/auditLogger';
 import { BaleMessengerModal } from './components/BaleMessengerModal';
 import { MasterAdminModal } from './components/MasterAdminModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { VoipCallModal } from './components/VoipCallModal';
+import { VoipSettingsModal } from './components/VoipSettingsModal';
 import { AppNotification } from './types/notification';
 import { generateSystemNotifications } from './utils/notificationService';
 
@@ -331,6 +333,30 @@ export const App: FC = () => {
     setMasterAdminTab(tab);
     setIsMasterAdminOpen(true);
   };
+
+  // VoIP Telephony States (Click-to-Call & Settings)
+  const [voipCallTarget, setVoipCallTarget] = useState<{
+    phone: string;
+    name?: string;
+    role?: string;
+  } | null>(null);
+  const [isVoipSettingsOpen, setIsVoipSettingsOpen] = useState(false);
+
+  const handleStartVoipCall = (phone: string, name?: string, role?: string) => {
+    if (!phone) return;
+    setVoipCallTarget({ phone, name: name || 'مخاطب', role });
+  };
+
+  useEffect(() => {
+    const onVoipCallEvent = (e: Event) => {
+      const ce = e as CustomEvent<{ phone: string; name?: string; role?: string }>;
+      if (ce.detail?.phone) {
+        handleStartVoipCall(ce.detail.phone, ce.detail.name, ce.detail.role);
+      }
+    };
+    window.addEventListener('hamibar:voip-call', onVoipCallEvent);
+    return () => window.removeEventListener('hamibar:voip-call', onVoipCallEvent);
+  }, []);
 
   const handleReloadAfterDataRepair = () => {
     try {
@@ -2010,6 +2036,7 @@ export const App: FC = () => {
             onOpenEitaa={() => handleOpenBale()}
             onOpenMasterAdmin={handleOpenMasterAdmin}
             onNavigateToInsuranceAlerts={() => handleNavigateToFleetInsurance()}
+            onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
             theme={theme}
             onToggleTheme={handleToggleTheme}
           />
@@ -2100,6 +2127,7 @@ export const App: FC = () => {
                     plateNumber: d.assignedVehicles?.[0],
                   })
                 }
+                onCallPhone={handleStartVoipCall}
                 onShowToast={showToast}
               />
             </div>
@@ -2114,6 +2142,7 @@ export const App: FC = () => {
                 onUpdateStaffMember={handleUpdateStaffMember}
                 onDeleteStaffMember={handleDeleteStaffMember}
                 onToggleStaffActive={handleToggleStaffActive}
+                onCallPhone={handleStartVoipCall}
                 onShowToast={showToast}
               />
             </div>
@@ -2345,6 +2374,29 @@ export const App: FC = () => {
         onOpenBackup={() => setIsBackupModalOpen(true)}
         onShowToast={showToast}
         onDataRepaired={handleReloadAfterDataRepair}
+      />
+
+      {/* VoIP Click-to-Call Modal (تماس با رانندگان و پرسنل) */}
+      {voipCallTarget && (
+        <VoipCallModal
+          isOpen={true}
+          onClose={() => setVoipCallTarget(null)}
+          phoneNumber={voipCallTarget.phone}
+          recipientName={voipCallTarget.name}
+          recipientRole={voipCallTarget.role}
+          onOpenSettings={() => {
+            setVoipCallTarget(null);
+            setIsVoipSettingsOpen(true);
+          }}
+          onShowToast={(msg, type) => showToast(msg, type)}
+        />
+      )}
+
+      {/* VoIP PBX Settings & History Modal (تنظیمات سانترال ویپ ایزابل/استریسک) */}
+      <VoipSettingsModal
+        isOpen={isVoipSettingsOpen}
+        onClose={() => setIsVoipSettingsOpen(false)}
+        onShowToast={(msg, type) => showToast(msg, type)}
       />
 
       {/* Mobile Bottom Navigation Bar (Fast & thumb-friendly navigation on mobile) */}

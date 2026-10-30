@@ -65,6 +65,7 @@ import { toFaDigits } from '../utils/jalaali';
 import { DocumentUploaderModal } from './DocumentUploaderModal';
 import { PersianDatePicker } from './PersianDatePicker';
 import { StaffDossierPrintModal } from './StaffDossierPrintModal';
+import { VoipPhoneButton } from './VoipPhoneButton';
 import * as XLSX from 'xlsx';
 
 const compressImageFile = (file: File, maxW = 360, maxH = 480, quality = 0.85): Promise<string> => {
@@ -109,6 +110,7 @@ interface StaffDirectoryViewProps {
   onUpdateStaffMember: (staff: StaffMember) => void;
   onDeleteStaffMember: (id: string) => void;
   onToggleStaffActive: (id: string) => void;
+  onCallPhone?: (phone: string, name?: string, role?: string) => void;
   onShowToast?: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
@@ -118,6 +120,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   onUpdateStaffMember,
   onDeleteStaffMember,
   onToggleStaffActive,
+  onCallPhone,
   onShowToast,
 }) => {
   // Search & Filter State
@@ -1077,11 +1080,17 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                   )}
                 </div>
 
-                {/* Contact & Hours Grid */}
+                {/* Contact & Hours Grid with VoIP Call */}
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-[#1a273f]">
                   <div className="flex items-center gap-1.5 text-slate-300">
-                    <Phone className="w-3.5 h-3.5 text-blue-400" />
-                    <span className="font-mono">{toFaDigits(s.phone || 'فاقد شماره')}</span>
+                    <VoipPhoneButton
+                      phone={s.phone}
+                      name={s.name}
+                      role={`${s.role} (${s.code})`}
+                      variant="chip"
+                      showCopy={false}
+                      onCall={onCallPhone}
+                    />
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-300">
                     <Clock className="w-3.5 h-3.5 text-amber-400" />
@@ -1407,7 +1416,16 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                       <td className="py-3 px-3 font-mono text-slate-300">
                         {toFaDigits(s.entryTime || '۲۰:۰۰')} - {toFaDigits(s.exitTime || '۰۶:۰۰')}
                       </td>
-                      <td className="py-3 px-3 font-mono text-slate-300">{toFaDigits(s.phone || '---')}</td>
+                      <td className="py-3 px-3 text-center">
+                        <VoipPhoneButton
+                          phone={s.phone}
+                          name={s.name}
+                          role={`${s.role} (${s.code})`}
+                          variant="table-cell"
+                          showCopy={false}
+                          onCall={onCallPhone}
+                        />
+                      </td>
                       <td className="py-3 px-3 font-mono text-slate-400">{toFaDigits(s.nationalId || '---')}</td>
                       <td className="py-3 px-3 text-slate-300">
                         {s.contractType === 'PERMANENT'
