@@ -17,6 +17,7 @@ import {
   Smartphone,
   Check,
   Radio,
+  Lock,
 } from 'lucide-react';
 import { VoipConfig, VoipMode, VoipCallLog, DEFAULT_VOIP_CONFIG } from '../types/voip';
 import {
@@ -27,16 +28,20 @@ import {
   clearVoipCallLogs,
 } from '../utils/voipService';
 import { toFaDigits } from '../utils/jalaali';
+import { AppUser } from '../types/auth';
+import { canManageSystemSettings } from '../utils/authService';
 
 interface VoipSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  currentUser?: AppUser | null;
   onShowToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 export const VoipSettingsModal: FC<VoipSettingsModalProps> = ({
   isOpen,
   onClose,
+  currentUser,
   onShowToast,
 }) => {
   const [config, setConfig] = useState<VoipConfig>(getVoipConfig());
@@ -54,6 +59,28 @@ export const VoipSettingsModal: FC<VoipSettingsModalProps> = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  if (currentUser && !canManageSystemSettings(currentUser)) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in">
+        <div className="bg-[#0d1628] border border-rose-500/50 rounded-2xl w-full max-w-md p-6 text-center shadow-2xl text-slate-100">
+          <div className="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-3 border border-rose-500/30">
+            <Lock className="w-7 h-7" />
+          </div>
+          <h3 className="text-base font-bold text-white mb-2">دسترسی مسدود است</h3>
+          <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+            تنظیمات سانترال ویپ و کلمات عبور سرور فقط برای مدیران ارشد سیستم در دسترس است.
+          </p>
+          <button
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition cursor-pointer"
+          >
+            بستن
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleSave = () => {
     saveVoipConfig(config);

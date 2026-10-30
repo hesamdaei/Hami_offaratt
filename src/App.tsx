@@ -325,11 +325,11 @@ export const App: FC = () => {
   };
   const handleOpenEitaa = handleOpenBale;
 
-  // Master Admin Modal State (Infrastructure, Bale Bot, Users, Backup, Debug)
+  // Master Admin Modal State (Unified Infrastructure, APIs, VoIP, Users, Backup, Debug)
   const [isMasterAdminOpen, setIsMasterAdminOpen] = useState(false);
-  const [masterAdminTab, setMasterAdminTab] = useState<'network' | 'bale' | 'users' | 'backup' | 'debug'>('network');
+  const [masterAdminTab, setMasterAdminTab] = useState<'api' | 'voip' | 'network' | 'bale' | 'users' | 'backup' | 'debug'>('api');
 
-  const handleOpenMasterAdmin = (tab: 'network' | 'bale' | 'users' | 'backup' | 'debug' = 'network') => {
+  const handleOpenMasterAdmin = (tab: 'api' | 'voip' | 'network' | 'bale' | 'users' | 'backup' | 'debug' = 'api') => {
     setMasterAdminTab(tab);
     setIsMasterAdminOpen(true);
   };
@@ -2036,7 +2036,7 @@ export const App: FC = () => {
             onOpenEitaa={() => handleOpenBale()}
             onOpenMasterAdmin={handleOpenMasterAdmin}
             onNavigateToInsuranceAlerts={() => handleNavigateToFleetInsurance()}
-            onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
+            onOpenVoipSettings={() => handleOpenMasterAdmin('voip')}
             theme={theme}
             onToggleTheme={handleToggleTheme}
           />
@@ -2384,9 +2384,10 @@ export const App: FC = () => {
           phoneNumber={voipCallTarget.phone}
           recipientName={voipCallTarget.name}
           recipientRole={voipCallTarget.role}
+          currentUser={currentUser}
           onOpenSettings={() => {
             setVoipCallTarget(null);
-            setIsVoipSettingsOpen(true);
+            handleOpenMasterAdmin('voip');
           }}
           onShowToast={(msg, type) => showToast(msg, type)}
         />
@@ -2396,6 +2397,7 @@ export const App: FC = () => {
       <VoipSettingsModal
         isOpen={isVoipSettingsOpen}
         onClose={() => setIsVoipSettingsOpen(false)}
+        currentUser={currentUser}
         onShowToast={(msg, type) => showToast(msg, type)}
       />
 

@@ -19,6 +19,8 @@ import {
 import { VoipConfig, VoipCallLog } from '../types/voip';
 import { getVoipConfig, saveVoipConfig, initiateVoipCall } from '../utils/voipService';
 import { toFaDigits } from '../utils/jalaali';
+import { AppUser } from '../types/auth';
+import { canManageSystemSettings } from '../utils/authService';
 
 interface VoipCallModalProps {
   isOpen: boolean;
@@ -26,6 +28,7 @@ interface VoipCallModalProps {
   phoneNumber: string;
   recipientName: string;
   recipientRole?: string;
+  currentUser?: AppUser | null;
   onOpenSettings?: () => void;
   onShowToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -36,6 +39,7 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
   phoneNumber,
   recipientName,
   recipientRole = 'مخاطب',
+  currentUser,
   onOpenSettings,
   onShowToast,
 }) => {
@@ -326,17 +330,18 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span>روش فعال: {modeLabels[config.mode]}</span>
             </div>
-            {onOpenSettings && (
+            {onOpenSettings && canManageSystemSettings(currentUser) && (
               <button
                 type="button"
                 onClick={() => {
                   onClose();
                   onOpenSettings();
                 }}
-                className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer transition"
+                className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition text-[11px]"
+                title="پیکربندی سانترال ویپ و سرور (مخصوص ادمین)"
               >
                 <Settings className="w-3 h-3" />
-                <span>تنظیمات ویپ</span>
+                <span>تنظیمات سانترال</span>
               </button>
             )}
           </div>

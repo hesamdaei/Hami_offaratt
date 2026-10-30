@@ -533,3 +533,8 @@ export function canAccessBackup(user: AppUser | SafeAppUser | null | undefined):
 export function canAccessNetworkSettings(user: AppUser | SafeAppUser | null | undefined): boolean {
   return isMasterAdmin(user);
 }
+
+export function canManageSystemSettings(user: AppUser | SafeAppUser | null | undefined): boolean {
+  if (!user) return false;
+  return isMasterAdmin(user) || Boolean(user.permissions?.networkSettings);
+}

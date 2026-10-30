@@ -26,6 +26,8 @@ import {
   Send,
   FileCheck,
   PhoneCall,
+  KeyRound,
+  Activity,
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { QuickSearchSpotlight } from './QuickSearchSpotlight';
@@ -34,7 +36,7 @@ import { PrintSettingsModal } from './PrintSettingsModal';
 import { VehicleItem, DriverDirectoryItem } from '../utils/fleetSeedData';
 import { FilterView } from '../types';
 import { AppUser } from '../types/auth';
-import { isMasterAdmin, canViewModule, canManageUsers } from '../utils/authService';
+import { isMasterAdmin, canViewModule, canManageUsers, canManageSystemSettings } from '../utils/authService';
 import { getFleetInsuranceAlerts } from '../utils/insuranceAlerts';
 
 export type ActiveAppTab =
@@ -72,7 +74,7 @@ export interface HeaderProps {
   onLogout?: () => void;
   onOpenBale?: () => void;
   onOpenEitaa?: () => void;
-  onOpenMasterAdmin?: (initialTab?: 'network' | 'bale' | 'eitaa' | 'users' | 'backup') => void;
+  onOpenMasterAdmin?: (initialTab?: 'api' | 'voip' | 'network' | 'bale' | 'eitaa' | 'users' | 'backup' | 'debug') => void;
   onNavigateToInsuranceAlerts?: () => void;
   onOpenVoipSettings?: () => void;
   isMobileMenuOpen?: boolean;
@@ -260,11 +262,13 @@ export const Header: FC<HeaderProps> = ({
     }
   };
 
-  const handleTriggerMasterModal = (tab: 'network' | 'bale' | 'eitaa' | 'users' | 'backup') => {
+  const handleTriggerMasterModal = (
+    tab: 'api' | 'voip' | 'network' | 'bale' | 'eitaa' | 'users' | 'backup' | 'debug'
+  ) => {
     setIsMasterMenuOpen(false);
     if (onOpenMasterAdmin) {
       onOpenMasterAdmin(tab);
-    } else if (tab === 'network' && onOpenLanSharing) {
+    } else if ((tab === 'network' || tab === 'api') && onOpenLanSharing) {
       onOpenLanSharing();
     } else if (tab === 'users' && onOpenUserManagement) {
       onOpenUserManagement();
@@ -397,16 +401,16 @@ export const Header: FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* 4.1 VoIP Click-to-Call System Quick Button */}
-          {onOpenVoipSettings && (
+          {/* 4.1 Admin-Only System & API Settings Quick Launcher */}
+          {currentUser && canManageSystemSettings(currentUser) && onOpenMasterAdmin && (
             <button
               type="button"
-              onClick={onOpenVoipSettings}
-              className="relative w-8 h-8 rounded-lg flex items-center justify-center text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:text-emerald-300 dark:hover:bg-emerald-500/10 transition cursor-pointer"
-              title="تلفن ویپ سازمانی (VoIP Click-to-Call)"
-              aria-label="تلفن ویپ"
+              onClick={() => onOpenMasterAdmin('api')}
+              className="relative w-8 h-8 rounded-lg flex items-center justify-center text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition cursor-pointer"
+              title="مرکز تنظیمات سیستم، وب‌سرویس‌ها، API و ویپ (مخصوص مدیران ارشد)"
+              aria-label="تنظیمات سیستم و وب‌سرویس‌ها"
             >
-              <PhoneCall className="w-4 h-4" />
+              <Shield className="w-4 h-4 text-amber-500" />
             </button>
           )}
 
@@ -528,50 +532,43 @@ export const Header: FC<HeaderProps> = ({
                     </div>
                   </button>
 
-                  {/* VoIP PBX & Click-to-Call */}
-                  {onOpenVoipSettings && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMasterMenuOpen(false);
-                        onOpenVoipSettings();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
-                    >
-                      <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <div>
-                        <div className="font-bold">تلفن ویپ (VoIP Click-to-Call)</div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">اتصال به ایزابل/استریسک، سافت‌فون و تست</div>
+                  {/* Admin-Only Infrastructure, APIs, VoIP and Security Section */}
+                  {currentUser && canManageSystemSettings(currentUser) && (
+                    <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-0.5">
+                      <div className="px-2.5 py-1 text-[10px] font-bold text-amber-500 dark:text-amber-400 flex items-center justify-between">
+                        <span>مدیریت زیرساخت و امنیت سیستم</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-bold">
+                          فقط مدیر ارشد
+                        </span>
                       </div>
-                    </button>
-                  )}
 
-                  {currentUser && isMasterAdmin(currentUser) && (
-                    <>
+                      {/* 1. APIs, Webhooks & LAN Server */}
                       <button
                         type="button"
-                        onClick={() => handleTriggerMasterModal('network')}
+                        onClick={() => handleTriggerMasterModal('api')}
                         className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
                       >
-                        <Network className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <KeyRound className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <div>
-                          <div className="font-bold">تنظیمات شبکه LAN</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">همگام‌سازی سرور مرکزی</div>
+                          <div className="font-bold">تنظیمات وب‌سرویس‌ها و APIها</div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400">سرور LAN، ربات بله، وب‌هوک و سینک دیتابیس</div>
                         </div>
                       </button>
 
+                      {/* 2. VoIP PBX & Telephony */}
                       <button
                         type="button"
-                        onClick={() => handleTriggerMasterModal('bale')}
+                        onClick={() => handleTriggerMasterModal('voip')}
                         className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
                       >
-                        <Bot className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <div>
-                          <div className="font-bold">ربات پیام‌رسان بله</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">توکن بات و اعلان خودکار</div>
+                          <div className="font-bold">مرکز تلفن سانترال ویپ (VoIP PBX)</div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400">اتصال AMI، ایزابل/استریسک، CTI و تست خطوط</div>
                         </div>
                       </button>
 
+                      {/* 3. User Management & Permissions */}
                       <button
                         type="button"
                         onClick={() => handleTriggerMasterModal('users')}
@@ -579,11 +576,12 @@ export const Header: FC<HeaderProps> = ({
                       >
                         <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                         <div>
-                          <div className="font-bold">مدیریت کاربران</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">سطح دسترسی و رمزها</div>
+                          <div className="font-bold">مدیریت کاربران و سطوح دسترسی</div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400">تعریف پرسنل، رمزهای عبور و مجوز ماژول‌ها</div>
                         </div>
                       </button>
 
+                      {/* 4. Backup & Restore */}
                       <button
                         type="button"
                         onClick={() => handleTriggerMasterModal('backup')}
@@ -591,11 +589,24 @@ export const Header: FC<HeaderProps> = ({
                       >
                         <Database className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                         <div>
-                          <div className="font-bold">بک‌آپ و بازیابی اطلاعات</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">دانلود و ریستور فایل JSON</div>
+                          <div className="font-bold">بک‌آپ و بازیابی داده‌ها</div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400">دانلود و ریستور فایل JSON و پایگاه داده</div>
                         </div>
                       </button>
-                    </>
+
+                      {/* 5. Diagnostics */}
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerMasterModal('debug')}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                      >
+                        <Activity className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                        <div>
+                          <div className="font-bold">پایش سلامت و عیب‌یابی داده‌ها</div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400">بررسی یکپارچگی رکوردها و رفع مغایرت</div>
+                        </div>
+                      </button>
+                    </div>
                   )}
 
                   {onOpenUserArea && (
