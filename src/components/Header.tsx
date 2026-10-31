@@ -29,6 +29,11 @@ import {
   KeyRound,
   Activity,
   FileSpreadsheet,
+  LayoutDashboard,
+  PackageCheck,
+  Compass,
+  Calculator,
+  ScanLine,
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { QuickSearchSpotlight } from './QuickSearchSpotlight';
@@ -41,12 +46,17 @@ import { isMasterAdmin, canViewModule, canManageUsers, canManageSystemSettings }
 import { getFleetInsuranceAlerts } from '../utils/insuranceAlerts';
 
 export type ActiveAppTab =
+  | 'DASHBOARD'
   | 'ATTENDANCE'
   | 'VEHICLE_ASSIGNMENT'
   | 'DRIVERS'
   | 'STAFF'
   | 'OIL_SERVICE'
   | 'HANDOVER'
+  | 'CUSTOMERS'
+  | 'ORDERS'
+  | 'OPERATIONS'
+  | 'FINANCE'
   | 'REGULATIONS'
   | 'REPORTS'
   | 'USERS_LOGS'
@@ -179,6 +189,12 @@ export const Header: FC<HeaderProps> = ({
   // Navigation modules definition
   const navModules: NavItemConfig[] = [
     {
+      id: 'DASHBOARD',
+      title: 'داشبورد عملیات ترابری',
+      shortTitle: 'داشبورد',
+      icon: LayoutDashboard,
+    },
+    {
       id: 'ATTENDANCE',
       title: 'تابلوی حضور و غیاب',
       shortTitle: 'حضور و غیاب',
@@ -212,6 +228,30 @@ export const Header: FC<HeaderProps> = ({
       shortTitle: 'مدیریت ناوگان',
       icon: Droplet,
       badge: totalVehiclesCount > 0 ? toFaDigits(totalVehiclesCount) : undefined,
+    },
+    {
+      id: 'ORDERS',
+      title: 'سفارش‌ها و رزرو بار',
+      shortTitle: 'سفارش‌ها',
+      icon: PackageCheck,
+    },
+    {
+      id: 'OPERATIONS',
+      title: 'عملیات و اعزام دیسپچ',
+      shortTitle: 'اعزام و دیسپچ',
+      icon: Compass,
+    },
+    {
+      id: 'FINANCE',
+      title: 'امور مالی و تعرفه‌ها',
+      shortTitle: 'امور مالی',
+      icon: Calculator,
+    },
+    {
+      id: 'CUSTOMERS',
+      title: 'مشتریان و رهگیری بار',
+      shortTitle: 'رهگیری بار',
+      icon: ScanLine,
     },
     {
       id: 'HANDOVER',
@@ -251,6 +291,8 @@ export const Header: FC<HeaderProps> = ({
   const visibleNavModules = navModules.filter((item) => {
     if (!currentUser || isMasterAdmin(currentUser)) return true;
     switch (item.id) {
+      case 'DASHBOARD':
+        return true;
       case 'ATTENDANCE':
         return canViewModule(currentUser, 'attendance');
       case 'VEHICLE_ASSIGNMENT':
@@ -261,6 +303,14 @@ export const Header: FC<HeaderProps> = ({
         return canViewModule(currentUser, 'staff');
       case 'OIL_SERVICE':
         return canViewModule(currentUser, 'oilService');
+      case 'ORDERS':
+        return canViewModule(currentUser, 'attendance') || canViewModule(currentUser, 'drivers');
+      case 'OPERATIONS':
+        return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
+      case 'FINANCE':
+        return isMasterAdmin(currentUser) || canViewModule(currentUser, 'attendance');
+      case 'CUSTOMERS':
+        return true;
       case 'HANDOVER':
         return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
       case 'REGULATIONS':

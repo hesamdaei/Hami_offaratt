@@ -1,4 +1,4 @@
-import { FC, useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { FC, useState, useMemo, useEffect, useRef, useCallback, Dispatch, SetStateAction } from 'react';
 import {
   Driver,
   AttendanceRecords,
@@ -72,6 +72,17 @@ import { VoipCallModal } from './components/VoipCallModal';
 import { VoipSettingsModal } from './components/VoipSettingsModal';
 import { AppNotification } from './types/notification';
 import { generateSystemNotifications } from './utils/notificationService';
+import { AppRouterProvider, useAppRouter } from './router/RouterContext';
+import { tabToPath, pathToTab } from './router/tabMapping';
+import { NotFoundView } from './components/NotFoundView';
+import { AccessDeniedView } from './components/AccessDeniedView';
+import { BreadcrumbsBar } from './components/BreadcrumbsBar';
+import { OperationalDashboardView } from './components/OperationalDashboardView';
+import { OperationsDashboardView } from './components/OperationsDashboardView';
+import { UnifiedOrdersAndReservationHub } from './components/UnifiedOrdersAndReservationHub';
+import { CargoTrackingCustomerPortal } from './components/CargoTrackingCustomerPortal';
+import { ReservationGuideAndCalculatorView } from './components/ReservationGuideAndCalculatorView';
+import { INITIAL_ORDERS, OrderItem } from './utils/ordersData';
 
 const STORAGE_KEY_DRIVERS = 'hamibar_drivers_list_v1';
 const STORAGE_KEY_RECORDS = 'hamibar_attendance_records_v1';
@@ -83,29 +94,94 @@ const STORAGE_KEY_ATTENDANCE_NOTES = 'hamibar_attendance_notes_v1';
 const BACKUP_APPLIED_KEY = 'hami_backup_applied_14050806_v5';
 const PDF_SYNC_KEY = 'hamibar_backup_14050806_sync_v6';
 
-export const App: FC = () => {
+interface HamiAppContentProps {
+  currentUser: AppUser | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<AppUser | null>>;
+}
+
+const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }) => {
+  const router = useAppRouter();
+  const { pathname, params, currentRoute, is404, canAccess, navigate } = router;
+
   const today = useMemo(() => getTodayJalaali(), []);
 
   // Standalone Phonebook Tab Check (?tab=PHONEBOOK or ?standalone=true)
   const isStandalonePhonebook = useMemo(() => {
     if (typeof window === 'undefined') return false;
     const p = new URLSearchParams(window.location.search);
-    return p.get('tab') === 'PHONEBOOK' || p.get('standalone') === 'true';
-  }, []);
+    return p.get('tab') === 'PHONEBOOK' || p.get('standalone') === 'true' || pathname === '/phonebook';
+  }, [pathname]);
 
-  // Main active navigation tab (default to Attendance Hub, or Phonebook if requested via URL)
+  // Main active navigation tab (synced with URL route)
   const [activeTab, setActiveTab] = useState<ActiveAppTab>(() => {
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search);
       if (p.get('tab') === 'PHONEBOOK') return 'PHONEBOOK';
+      const path = window.location.pathname;
+      if (path && path !== '/') {
+        return pathToTab(path);
+      }
     }
-    return 'ATTENDANCE';
+    return 'DASHBOARD';
   });
+
+  // Orders and Cargo Reservations State
+  const [orders, setOrders] = useState<OrderItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('hamibar_orders_v1');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_ORDERS;
+  });
+
+  const handleAddOrder = (order: OrderItem) => {
+    const updated = [order, ...orders];
+    setOrders(updated);
+    try {
+      localStorage.setItem('hamibar_orders_v1', JSON.stringify(updated));
+    } catch {}
+    showToast('سفارش جدید با موفقیت در سامانه ثبت شد.', 'success');
+  };
+
+  const handleUpdateOrder = (order: OrderItem) => {
+    const updated = orders.map((o) => (o.id === order.id ? order : o));
+    setOrders(updated);
+    try {
+      localStorage.setItem('hamibar_orders_v1', JSON.stringify(updated));
+    } catch {}
+    showToast('سفارش با موفقیت به‌روزرسانی شد.', 'success');
+  };
+
+  const handleDeleteOrder = (orderId: string) => {
+    const updated = orders.filter((o) => o.id !== orderId);
+    setOrders(updated);
+    try {
+      localStorage.setItem('hamibar_orders_v1', JSON.stringify(updated));
+    } catch {}
+    showToast('سفارش با موفقیت حذف شد.', 'info');
+  };
+
   const [fleetSubTab, setFleetSubTab] = useState<'SPECIFICATIONS' | 'DASHBOARD' | 'INSURANCE_ALERTS' | 'ENTRY' | 'HISTORY' | 'RULES'>('SPECIFICATIONS');
   const [highlightedInsuranceVehicleId, setHighlightedInsuranceVehicleId] = useState<string | null>(null);
 
+  // Synchronize activeTab with currentRoute and handle special routes
+  useEffect(() => {
+    if (currentRoute?.navTabId) {
+      setActiveTab(currentRoute.navTabId as ActiveAppTab);
+    }
+    if (pathname === '/drivers/new') {
+      setIsAddDriverOpen(true);
+    } else if (pathname === '/settings') {
+      setIsMasterAdminOpen(true);
+    }
+  }, [currentRoute, pathname]);
+
   const handleTabChange = (tab: ActiveAppTab) => {
     setActiveTab(tab);
+    const targetPath = tabToPath(tab);
+    if (pathname !== targetPath) {
+      navigate(targetPath);
+    }
   };
 
   const handleNavigateToFleetInsurance = (vehicleId?: string) => {
@@ -114,6 +190,7 @@ export const App: FC = () => {
     if (vehicleId) {
       setHighlightedInsuranceVehicleId(vehicleId);
     }
+    navigate('/trucks');
   };
 
   // Preselected Vehicle / Driver for Vehicle Handover Form
@@ -306,9 +383,6 @@ export const App: FC = () => {
   const isSaveInFlightRef = useRef<boolean>(false);
   const hasLocalPendingEditsRef = useRef<boolean>(false);
 
-  // User Authentication & Session State
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => getStoredSession());
-
   // User Area, User Management, and Notification Popover states
   const [isUserAreaOpen, setIsUserAreaOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
@@ -464,6 +538,8 @@ export const App: FC = () => {
     if (!currentUser || isMasterAdmin(currentUser)) return;
     const isCurrentTabAllowed = () => {
       switch (activeTab) {
+        case 'DASHBOARD':
+          return true;
         case 'ATTENDANCE':
           return canViewModule(currentUser, 'attendance');
         case 'VEHICLE_ASSIGNMENT':
@@ -474,6 +550,14 @@ export const App: FC = () => {
           return canViewModule(currentUser, 'staff');
         case 'OIL_SERVICE':
           return canViewModule(currentUser, 'oilService');
+        case 'ORDERS':
+          return canViewModule(currentUser, 'attendance') || canViewModule(currentUser, 'drivers');
+        case 'OPERATIONS':
+          return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
+        case 'FINANCE':
+          return isMasterAdmin(currentUser) || canViewModule(currentUser, 'attendance');
+        case 'CUSTOMERS':
+          return true;
         case 'HANDOVER':
           return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
         case 'REGULATIONS':
@@ -489,12 +573,13 @@ export const App: FC = () => {
       }
     };
     if (!isCurrentTabAllowed()) {
-      if (canViewModule(currentUser, 'attendance')) setActiveTab('ATTENDANCE');
-      else if (canViewModule(currentUser, 'drivers')) setActiveTab('DRIVERS');
-      else if (canViewModule(currentUser, 'staff')) setActiveTab('STAFF');
-      else if (canViewModule(currentUser, 'oilService')) setActiveTab('OIL_SERVICE');
-      else if (canViewModule(currentUser, 'regulations')) setActiveTab('REGULATIONS');
-      else if (canManageUsers(currentUser)) setActiveTab('USERS_LOGS');
+      if (canViewModule(currentUser, 'attendance')) handleTabChange('ATTENDANCE');
+      else if (canViewModule(currentUser, 'drivers')) handleTabChange('DRIVERS');
+      else if (canViewModule(currentUser, 'staff')) handleTabChange('STAFF');
+      else if (canViewModule(currentUser, 'oilService')) handleTabChange('OIL_SERVICE');
+      else if (canViewModule(currentUser, 'regulations')) handleTabChange('REGULATIONS');
+      else if (canManageUsers(currentUser)) handleTabChange('USERS_LOGS');
+      else handleTabChange('DASHBOARD');
     }
   }, [currentUser, activeTab]);
 
@@ -2145,14 +2230,92 @@ export const App: FC = () => {
             onToggleTheme={handleToggleTheme}
           />
 
-          {/* Module 1: Attendance Management Hub (Drivers & Staff) */}
-          {activeTab === 'ATTENDANCE' && (
+          {/* Dynamic Breadcrumbs Navigation Bar */}
+          <BreadcrumbsBar />
+
+          {/* 404 Route Not Found View */}
+          {is404 ? (
             <div className="animate-in fade-in duration-150">
-              <AttendanceManagementHubView
-                drivers={drivers}
-                driverRecords={records}
-                staffMembers={staffMembers}
-                staffRecords={staffRecords}
+              <NotFoundView attemptedPath={pathname} />
+            </div>
+          ) : !canAccess ? (
+            /* 403 Forbidden Access Denied View */
+            <div className="animate-in fade-in duration-150">
+              <AccessDeniedView
+                currentUser={currentUser}
+                requiredRoleName={currentRoute?.masterAdminOnly ? 'مدیر ارشد سامانه' : 'مجوز سازمانی دسترسی'}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Module 0: Operational Dashboard (داشبورد عملیات) */}
+              {activeTab === 'DASHBOARD' && (
+                <div className="animate-in fade-in duration-150">
+                  <OperationalDashboardView
+                    vehicles={vehicles}
+                    drivers={drivers}
+                    driverDirectory={driverDirectory}
+                    records={records}
+                    onNavigateTab={handleTabChange}
+                  />
+                </div>
+              )}
+
+              {/* Module: Operations & Dispatch (عملیات و اعزام ناوگان) */}
+              {activeTab === 'OPERATIONS' && (
+                <div className="animate-in fade-in duration-150">
+                  <OperationsDashboardView
+                    vehicles={vehicles}
+                    onNavigateToTab={handleTabChange}
+                  />
+                </div>
+              )}
+
+              {/* Module: Orders & Reservations Hub (سفارش‌ها و بارها) */}
+              {activeTab === 'ORDERS' && (
+                <div className="animate-in fade-in duration-150">
+                  <UnifiedOrdersAndReservationHub
+                    orders={orders}
+                    onAddOrder={handleAddOrder}
+                    onUpdateOrder={handleUpdateOrder}
+                    onDeleteOrder={handleDeleteOrder}
+                    vehicles={vehicles}
+                    drivers={driverDirectory}
+                    showToast={showToast}
+                    initialSubTab={pathname === '/orders/new' ? 'NEW_ORDER' : 'ORDERS_LIST'}
+                  />
+                </div>
+              )}
+
+              {/* Module: Customers & Cargo Tracking Portal (مشتریان و رهگیری بار) */}
+              {activeTab === 'CUSTOMERS' && (
+                <div className="animate-in fade-in duration-150">
+                  <CargoTrackingCustomerPortal
+                    orderNumber="ORD-1403/9201"
+                    onBackToApp={() => handleTabChange('DASHBOARD')}
+                  />
+                </div>
+              )}
+
+              {/* Module: Finance & Tariff Calculator (امور مالی و تعرفه‌ها) */}
+              {activeTab === 'FINANCE' && (
+                <div className="animate-in fade-in duration-150">
+                  <ReservationGuideAndCalculatorView
+                    onAddOrder={handleAddOrder}
+                    onNavigateToOrders={() => handleTabChange('ORDERS')}
+                    showToast={showToast}
+                  />
+                </div>
+              )}
+
+              {/* Module 1: Attendance Management Hub (Drivers & Staff) */}
+              {activeTab === 'ATTENDANCE' && (
+                <div className="animate-in fade-in duration-150">
+                  <AttendanceManagementHubView
+                    drivers={drivers}
+                    driverRecords={records}
+                    staffMembers={staffMembers}
+                    staffRecords={staffRecords}
                 vehicles={vehicles}
                 driverDirectory={driverDirectory}
                 attendanceNotes={attendanceNotes}
@@ -2345,8 +2508,10 @@ export const App: FC = () => {
               />
             </div>
           )}
-        </main>
-      </div>
+        </>
+      )}
+    </main>
+  </div>
 
       {/* Modern Compact Footer */}
       <footer className="bg-[#0e1627] border-t border-[#1a2842] py-3.5 px-6 text-slate-400 text-xs mt-6 mb-16 sm:mb-0">
@@ -2374,7 +2539,12 @@ export const App: FC = () => {
 
       <AddDriverModal
         isOpen={isAddDriverOpen}
-        onClose={() => setIsAddDriverOpen(false)}
+        onClose={() => {
+          setIsAddDriverOpen(false);
+          if (pathname === '/drivers/new') {
+            navigate('/drivers');
+          }
+        }}
         onAdd={handleAddDriver}
       />
 
@@ -2404,7 +2574,7 @@ export const App: FC = () => {
         staffRecords={staffRecords}
         vehicles={vehicles}
         driverDirectory={driverDirectory}
-        orders={[]}
+        orders={orders}
         onRestoreData={handleRestoreData}
         onResetDefaults={handleResetDefaults}
         onApplyDecodedBackup={handleApplyLatestBackup}
@@ -2492,7 +2662,12 @@ export const App: FC = () => {
       {/* Master Admin Settings Modal (شبکه، تنظیمات بله، دسترسی‌ها و بک‌آپ) */}
       <MasterAdminModal
         isOpen={isMasterAdminOpen}
-        onClose={() => setIsMasterAdminOpen(false)}
+        onClose={() => {
+          setIsMasterAdminOpen(false);
+          if (pathname === '/settings') {
+            navigate('/dashboard');
+          }
+        }}
         currentUser={currentUser}
         initialTab={masterAdminTab}
         onManualSync={handleForceFetchFromNetworkDb}
@@ -2545,6 +2720,16 @@ export const App: FC = () => {
 
       <Toast toast={toast} onClose={handleCloseToast} />
     </div>
+  );
+};
+
+export const App: FC = () => {
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => getStoredSession());
+
+  return (
+    <AppRouterProvider currentUser={currentUser}>
+      <HamiAppContent currentUser={currentUser} setCurrentUser={setCurrentUser} />
+    </AppRouterProvider>
   );
 };
 

@@ -4,6 +4,7 @@ import { Driver, AttendanceRecords } from '../types';
 import { AppUser } from '../types/auth';
 import { toFaDigits } from './jalaali';
 import { getFleetInsuranceAlerts } from './insuranceAlerts';
+import { evaluateVehicleServiceStatus } from './maintenanceStandardsConfig';
 
 const NOTIFICATIONS_STORAGE_KEY = 'hamibar_read_notifications_v1';
 
@@ -129,23 +130,21 @@ export function generateSystemNotifications(params: {
     badge: `${toFaDigits(present)} حاضر`,
   });
 
-  // 2. Oil Service Warnings
-  // Find vehicles that need oil change (distance since last change >= 8000km or remaining < 1000km)
+  // 2. Oil Service Warnings (Unified evaluation for both mileage and non-mileage vehicles like KHAAVAR)
   const urgentOilVehicles = vehicles.filter((v) => {
-    const current = v.currentMileage || 0;
-    const last = v.lastChangeMileage || 0;
-    const diff = current - last;
-    return diff >= 7000;
+    const evalStatus = evaluateVehicleServiceStatus(v);
+    return evalStatus.status === 'CRITICAL' || evalStatus.status === 'WARNING';
   });
 
   if (urgentOilVehicles.length > 0) {
     const firstV = urgentOilVehicles[0];
-    const diffKm = (firstV.currentMileage || 0) - (firstV.lastChangeMileage || 0);
+    const firstEval = evaluateVehicleServiceStatus(firstV);
+    const critCount = urgentOilVehicles.filter((v) => evaluateVehicleServiceStatus(v).status === 'CRITICAL').length;
     list.push({
       id: `notif-oil-urgent-${firstV.id}`,
       title: 'هشدار موعد سرویس روغن خودروها',
-      message: `تعداد ${toFaDigits(urgentOilVehicles.length)} خودرو نیاز به بررسی تعویض روغن دارند. خودروی پلاک ${firstV.plateNumber} با کارکرد ${toFaDigits(diffKm)} کیلومتر پس از آخرین سرویس در وضعیت هشدار قرار دارد.`,
-      type: 'warning',
+      message: `تعداد ${toFaDigits(urgentOilVehicles.length)} خودرو (${toFaDigits(critCount)} فوری) نیاز به بررسی تعویض روغن دارند. خودروی کد ${toFaDigits(firstV.code)} (${firstV.plateNumber}) با وضعیت «${firstEval.statusReason || firstEval.statusText}» در اولویت سرویس قرار دارد.`,
+      type: critCount > 0 ? 'alert' : 'warning',
       category: 'oil_service',
       timestamp: 'نیاز به اقدام',
       read: readIds.has(`notif-oil-urgent-${firstV.id}`),

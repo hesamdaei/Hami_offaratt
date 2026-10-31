@@ -29,6 +29,7 @@ import { IranianPlate } from './IranianPlate';
 import { PlateInput } from './PlateInput';
 import {
   toFaDigits,
+  getTodayJalaali,
   parseJalaaliDate,
   calculateDaysBetweenJalaali,
   addJalaaliDays,
@@ -40,6 +41,8 @@ import {
   getStoredServiceRules,
   getStoredMaintenanceItems,
   calculateMileageStatus,
+  evaluateVehicleServiceStatus,
+  DEFAULT_SERVICE_RULES,
   MaintenanceItemStandard,
   ServiceRule,
 } from '../utils/maintenanceStandardsConfig';
@@ -223,10 +226,17 @@ export const VehicleSpecificationsModal: FC<VehicleSpecificationsModalProps> = (
               <span className="text-slate-400">راننده:</span>
               <strong className="text-white font-sans">{formData.driverName || 'بدون راننده'}</strong>
             </div>
-            <div className="flex items-center gap-1.5 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800">
-              <span className="text-slate-400">کیلومتر جاری:</span>
-              <strong className="text-sky-300 font-bold">{toFaDigits(Number(formData.currentMileage || 0).toLocaleString())} km</strong>
-            </div>
+            {(formData.vehicleType || vehicle.vehicleType) === 'KHAAVAR' ? (
+              <div className="flex items-center gap-1.5 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800">
+                <span className="text-slate-400">آخرین سرویس:</span>
+                <strong className="text-sky-300 font-bold">{toFaDigits(formData.lastChangeDate || '۱۴۰۵/۰۶/۰۱')}</strong>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800">
+                <span className="text-slate-400">کیلومتر جاری:</span>
+                <strong className="text-sky-300 font-bold">{toFaDigits(Number(formData.currentMileage || 0).toLocaleString())} km</strong>
+              </div>
+            )}
             <div className="flex items-center gap-1.5 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800">
               <span className="text-slate-400">سال ساخت:</span>
               <strong className="text-amber-300">{toFaDigits(formData.modelYear || 1398)}</strong>
@@ -757,216 +767,294 @@ export const VehicleSpecificationsModal: FC<VehicleSpecificationsModalProps> = (
           {activeTab === 'MAINTENANCE' && (
             <div className="space-y-4">
               <div className="bg-[#111c34] border border-slate-800 rounded-xl p-4 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
-                    <Droplet className="w-4 h-4" />
-                    <span>مشخصات کارکرد، کیلومتر و تعویض روغن</span>
-                  </div>
-
-                  {onOpenOilModal && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onOpenOilModal(vehicle);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition flex items-center gap-1"
-                    >
-                      <Droplet className="w-3 h-3" />
-                      <span>ثبت مستقیم تعویض روغن</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
-                  {/* Current Mileage */}
-                  <div>
-                    <label className="block text-slate-400 mb-1">کیلومترشمار فعلی</label>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        value={formData.currentMileage || 0}
-                        onChange={(e) => handleInputChange('currentMileage', Number(e.target.value))}
-                        className="w-full bg-[#0a1120] border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono"
-                      />
-                    ) : (
-                      <div className="bg-[#0a1120] px-3 py-1.5 rounded-lg border border-slate-800 text-sky-400 font-mono font-bold text-sm">
-                        {toFaDigits(Number(formData.currentMileage || 0).toLocaleString())} km
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Last Change Mileage */}
-                  <div>
-                    <label className="block text-slate-400 mb-1">کیلومتر در زمان آخرین تعویض روغن</label>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        value={formData.lastChangeMileage || 0}
-                        onChange={(e) => handleInputChange('lastChangeMileage', Number(e.target.value))}
-                        className="w-full bg-[#0a1120] border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono"
-                      />
-                    ) : (
-                      <div className="bg-[#0a1120] px-3 py-1.5 rounded-lg border border-slate-800 text-slate-300 font-mono">
-                        {toFaDigits(Number(formData.lastChangeMileage || 0).toLocaleString())} km
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Last Change Date */}
-                  <div>
-                    <label className="block text-slate-400 mb-1">تاریخ آخرین تعویض روغن</label>
-                    {isEditing ? (
-                      <PersianDatePicker
-                        value={formData.lastChangeDate || ''}
-                        onChange={(val) => handleInputChange('lastChangeDate', val)}
-                        placeholder="۱۴۰۵/۰۶/۰۱"
-                      />
-                    ) : (
-                      <div className="bg-[#0a1120] px-3 py-1.5 rounded-lg border border-slate-800 text-slate-300 font-mono">
-                        {toFaDigits(formData.lastChangeDate || '۱۴۰۵/۰۶/۰۱')}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Trips Since Change */}
-                  <div>
-                    <label className="block text-slate-400 mb-1">تعداد سفر پس از تعویض</label>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        value={formData.tripsSinceChange || 0}
-                        onChange={(e) => handleInputChange('tripsSinceChange', Number(e.target.value))}
-                        className="w-full bg-[#0a1120] border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono"
-                      />
-                    ) : (
-                      <div className="bg-[#0a1120] px-3 py-1.5 rounded-lg border border-slate-800 text-slate-300 font-mono">
-                        {toFaDigits(formData.tripsSinceChange || 0)} سفر
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Real-time calculated mileage difference & time summary with Item Standards Selector */}
                 {(() => {
-                  const curr = Number(formData.currentMileage || 0);
-                  const last = Number(formData.lastChangeMileage || 0);
-
                   const storedRules = getStoredServiceRules();
                   const storedItems = getStoredMaintenanceItems();
-                  const vRule: ServiceRule = storedRules[formData.vehicleType || vehicle.vehicleType] || storedRules.HYUNDAI || {
-                    label: 'خودرو',
-                    hasMileage: true,
-                    maxMileage: 5000,
-                    maxDays: 45,
-                    maxTrips: 45,
-                    warningMileage: 500,
+                  const vType = formData.vehicleType || vehicle.vehicleType;
+                  const vRule: ServiceRule =
+                    storedRules[vType] ||
+                    DEFAULT_SERVICE_RULES[vType] || {
+                      label: 'خودرو',
+                      hasMileage: vType !== 'KHAAVAR',
+                      maxMileage: 5000,
+                      maxDays: 60,
+                      maxTrips: 80,
+                      warningMileage: 500,
+                    };
+
+                  const evalResult = evaluateVehicleServiceStatus(
+                    {
+                      ...vehicle,
+                      ...formData,
+                    },
+                    storedRules
+                  );
+
+                  const curr = Number(formData.currentMileage ?? evalResult.currentMileage);
+                  const last = Number(formData.lastChangeMileage ?? evalResult.lastChangeMileage);
+                  const effectiveDate = formData.lastChangeDate || evalResult.lastChangeDate;
+                  const trips = Number(formData.tripsSinceChange ?? evalResult.tripsDriven);
+
+                  const activeItem = storedItems.find((it) => it.id === selectedStandardItemId) || storedItems[0];
+                  const isEngineOil = selectedStandardItemId === 'engine_oil';
+                  const hasMileageForCalc = isEngineOil ? vRule.hasMileage : vRule.hasMileage;
+                  const effectiveCeilingKm =
+                    isEngineOil && vRule.hasMileage && vRule.maxMileage
+                      ? vRule.maxMileage
+                      : activeItem?.maxKm || 5000;
+                  const effectiveMaxDays =
+                    isEngineOil && vRule.maxDays ? vRule.maxDays : activeItem?.maxDays || 45;
+                  const effectiveWarningKm = activeItem?.warningKm || 500;
+                  const effectiveMaxTrips = vRule.maxTrips || 80;
+
+                  const stats = calculateMileageStatus(
+                    curr,
+                    last,
+                    effectiveCeilingKm,
+                    effectiveWarningKm,
+                    effectiveDate,
+                    effectiveMaxDays,
+                    hasMileageForCalc,
+                    trips,
+                    effectiveMaxTrips
+                  );
+
+                  const parsedDate = parseJalaaliDate(effectiveDate);
+                  const nextDueDateObj = parsedDate ? addJalaaliDays(parsedDate, effectiveMaxDays) : null;
+                  const nextDueDateStr = nextDueDateObj
+                    ? formatJalaaliDate(nextDueDateObj.jy, nextDueDateObj.jm, nextDueDateObj.jd)
+                    : '';
+
+                  const handleQuickServiceInModal = () => {
+                    const todayInfo = getTodayJalaali();
+                    const todayStr = `${todayInfo.jy}/${String(todayInfo.jm).padStart(2, '0')}/${String(todayInfo.jd).padStart(2, '0')}`;
+                    const updatedVehicle: VehicleItem = {
+                      ...vehicle,
+                      ...formData,
+                      lastChangeDate: todayStr,
+                      lastChangeMileage: vRule.hasMileage ? curr : 0,
+                      currentMileage: vRule.hasMileage ? curr : 0,
+                      tripsSinceChange: 0,
+                    } as VehicleItem;
+                    setFormData(updatedVehicle);
+                    onUpdateVehicle(updatedVehicle);
+                    showToast?.(
+                      `تعویض روغن خودرو کد ${toFaDigits(vehicle.code)} در تاریخ امروز (${toFaDigits(todayStr)}) ثبت شد.`,
+                      'success'
+                    );
                   };
 
-                  // Find selected maintenance standard item
-                  const activeItem = storedItems.find((it) => it.id === selectedStandardItemId) || storedItems[0];
-                  // If selected item is engine_oil, use vehicle rule maxMileage if available, or item maxKm
-                  const effectiveCeilingKm = (selectedStandardItemId === 'engine_oil' && vRule.hasMileage && vRule.maxMileage)
-                    ? vRule.maxMileage
-                    : (activeItem?.maxKm || 5000);
-                  const effectiveMaxDays = (selectedStandardItemId === 'engine_oil' && vRule.maxDays)
-                    ? vRule.maxDays
-                    : (activeItem?.maxDays || 45);
-                  const effectiveWarningKm = activeItem?.warningKm || 500;
-
-                  const stats = calculateMileageStatus(curr, last, effectiveCeilingKm, effectiveWarningKm, formData.lastChangeDate, effectiveMaxDays);
-                  const parsedDate = parseJalaaliDate(formData.lastChangeDate);
-                  const nextDueDateObj = parsedDate ? addJalaaliDays(parsedDate, effectiveMaxDays) : null;
-                  const nextDueDateStr = nextDueDateObj ? formatJalaaliDate(nextDueDateObj.jy, nextDueDateObj.jm, nextDueDateObj.jd) : '';
-
                   return (
-                    <div className="space-y-2.5">
-                      {/* Item Standard Selector Header */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 bg-[#091120] p-2 rounded-xl border border-slate-800">
-                        <div className="flex items-center gap-1.5 text-xs text-slate-300">
-                          <Gauge className="w-3.5 h-3.5 text-amber-400" />
-                          <span className="font-bold">سنجش بر اساس استاندارد قطعه/سرویس:</span>
-                        </div>
-                        <select
-                          value={selectedStandardItemId}
-                          onChange={(e) => setSelectedStandardItemId(e.target.value)}
-                          className="bg-[#0e172a] border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
-                        >
-                          {storedItems.map((it) => (
-                            <option key={it.id} value={it.id}>
-                              {it.name} (سقف: {toFaDigits(it.maxKm.toLocaleString())} km / {toFaDigits(it.maxDays)} روز)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* 4 Metric Boxes */}
-                      <div className="bg-[#091120] border border-[#1b2b48] rounded-xl p-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                        <div className="bg-[#0e172a] p-2 rounded-lg border border-slate-800">
-                          <span className="text-slate-400 block text-[10px]">کارکرد از آخرین سرویس</span>
-                          <strong className="text-sky-300 font-mono font-bold text-xs">
-                            {toFaDigits(stats.drivenKm.toLocaleString())} km
-                          </strong>
-                          <span className="block text-[9px] text-slate-500 mt-0.5">
-                            سقف: {toFaDigits(effectiveCeilingKm.toLocaleString())} km
+                    <>
+                      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800 pb-2.5">
+                        <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                          <Droplet className="w-4 h-4" />
+                          <span>
+                            {vRule.hasMileage
+                              ? 'مشخصات کارکرد، کیلومترشمار و تعویض روغن'
+                              : `مشخصات سرویس دوره‌ای ${vRule.label} (بر اساس سقف ${toFaDigits(vRule.maxDays)} روز / ${toFaDigits(effectiveMaxTrips)} سفر)`}
                           </span>
                         </div>
 
-                        <div className="bg-[#0e172a] p-2 rounded-lg border border-slate-800">
-                          <span className="text-slate-400 block text-[10px]">کیلومتر سررسید بعدی</span>
-                          <strong className="text-amber-300 font-mono font-bold text-xs">
-                            {toFaDigits(stats.nextTargetKm.toLocaleString())} km
-                          </strong>
-                          <span className="block text-[9px] text-slate-500 mt-0.5">
-                            مصرف: {toFaDigits(stats.wearPercent)}%
-                          </span>
-                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleQuickServiceInModal}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>ثبت تعویض روغن امروز</span>
+                          </button>
 
-                        <div className="bg-[#0e172a] p-2 rounded-lg border border-slate-800">
-                          <span className="text-slate-400 block text-[10px]">
-                            {stats.isInconsistent ? 'خطای کیلومتر' : stats.isOverdue ? 'اضافه پیمایش (تأخیر)' : 'باقیمانده تا سرویس'}
-                          </span>
-                          <strong className={stats.isInconsistent || stats.isOverdue ? 'text-rose-400 font-mono font-black text-xs' : 'text-emerald-400 font-mono font-bold text-xs'}>
-                            {stats.isInconsistent
-                              ? `ناهماهنگ (${toFaDigits(stats.discrepancyKm)} km)`
-                              : stats.isOverdue
-                              ? `+${toFaDigits(stats.overdueKm.toLocaleString())} km`
-                              : `${toFaDigits(stats.remainingKm.toLocaleString())} km`}
-                          </strong>
-                          <span className="block text-[9px] text-slate-500 mt-0.5">
-                            {stats.statusText}
-                          </span>
-                        </div>
-
-                        <div className="bg-[#0e172a] p-2 rounded-lg border border-slate-800">
-                          <span className="text-slate-400 block text-[10px]">
-                            زمان ({toFaDigits(stats.daysPassed)} از {toFaDigits(effectiveMaxDays)} روز)
-                          </span>
-                          <strong className="text-slate-200 font-mono text-xs">
-                            {nextDueDateStr ? `سررسید: ${toFaDigits(nextDueDateStr)}` : '—'}
-                          </strong>
-                          <span className={`block text-[9px] mt-0.5 ${stats.isDaysOverdue ? 'text-rose-400 font-bold' : 'text-emerald-400'}`}>
-                            {stats.isDaysOverdue ? `${toFaDigits(stats.daysOverdue)} روز تأخیر` : `${toFaDigits(stats.daysRemaining)} روز مانده`}
-                          </span>
+                          {onOpenOilModal && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onOpenOilModal(vehicle);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                            >
+                              <Droplet className="w-3 h-3" />
+                              <span>فرم کامل سرویس</span>
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      {/* Visual Wear Bar */}
-                      <div className="bg-[#091120] p-2 rounded-xl border border-slate-800">
-                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-300 rounded-full ${
-                              stats.isInconsistent || stats.wearPercent >= 100
-                                ? 'bg-rose-500'
-                                : stats.wearPercent >= 85
-                                ? 'bg-amber-400'
-                                : 'bg-emerald-400'
-                            }`}
-                            style={{ width: `${stats.isInconsistent ? 100 : stats.wearPercent}%` }}
-                          />
+                      <div className={`grid grid-cols-1 sm:grid-cols-2 ${vRule.hasMileage ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-3.5 text-xs`}>
+                        {vRule.hasMileage && (
+                          <>
+                            {/* Current Mileage */}
+                            <div>
+                              <label className="block text-slate-400 mb-1">کیلومترشمار فعلی</label>
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={formData.currentMileage || 0}
+                                  onChange={(e) => handleInputChange('currentMileage', Number(e.target.value))}
+                                  className="w-full bg-[#0a1120] border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono"
+                                />
+                              ) : (
+                                <div className="bg-[#0a1120] px-3 py-1.5 rounded-lg border border-slate-800 text-sky-400 font-mono font-bold text-sm">
+                                  {toFaDigits(curr.toLocaleString())} km
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Last Change Mileage */}
+                            <div>
+                              <label className="block text-slate-400 mb-1">کیلومتر در زمان آخرین تعویض روغن</label>
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={formData.lastChangeMileage || 0}
+                                  onChange={(e) => handleInputChange('lastChangeMileage', Number(e.target.value))}
+                                  className="w-full bg-[#0a1120] border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono"
+                                />
+                              ) : (
+                                <div className="bg-[#0a1120] px-3 py-1.5 rounded-lg border border-slate-800 text-slate-300 font-mono">
+                                  {toFaDigits(last.toLocaleString())} km
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+
+                        {/* Last Change Date */}
+                        <div>
+                          <label className="block text-slate-400 mb-1">تاریخ آخرین تعویض روغن</label>
+                          {isEditing ? (
+                            <PersianDatePicker
+                              value={formData.lastChangeDate || effectiveDate}
+                              onChange={(val) => handleInputChange('lastChangeDate', val)}
+                              placeholder="۱۴۰۵/۰۶/۰۱"
+                            />
+                          ) : (
+                            <div className="bg-[#0a1120] px-3 py-1.5 rounded-lg border border-slate-800 text-slate-200 font-mono font-bold">
+                              {toFaDigits(effectiveDate)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Trips Since Change */}
+                        <div>
+                          <label className="block text-slate-400 mb-1">تعداد سفر پس از تعویض</label>
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              value={formData.tripsSinceChange || 0}
+                              onChange={(e) => handleInputChange('tripsSinceChange', Number(e.target.value))}
+                              className="w-full bg-[#0a1120] border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono"
+                            />
+                          ) : (
+                            <div className="bg-[#0a1120] px-3 py-1.5 rounded-lg border border-slate-800 text-slate-200 font-mono font-bold">
+                              {toFaDigits(trips)} از {toFaDigits(effectiveMaxTrips)} سفر
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
+
+                      <div className="space-y-2.5">
+                        {/* Item Standard Selector Header */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 bg-[#091120] p-2 rounded-xl border border-slate-800">
+                          <div className="flex items-center gap-1.5 text-xs text-slate-300">
+                            <Gauge className="w-3.5 h-3.5 text-amber-400" />
+                            <span className="font-bold">سنجش بر اساس استاندارد قطعه/سرویس:</span>
+                          </div>
+                          <select
+                            value={selectedStandardItemId}
+                            onChange={(e) => setSelectedStandardItemId(e.target.value)}
+                            className="bg-[#0e172a] border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
+                          >
+                            {storedItems.map((it) => (
+                              <option key={it.id} value={it.id}>
+                                {it.name} ({vRule.hasMileage ? `سقف: ${toFaDigits(it.maxKm.toLocaleString())} km / ` : ''}{toFaDigits(it.maxDays)} روز)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Metric Boxes (Adapted for KHAAVAR vs Mileage vehicles) */}
+                        <div className="bg-[#091120] border border-[#1b2b48] rounded-xl p-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                          <div className="bg-[#0e172a] p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 block text-[10px]">
+                              {hasMileageForCalc ? 'کارکرد از آخرین سرویس' : 'زمان سپری‌شده'}
+                            </span>
+                            <strong className="text-sky-300 font-mono font-bold text-xs">
+                              {hasMileageForCalc
+                                ? `${toFaDigits(stats.drivenKm.toLocaleString())} km`
+                                : `${toFaDigits(stats.daysPassed)} روز`}
+                            </strong>
+                            <span className="block text-[9px] text-slate-500 mt-0.5">
+                              {hasMileageForCalc
+                                ? `سقف: ${toFaDigits(effectiveCeilingKm.toLocaleString())} km`
+                                : `سقف مجاز: ${toFaDigits(effectiveMaxDays)} روز`}
+                            </span>
+                          </div>
+
+                          <div className="bg-[#0e172a] p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 block text-[10px]">
+                              {hasMileageForCalc ? 'کیلومتر سررسید بعدی' : 'کارکرد سفرها'}
+                            </span>
+                            <strong className="text-amber-300 font-mono font-bold text-xs">
+                              {hasMileageForCalc
+                                ? `${toFaDigits(stats.nextTargetKm.toLocaleString())} km`
+                                : `${toFaDigits(trips)} از ${toFaDigits(effectiveMaxTrips)} سفر`}
+                            </strong>
+                            <span className="block text-[9px] text-slate-500 mt-0.5">
+                              استهلاک دوره: {toFaDigits(stats.wearPercent)}%
+                            </span>
+                          </div>
+
+                          <div className="bg-[#0e172a] p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 block text-[10px]">وضعیت سررسید</span>
+                            <strong
+                              className={
+                                stats.status === 'CRITICAL'
+                                  ? 'text-rose-400 font-mono font-black text-xs'
+                                  : stats.status === 'WARNING'
+                                  ? 'text-amber-400 font-mono font-bold text-xs'
+                                  : 'text-emerald-400 font-mono font-bold text-xs'
+                              }
+                            >
+                              {stats.statusText}
+                            </strong>
+                            <span className="block text-[9px] text-slate-500 mt-0.5">
+                              {stats.status === 'CRITICAL' ? 'نیازمند تعویض فوری' : stats.status === 'WARNING' ? 'در آستانه موعد' : 'وضعیت استاندارد'}
+                            </span>
+                          </div>
+
+                          <div className="bg-[#0e172a] p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 block text-[10px]">
+                              موعد تقویمی ({toFaDigits(stats.daysPassed)} از {toFaDigits(effectiveMaxDays)} روز)
+                            </span>
+                            <strong className="text-slate-200 font-mono text-xs">
+                              {nextDueDateStr ? `سررسید: ${toFaDigits(nextDueDateStr)}` : '—'}
+                            </strong>
+                            <span className={`block text-[9px] mt-0.5 ${stats.isDaysOverdue ? 'text-rose-400 font-bold' : 'text-emerald-400'}`}>
+                              {stats.isDaysOverdue ? `${toFaDigits(stats.daysOverdue)} روز تأخیر` : `${toFaDigits(stats.daysRemaining)} روز مانده`}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Visual Wear Bar */}
+                        <div className="bg-[#091120] p-2 rounded-xl border border-slate-800">
+                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 rounded-full ${
+                                stats.status === 'CRITICAL'
+                                  ? 'bg-rose-500'
+                                  : stats.status === 'WARNING'
+                                  ? 'bg-amber-400'
+                                  : 'bg-emerald-400'
+                              }`}
+                              style={{ width: `${stats.isInconsistent ? 100 : Math.min(100, stats.wearPercent)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   );
                 })()}
 

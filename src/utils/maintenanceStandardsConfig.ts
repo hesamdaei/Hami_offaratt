@@ -292,18 +292,325 @@ export interface MileageCalculationResult {
  * - wear percentage
  * - days passed & days remaining
  */
+export interface VehicleServiceEvaluation {
+  rule: ServiceRule;
+  hasMileage: boolean;
+  lastChangeDate: string;
+  nextDueDateStr: string;
+  daysPassed: number;
+  maxDays: number;
+  daysRemaining: number;
+  daysOverdue: number;
+  isDaysOverdue: boolean;
+  isDaysWarning: boolean;
+  tripsDriven: number;
+  maxTrips: number;
+  tripsRemaining: number;
+  tripsOverdue: number;
+  isTripsOverdue: boolean;
+  isTripsWarning: boolean;
+  currentMileage: number;
+  lastChangeMileage: number;
+  drivenKm: number;
+  ceilingKm: number;
+  nextTargetKm: number;
+  remainingKm: number;
+  overdueKm: number;
+  isMileageOverdue: boolean;
+  isMileageWarning: boolean;
+  isInconsistent: boolean;
+  discrepancyKm: number;
+  wearPercent: number;
+  status: 'CRITICAL' | 'WARNING' | 'HEALTHY';
+  statusText: string;
+  statusReason: string;
+  hasCompletedOilChange: boolean;
+}
+
+/**
+ * Evaluate exact oil service status for ANY vehicle (including KHAAVAR without odometer, or HYUNDAI/ISUZU/NISSAN with odometer).
+ * Ensures 100% consistent calculation across all tables, cards, modals, notifications, and exports.
+ */
+export function evaluateVehicleServiceStatus(
+  vehicle: {
+    vehicleType: string;
+    currentMileage?: number;
+    currentKm?: number;
+    lastChangeMileage?: number;
+    lastOilChangeKm?: number;
+    lastChangeDate?: string;
+    tripsSinceChange?: number;
+    serviceHistory?: any[];
+  },
+  customRules?: Record<string, ServiceRule>
+): VehicleServiceEvaluation {
+  const rulesMap = customRules || getStoredServiceRules();
+  const baseRule = rulesMap[vehicle.vehicleType] || DEFAULT_SERVICE_RULES[vehicle.vehicleType] || {
+    label: vehicle.vehicleType,
+    hasMileage: vehicle.vehicleType !== 'KHAAVAR',
+    maxDays: vehicle.vehicleType === 'KHAAVAR' ? 60 : 45,
+    maxTrips: vehicle.vehicleType === 'KHAAVAR' ? 80 : 60,
+    maxMileage: 5000,
+    warningMileage: 500,
+  };
+
+  // Force KHAAVAR to respect hasMileage (default false unless explicitly configured with positive mileage)
+  const hasMileage = Boolean(baseRule.hasMileage);
+  const maxDays = Math.max(1, Number(baseRule.maxDays) || (vehicle.vehicleType === 'KHAAVAR' ? 60 : 45));
+  const maxTrips = Math.max(1, Number(baseRule.maxTrips) || (vehicle.vehicleType === 'KHAAVAR' ? 80 : 60));
+  const ceilingKm = Math.max(100, Number(baseRule.maxMileage) || 5000);
+  const warningKmThreshold = Math.max(0, Number(baseRule.warningMileage) || 500);
+
+  // Resolve latest date from vehicle.lastChangeDate AND serviceHistory[0]?.date (in case history has a newer record)
+  const historyList = Array.isArray(vehicle.serviceHistory) ? vehicle.serviceHistory : [];
+  const latestHistoryDate = historyList.length > 0 && historyList[0]?.date ? String(historyList[0].date) : '';
+  const propDate = vehicle.lastChangeDate ? String(vehicle.lastChangeDate) : '';
+
+  let lastChangeDate = propDate || latestHistoryDate || '1405/06/01';
+  if (propDate && latestHistoryDate) {
+    // Pick whichever date is more recent (fewer days passed)
+    const dProp = calculateDaysBetweenJalaali(propDate);
+    const dHist = calculateDaysBetweenJalaali(latestHistoryDate);
+    if (dHist < dProp) {
+      lastChangeDate = latestHistoryDate;
+    }
+  }
+
+  // Time calculations
+  const daysPassed = calculateDaysBetweenJalaali(lastChangeDate);
+  const isDaysOverdue = daysPassed >= maxDays;
+  const daysRemaining = Math.max(0, maxDays - daysPassed);
+  const daysOverdue = Math.max(0, daysPassed - maxDays);
+  const isDaysWarning = !isDaysOverdue && daysRemaining <= 7;
+
+  // Trips calculations
+  const rawTrips = typeof vehicle.tripsSinceChange === 'number' && !isNaN(vehicle.tripsSinceChange)
+    ? Math.max(0, vehicle.tripsSinceChange)
+    : 0;
+  const tripsDriven = rawTrips;
+  const isTripsOverdue = maxTrips > 0 && tripsDriven >= maxTrips;
+  const tripsRemaining = Math.max(0, maxTrips - tripsDriven);
+  const tripsOverdue = Math.max(0, tripsDriven - maxTrips);
+  const isTripsWarning = !isTripsOverdue && maxTrips > 0 && tripsRemaining <= 8;
+
+  // Mileage calculations (only active if hasMileage is true)
+  const rawCurrentKm = typeof vehicle.currentMileage === 'number'
+    ? vehicle.currentMileage
+    : typeof vehicle.currentKm === 'number'
+    ? vehicle.currentKm
+    : 0;
+  const rawLastKm = typeof vehicle.lastChangeMileage === 'number'
+    ? vehicle.lastChangeMileage
+    : typeof vehicle.lastOilChangeKm === 'number'
+    ? vehicle.lastOilChangeKm
+    : 0;
+
+  const currentMileage = hasMileage ? rawCurrentKm : 0;
+  const lastChangeMileage = hasMileage ? rawLastKm : 0;
+
+  const isInconsistent = hasMileage && currentMileage < lastChangeMileage;
+  const discrepancyKm = isInconsistent ? lastChangeMileage - currentMileage : 0;
+  const drivenKm = hasMileage && !isInconsistent ? Math.max(0, currentMileage - lastChangeMileage) : 0;
+  const nextTargetKm = hasMileage ? lastChangeMileage + ceilingKm : 0;
+
+  const isMileageOverdue = hasMileage && !isInconsistent && currentMileage >= nextTargetKm;
+  const overdueKm = hasMileage
+    ? isInconsistent
+      ? discrepancyKm
+      : isMileageOverdue
+      ? currentMileage - nextTargetKm
+      : 0
+    : 0;
+  const remainingKm = hasMileage && !isInconsistent && !isMileageOverdue
+    ? Math.max(0, nextTargetKm - currentMileage)
+    : 0;
+  const isMileageWarning = hasMileage && !isMileageOverdue && !isInconsistent && remainingKm <= warningKmThreshold;
+
+  // Wear percentage:
+  // For mileage vehicles: max of mileage % or days %
+  // For non-mileage vehicles (KHAAVAR): max of days % or trips %
+  const daysPercent = Math.min(100, Math.round((daysPassed / maxDays) * 100));
+  const tripsPercent = maxTrips > 0 ? Math.min(100, Math.round((tripsDriven / maxTrips) * 100)) : 0;
+  const kmPercent = hasMileage
+    ? isInconsistent
+      ? 100
+      : Math.min(100, Math.round((drivenKm / ceilingKm) * 100))
+    : 0;
+
+  const wearPercent = hasMileage
+    ? Math.max(kmPercent, daysPercent)
+    : Math.max(daysPercent, tripsPercent);
+
+  let status: 'CRITICAL' | 'WARNING' | 'HEALTHY' = 'HEALTHY';
+  let statusText = 'ایمن و استاندارد';
+  let statusReason = '';
+
+  if (!hasMileage) {
+    // KHAAVAR / Non-mileage evaluation (strictly based on days & trips)
+    if (isDaysOverdue && isTripsOverdue) {
+      status = 'CRITICAL';
+      statusText = 'فرارسیده (زمان و سفر)';
+      statusReason = `${daysOverdue} روز و ${tripsOverdue} سفر گذشته`;
+    } else if (isDaysOverdue) {
+      status = 'CRITICAL';
+      statusText = 'موعد تعویض (گذشت زمان)';
+      statusReason = `${daysOverdue} روز از سقف ${maxDays} روز گذشته`;
+    } else if (isTripsOverdue) {
+      status = 'CRITICAL';
+      statusText = 'موعد تعویض (تکمیل سفر)';
+      statusReason = `${tripsDriven} سفر از سقف ${maxTrips} سفر`;
+    } else if (isDaysWarning || isTripsWarning) {
+      status = 'WARNING';
+      statusText = 'نزدیک موعد سرویس';
+      statusReason = isDaysWarning
+        ? `${daysRemaining} روز تا سررسید`
+        : `${tripsRemaining} سفر تا سررسید`;
+    } else {
+      status = 'HEALTHY';
+      statusText = 'ایمن';
+      statusReason = `${daysRemaining} روز مانده (${tripsDriven}/${maxTrips} سفر)`;
+    }
+  } else {
+    // Mileage-based vehicles evaluation (HYUNDAI, ISUZU, NISSAN, etc.)
+    if (isInconsistent) {
+      status = 'CRITICAL';
+      statusText = 'خطای کیلومترشمار';
+      statusReason = `کیلومتر فعلی کمتر از آخرین تعویض است`;
+    } else if (isMileageOverdue) {
+      status = 'CRITICAL';
+      statusText = 'موعد تعویض (کیلومتر)';
+      statusReason = `+${overdueKm.toLocaleString()} km اضافه پیمایش`;
+    } else if (isDaysOverdue) {
+      status = 'CRITICAL';
+      statusText = 'موعد تعویض (زمان)';
+      statusReason = `${daysOverdue} روز تأخیر زمانی`;
+    } else if (isTripsOverdue) {
+      status = 'CRITICAL';
+      statusText = 'موعد تعویض (سفر)';
+      statusReason = `تکمیل سقف ${maxTrips} سفر`;
+    } else if (isMileageWarning || isDaysWarning || isTripsWarning) {
+      status = 'WARNING';
+      statusText = 'نزدیک موعد سرویس';
+      statusReason = isMileageWarning
+        ? `${remainingKm.toLocaleString()} km مانده`
+        : `${daysRemaining} روز مانده`;
+    } else {
+      status = 'HEALTHY';
+      statusText = 'ایمن';
+      statusReason = `${remainingKm.toLocaleString()} km مانده`;
+    }
+  }
+
+  const hasCompletedOilChange = Boolean(
+    vehicle.lastChangeDate ||
+    vehicle.lastChangeMileage ||
+    (Array.isArray(vehicle.serviceHistory) && vehicle.serviceHistory.length > 0)
+  );
+
+  return {
+    rule: baseRule,
+    hasMileage,
+    lastChangeDate,
+    nextDueDateStr: '',
+    daysPassed,
+    maxDays,
+    daysRemaining,
+    daysOverdue,
+    isDaysOverdue,
+    isDaysWarning,
+    tripsDriven,
+    maxTrips,
+    tripsRemaining,
+    tripsOverdue,
+    isTripsOverdue,
+    isTripsWarning,
+    currentMileage,
+    lastChangeMileage,
+    drivenKm,
+    ceilingKm,
+    nextTargetKm,
+    remainingKm,
+    overdueKm,
+    isMileageOverdue,
+    isMileageWarning,
+    isInconsistent,
+    discrepancyKm,
+    wearPercent,
+    status,
+    statusText,
+    statusReason,
+    hasCompletedOilChange,
+  };
+}
+
+/**
+ * Robust, unified mileage calculation function
+ */
 export function calculateMileageStatus(
   currentMileage: number,
   lastChangeMileage: number,
   ceilingKm: number,
   warningKmThreshold = 500,
   lastChangeDate?: string,
-  maxDays = 45
+  maxDays = 45,
+  hasMileage = true,
+  tripsDriven = 0,
+  maxTrips = 80
 ): MileageCalculationResult {
   const cur = typeof currentMileage === 'number' && !isNaN(currentMileage) ? currentMileage : 0;
   const last = typeof lastChangeMileage === 'number' && !isNaN(lastChangeMileage) ? lastChangeMileage : 0;
   const ceiling = typeof ceilingKm === 'number' && ceilingKm > 0 ? ceilingKm : 5000;
-  const warningThreshold = typeof warningKmThreshold === 'number' && warningKmThreshold > 0 ? warningKmThreshold : 500;
+  const warningThreshold = typeof warningKmThreshold === 'number' && warningKmThreshold >= 0 ? warningKmThreshold : 500;
+
+  // Time-based calculations
+  const daysPassed = calculateDaysBetweenJalaali(lastChangeDate);
+  const effectiveMaxDays = maxDays > 0 ? maxDays : 45;
+  const isDaysOverdue = daysPassed >= effectiveMaxDays;
+  const daysRemaining = Math.max(0, effectiveMaxDays - daysPassed);
+  const daysOverdue = Math.max(0, daysPassed - effectiveMaxDays);
+  const isDaysWarning = !isDaysOverdue && daysRemaining <= 7;
+
+  if (!hasMileage) {
+    const effectiveMaxTrips = maxTrips > 0 ? maxTrips : 80;
+    const isTripsOverdue = tripsDriven >= effectiveMaxTrips;
+    const isTripsWarning = !isTripsOverdue && (effectiveMaxTrips - tripsDriven) <= 8;
+    const daysPct = Math.min(100, Math.round((daysPassed / effectiveMaxDays) * 100));
+    const tripsPct = Math.min(100, Math.round((tripsDriven / effectiveMaxTrips) * 100));
+    const wearPercent = Math.max(daysPct, tripsPct);
+
+    let status: 'CRITICAL' | 'WARNING' | 'HEALTHY' = 'HEALTHY';
+    let statusText = 'ایمن و استاندارد (زمان/سفر)';
+    if (isDaysOverdue || isTripsOverdue) {
+      status = 'CRITICAL';
+      statusText = isDaysOverdue ? `سررسید گذشته (${daysOverdue} روز تأخیر)` : `تکمیل سقف سفر (${tripsDriven} سفر)`;
+    } else if (isDaysWarning || isTripsWarning) {
+      status = 'WARNING';
+      statusText = isDaysWarning ? `نزدیک موعد (${daysRemaining} روز مانده)` : `نزدیک سقف سفر`;
+    }
+
+    return {
+      currentMileage: 0,
+      lastChangeMileage: 0,
+      drivenKm: 0,
+      ceilingKm: 0,
+      nextTargetKm: 0,
+      remainingKm: 0,
+      overdueKm: 0,
+      wearPercent,
+      isOverdue: isDaysOverdue || isTripsOverdue,
+      isWarning: status === 'WARNING',
+      isHealthy: status === 'HEALTHY',
+      isInconsistent: false,
+      discrepancyKm: 0,
+      status,
+      statusText,
+      daysPassed,
+      maxDays: effectiveMaxDays,
+      daysRemaining,
+      daysOverdue,
+      isDaysOverdue,
+    };
+  }
 
   const isInconsistent = cur < last;
   const discrepancyKm = isInconsistent ? (last - cur) : 0;
@@ -320,14 +627,6 @@ export function calculateMileageStatus(
     ? 100
     : Math.min(100, Math.round((drivenKm / ceiling) * 100));
 
-  // Time-based calculations
-  const daysPassed = calculateDaysBetweenJalaali(lastChangeDate);
-  const effectiveMaxDays = maxDays > 0 ? maxDays : 45;
-  const isDaysOverdue = daysPassed >= effectiveMaxDays;
-  const daysRemaining = Math.max(0, effectiveMaxDays - daysPassed);
-  const daysOverdue = Math.max(0, daysPassed - effectiveMaxDays);
-
-  const isDaysWarning = !isDaysOverdue && daysPassed >= (effectiveMaxDays - 7);
   const isMileageWarning = !isOverdue && !isInconsistent && remainingKm <= warningThreshold;
 
   let status: 'CRITICAL' | 'WARNING' | 'HEALTHY' = 'HEALTHY';
@@ -360,7 +659,7 @@ export function calculateMileageStatus(
     remainingKm,
     overdueKm,
     wearPercent,
-    isOverdue,
+    isOverdue: isOverdue || isDaysOverdue,
     isWarning,
     isHealthy,
     isInconsistent,
@@ -374,3 +673,4 @@ export function calculateMileageStatus(
     isDaysOverdue,
   };
 }
+

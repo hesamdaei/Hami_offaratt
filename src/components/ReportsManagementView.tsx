@@ -17,7 +17,8 @@ import {
 import { AppUser } from '../types/auth';
 import { isMasterAdmin } from '../utils/authService';
 import { Driver, AttendanceRecords, StaffMember } from '../types';
-import { VehicleItem, DriverDirectoryItem } from '../utils/fleetSeedData';
+import { VehicleItem, DriverDirectoryItem, VEHICLE_TYPE_NAMES } from '../utils/fleetSeedData';
+import { evaluateVehicleServiceStatus } from '../utils/maintenanceStandardsConfig';
 import { exportToExcel, exportStaffToExcel } from '../utils/excelExport';
 import { exportAuditLogsToExcel, getAuditLogs } from '../utils/auditLogger';
 import { assertMasterAdminExcelPermission } from '../utils/excelExportSecurity';
@@ -93,30 +94,42 @@ export const ReportsManagementView: FC<ReportsManagementViewProps> = ({
     try {
       assertMasterAdminExcelPermission(currentUser, 'ناوگان و سرویس روغن');
       setExportingReportId('fleet');
-      const data = vehicles.map((v, index) => ({
-        ردیف: toFaDigits(index + 1),
-        'کد شناسایی خودرو': v.code,
-        پلاک: v.plate,
-        'مدل خودرو': v.model,
-        'راننده منتسب': v.assignedDriverName || 'بدون راننده',
-        'کیلومتر فعلی': toFaDigits(v.currentKm),
-        'کیلومتر آخرین تعویض روغن': toFaDigits(v.lastOilChangeKm),
-        'کیلومتر سرویس بعدی': toFaDigits(v.nextOilChangeKm),
-        'کیلومتر باقیمانده تا سرویس': toFaDigits(v.nextOilChangeKm - v.currentKm),
-        'نوع روغن مصرفی': v.oilType || '۱۰W-۴۰',
-        'تاریخ آخرین سرویس': v.lastServiceDate || '---',
-        'وضعیت عملیاتی':
-          v.status === 'ACTIVE'
-            ? 'فعال در خط'
-            : v.status === 'PARKED'
-            ? 'پارکینگ'
-            : v.status === 'IN_MAINTENANCE'
-            ? 'تعمیرگاه'
-            : 'غیرفعال',
-        'اعتبار بیمه شخص ثالث': v.thirdPartyExpiry || '---',
-        'اعتبار معاینه فنی': v.inspectionExpiry || '---',
-        'اعتبار بیمه بدنه': v.insuranceExpiry || '---',
-      }));
+      const data = vehicles.map((v, index) => {
+        const evalRes = evaluateVehicleServiceStatus(v);
+        return {
+          ردیف: toFaDigits(index + 1),
+          'کد ناوگان': toFaDigits(v.code),
+          'پلاک انتظامی': v.plateNumber,
+          'نوع خودرو': VEHICLE_TYPE_NAMES[v.vehicleType] || v.vehicleType,
+          'راننده منتسب': v.driverName || 'بدون راننده',
+          'شماره تماس راننده': v.driverPhone ? toFaDigits(v.driverPhone) : '---',
+          'مبنای سرویس': evalRes.hasMileage ? 'کیلومترشمار و زمان' : 'سفر و زمان (بدون کیلومتر)',
+          'کیلومتر فعلی': evalRes.hasMileage ? toFaDigits(evalRes.currentMileage.toLocaleString('fa-IR')) : 'فاقد کیلومترشمار',
+          'کیلومتر آخرین تعویض روغن': evalRes.hasMileage ? toFaDigits(evalRes.lastChangeMileage.toLocaleString('fa-IR')) : '---',
+          'کیلومتر سرویس بعدی': evalRes.hasMileage ? toFaDigits(evalRes.nextTargetKm.toLocaleString('fa-IR')) : '---',
+          'پیمایش / سفر از آخرین سرویس': evalRes.hasMileage
+            ? `${toFaDigits(evalRes.drivenKm.toLocaleString('fa-IR'))} km`
+            : `${toFaDigits(evalRes.tripsDriven)} سفر (از ${toFaDigits(evalRes.maxTrips)})`,
+          'تاریخ آخرین تعویض روغن': toFaDigits(evalRes.lastChangeDate),
+          'روزهای سپری‌شده': `${toFaDigits(evalRes.daysPassed)} روز (از ${toFaDigits(evalRes.maxDays)} روز)`,
+          'وضعیت موعد سرویس': evalRes.statusText,
+          'جزئیات وضعیت سرویس': evalRes.statusReason,
+          'نوع روغن مصرفی': v.lastOilBrand || 'بهران دیزل سوپر ۱۵W۴۰',
+          'وضعیت عملیاتی':
+            v.status === 'ACTIVE'
+              ? 'آماده به کار'
+              : v.status === 'IN_MISSION'
+              ? 'در مأموریت'
+              : v.status === 'PARKING'
+              ? 'پارکینگ'
+              : v.status === 'IN_MAINTENANCE'
+              ? 'تعمیرگاه'
+              : 'غیرفعال',
+          'اعتبار بیمه شخص ثالث': v.thirdPartyExpiry ? toFaDigits(v.thirdPartyExpiry) : '---',
+          'اعتبار معاینه فنی': v.inspectionExpiry ? toFaDigits(v.inspectionExpiry) : '---',
+          'اعتبار بیمه بدنه': v.insuranceExpiry ? toFaDigits(v.insuranceExpiry) : '---',
+        };
+      });
 
       const worksheet = XLSX.utils.json_to_sheet(data);
       const workbook = XLSX.utils.book_new();

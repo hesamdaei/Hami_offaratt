@@ -17,6 +17,11 @@ import {
   FileCheck,
   PhoneCall,
   FileSpreadsheet,
+  LayoutDashboard,
+  PackageCheck,
+  Compass,
+  Calculator,
+  ScanLine,
 } from 'lucide-react';
 import { ActiveAppTab } from './Header';
 import { toFaDigits } from '../utils/jalaali';
@@ -102,6 +107,12 @@ export const Sidebar12: FC<Sidebar12Props> = ({
       title: 'عملیات دیسپچ',
       items: [
         {
+          id: 'DASHBOARD',
+          label: 'داشبورد عملیات',
+          subLabel: 'پایش و شاخص‌های ترابری',
+          icon: LayoutDashboard,
+        },
+        {
           id: 'ATTENDANCE',
           label: 'تابلوی حضور و غیاب',
           subLabel: 'رانندگان و پرسنل',
@@ -116,11 +127,29 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           badge: unassignedVehiclesCount > 0 ? `${toFaDigits(unassignedVehiclesCount)} آزاد` : undefined,
         },
         {
+          id: 'ORDERS',
+          label: 'سفارش‌ها و رزرو بار',
+          subLabel: 'ثبت و پیگیری بارنامه‌ها',
+          icon: PackageCheck,
+        },
+        {
+          id: 'OPERATIONS',
+          label: 'اعزام و دیسپچ ناوگان',
+          subLabel: 'کنترل میدانی و مأموریت‌ها',
+          icon: Compass,
+        },
+        {
           id: 'HANDOVER',
           label: 'برگه تحویل خودرو',
           subLabel: 'صورت‌جلسه ۶۶ قلمی و بدنه',
           icon: FileCheck,
           badge: '۶۶ قلم',
+        },
+        {
+          id: 'CUSTOMERS',
+          label: 'رهگیری بار و مشتریان',
+          subLabel: 'استعلام لحظه‌ای مرسولات',
+          icon: ScanLine,
         },
       ],
     },
@@ -166,6 +195,12 @@ export const Sidebar12: FC<Sidebar12Props> = ({
       title: 'گزارش‌ها و مدیریت',
       items: [
         {
+          id: 'FINANCE',
+          label: 'امور مالی و تعرفه‌ها',
+          subLabel: 'ماشین‌حساب و پیش‌فاکتور',
+          icon: Calculator,
+        },
+        {
           id: 'REPORTS',
           label: 'گزارش‌های مدیریتی',
           subLabel: 'استخراج اکسل و تحلیل‌ها',
@@ -194,12 +229,20 @@ export const Sidebar12: FC<Sidebar12Props> = ({
       items: group.items.filter((item) => {
         if (!currentUser || isMasterAdmin(currentUser)) return true;
         switch (item.id) {
+          case 'DASHBOARD':
+            return true;
           case 'ATTENDANCE':
             return canViewModule(currentUser, 'attendance');
           case 'VEHICLE_ASSIGNMENT':
             return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
+          case 'ORDERS':
+            return canViewModule(currentUser, 'attendance') || canViewModule(currentUser, 'drivers');
+          case 'OPERATIONS':
+            return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
           case 'HANDOVER':
             return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
+          case 'CUSTOMERS':
+            return true;
           case 'DRIVERS':
             return canViewModule(currentUser, 'drivers');
           case 'STAFF':
@@ -208,6 +251,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
             return canViewModule(currentUser, 'oilService');
           case 'PHONEBOOK':
             return true;
+          case 'FINANCE':
+            return isMasterAdmin(currentUser) || canViewModule(currentUser, 'attendance');
           case 'REGULATIONS':
             return canViewModule(currentUser, 'regulations');
           case 'REPORTS':
