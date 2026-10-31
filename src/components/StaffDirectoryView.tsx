@@ -2856,7 +2856,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
         columns={staffPrintColumns}
         data={sortedStaff}
         defaultOrientation="landscape"
-        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+        companyName="شرکت ترابری و لجستیک حامی"
         summaryCards={[
           { label: 'کل پرسنل', value: staffMembers.length },
           { label: 'پرسنل فعال', value: staffMembers.filter((s) => s.status !== 'inactive').length },

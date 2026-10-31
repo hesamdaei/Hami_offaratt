@@ -21,6 +21,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Settings,
+  Download,
+  Wrench,
+  Sparkles,
 } from 'lucide-react';
 import {
   checkLanServerStatus,
@@ -57,7 +60,7 @@ export const LanSharingModal: FC<LanSharingModalProps> = ({
   const [syncingAction, setSyncingAction] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [copiedCmd, setCopiedCmd] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'DATABASE' | 'ADDRESSES' | 'GUIDE' | 'FIREWALL'>('DATABASE');
+  const [activeTab, setActiveTab] = useState<'DATABASE' | 'ADDRESSES' | 'INSTALLER' | 'FIREWALL' | 'GUIDE'>('DATABASE');
 
   // Custom server configuration
   const [customServerInput, setCustomServerInput] = useState<string>('');
@@ -134,6 +137,24 @@ export const LanSharingModal: FC<LanSharingModalProps> = ({
     setCopiedCmd(true);
     onShowToast('دستور فایروال کپی شد. آن را در CMD ویندوز (Run as admin) اجرا کنید.', 'success');
     setTimeout(() => setCopiedCmd(false), 2500);
+  };
+
+  const handleDownloadScript = (scriptName: string) => {
+    const link = document.createElement('a');
+    link.href = `/api/setup/download/${scriptName}`;
+    link.setAttribute('download', scriptName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    onShowToast(`فایل ${scriptName} در حال دانلود است.`, 'info');
+  };
+
+  const [copiedScriptCmd, setCopiedScriptCmd] = useState<string | null>(null);
+  const handleCopyScriptCommand = (cmd: string, id: string) => {
+    navigator.clipboard.writeText(cmd);
+    setCopiedScriptCmd(id);
+    onShowToast('دستور در حافظه کپی شد.', 'success');
+    setTimeout(() => setCopiedScriptCmd(null), 2500);
   };
 
   const handleSyncNow = async () => {
@@ -271,6 +292,17 @@ export const LanSharingModal: FC<LanSharingModalProps> = ({
           >
             <Wifi className="w-4 h-4 text-sky-400" />
             <span>آدرس‌های اتصال شبکه</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('INSTALLER')}
+            className={`pb-2.5 px-3 font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              activeTab === 'INSTALLER'
+                ? 'border-blue-500 text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Download className="w-4 h-4 text-emerald-400" />
+            <span>فایل ست‌آپ و نصاب (Setup)</span>
           </button>
           <button
             onClick={() => setActiveTab('GUIDE')}
@@ -597,6 +629,207 @@ export const LanSharingModal: FC<LanSharingModalProps> = ({
                 <p className="text-slate-400 text-[11px] leading-relaxed">
                   در تنظیمات ویندوز ۱۱ (Settings &gt; Network &amp; internet &gt; Wi-Fi / Ethernet)، نوع شبکه را از Public به <strong>Private network</strong> تغییر دهید تا ویندوز اجازه تبادل داده در شبکه محلی را صادر کند.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SETUP INSTALLER WIZARD */}
+          {activeTab === 'INSTALLER' && (
+            <div className="space-y-4">
+              {/* Intro banner */}
+              <div className="bg-gradient-to-r from-emerald-950/40 to-blue-950/40 border border-emerald-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                    <span className="font-bold text-white text-sm">نصب و راه‌اندازی خودکار سامانه (Setup Wizard)</span>
+                  </div>
+                  <p className="text-slate-300 text-xs leading-relaxed">
+                    فایل‌های نصاب جهت آماده‌سازی خودکار ویندوز ۱۰/۱۱ و لینوکس، باز کردن پورت ۳۰۰۰ در فایروال، نصب خودکار پیش‌نیازها و ساخت آیکون دسکتاپ.
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDownloadScript('SETUP_INSTALLER.bat')}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-900/30 transition cursor-pointer shrink-0"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>دانلود فایل ست‌آپ ویندوز (.bat)</span>
+                </button>
+              </div>
+
+              {/* Installers Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Windows 1-Click Installer */}
+                <div className="bg-[#090f1d] border border-slate-800 hover:border-slate-700 transition rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Laptop className="w-4 h-4 text-blue-400" />
+                      <span className="font-bold text-white text-xs">نصاب خودکار ویندوز (Batch)</span>
+                    </div>
+                    <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full font-mono">
+                      SETUP_INSTALLER.bat
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    با یک کلیک و مجوز Administrator، نودجی‌اس را بررسی کرده، کتابخانه‌ها را نصب، پورت ۳۰۰۰ فایروال را باز و شورتکات دسکتاپ را می‌سازد.
+                  </p>
+                  <div className="pt-1 flex items-center gap-2">
+                    <button
+                      onClick={() => handleDownloadScript('SETUP_INSTALLER.bat')}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>دانلود فایل SETUP_INSTALLER.bat</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* PowerShell Setup */}
+                <div className="bg-[#090f1d] border border-slate-800 hover:border-slate-700 transition rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="w-4 h-4 text-sky-400" />
+                      <span className="font-bold text-white text-xs">اسکریپت پاورشل (PowerShell)</span>
+                    </div>
+                    <span className="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full font-mono">
+                      setup_installer.ps1
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    مناسب مدیران شبکه ویندوز ۱۱ جهت نصب از طریق خط فرمان PowerShell به همراه گزارش رنگی مراحل.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDownloadScript('setup_installer.ps1')}
+                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>دانلود</span>
+                    </button>
+                    <button
+                      onClick={() => handleCopyScriptCommand('powershell -ExecutionPolicy Bypass -File setup_installer.ps1', 'ps1-cmd')}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                      {copiedScriptCmd === 'ps1-cmd' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedScriptCmd === 'ps1-cmd' ? 'دستور کپی شد' : 'کپی دستور اجرای پاورشل'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Linux / Ubuntu Server */}
+                <div className="bg-[#090f1d] border border-slate-800 hover:border-slate-700 transition rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Server className="w-4 h-4 text-amber-400" />
+                      <span className="font-bold text-white text-xs">نصاب سرور لینوکس (systemd)</span>
+                    </div>
+                    <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-mono">
+                      setup_installer.sh
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    نصب خودکار روی اوبونتو و دبیان، ثبت سرویس سیستمی hami-fleet.service با قابلیت ری‌استارت خودکار ۲۴/۷ و باز کردن فایروال UFW.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDownloadScript('setup_installer.sh')}
+                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>دانلود</span>
+                    </button>
+                    <button
+                      onClick={() => handleCopyScriptCommand('sudo bash setup_installer.sh', 'sh-cmd')}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                      {copiedScriptCmd === 'sh-cmd' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedScriptCmd === 'sh-cmd' ? 'دستور کپی شد' : 'کپی دستور: sudo bash setup_installer.sh'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Utilities: Startup & Firewall */}
+                <div className="bg-[#090f1d] border border-slate-800 hover:border-slate-700 transition rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wrench className="w-4 h-4 text-emerald-400" />
+                      <span className="font-bold text-white text-xs">فایل‌های کمکی ویندوز</span>
+                    </div>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono">
+                      Utilities
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    فایل‌های آماده جهت راه‌اندازی روزانه، باز کردن مستقل فایروال یا حذف و پاکسازی میانبرها.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      onClick={() => handleDownloadScript('START_LAN_SERVER.bat')}
+                      className="flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-medium transition cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>START_LAN_SERVER</span>
+                    </button>
+                    <button
+                      onClick={() => handleDownloadScript('SETUP_FIREWALL.bat')}
+                      className="flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[11px] font-medium transition cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>SETUP_FIREWALL</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* What Setup installer does checklist */}
+              <div className="bg-[#091122] border border-slate-800/80 rounded-xl p-4 space-y-3">
+                <div className="text-white font-bold text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>مراحل ۶ گانه انجام‌شده در فایل ست‌آپ اولیه (Setup Wizard):</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] text-slate-300">
+                  <div className="flex items-start gap-2 bg-[#0c162c] p-2.5 rounded-lg border border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[10px]">۱</span>
+                    <div>
+                      <strong className="text-white block">بررسی و نصب خودکار Node.js:</strong>
+                      <span className="text-slate-400 text-[10px]">شناسایی نسخه LTS و در صورت نیاز دانلود و نصب خودکار via winget یا MSI رسمی.</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-[#0c162c] p-2.5 rounded-lg border border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[10px]">۲</span>
+                    <div>
+                      <strong className="text-white block">پیکربندی محیط و پایگاه داده:</strong>
+                      <span className="text-slate-400 text-[10px]">ایجاد فایل .env و ساخت دیتابیس اولیه data/hami-database.json از روی نسخه پیش‌فرض.</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-[#0c162c] p-2.5 rounded-lg border border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[10px]">۳</span>
+                    <div>
+                      <strong className="text-white block">نصب کتابخانه‌ها (npm install):</strong>
+                      <span className="text-slate-400 text-[10px]">دانلود و اعتبارسنجی کامل پکیج‌های پروژه و ابزارهای موردنیاز سرور.</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-[#0c162c] p-2.5 rounded-lg border border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[10px]">۴</span>
+                    <div>
+                      <strong className="text-white block">کامپایل نسخه تولیدی (npm run build):</strong>
+                      <span className="text-slate-400 text-[10px]">تولید پکیج بهینه‌سازی‌شده PWA و فایل‌های تحت وب در پوشه dist.</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-[#0c162c] p-2.5 rounded-lg border border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[10px]">۵</span>
+                    <div>
+                      <strong className="text-white block">پیکربندی فایروال ویندوز:</strong>
+                      <span className="text-slate-400 text-[10px]">باز کردن پورت ۳۰۰۰ (TCP Inbound) برای دسترسی فوری سایر سیستم‌ها و گوشی‌ها.</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-[#0c162c] p-2.5 rounded-lg border border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[10px]">۶</span>
+                    <div>
+                      <strong className="text-white block">ساخت میانبر دسکتاپ و منوی استارت:</strong>
+                      <span className="text-slate-400 text-[10px]">ایجاد شورتکات ۱ کلیکی «سامانه لجستیک حامی بار» روی دسکتاپ و اجرای خودکار.</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

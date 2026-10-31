@@ -379,13 +379,64 @@ app.post(['/api/lan/users', '/api/users'], (req, res) => {
   }
 
   const db = readDatabase() || {};
-  db.users = incomingUsers;
+  const currentUsers: any[] = Array.isArray(db.users) ? db.users : [...INITIAL_USERS];
+  const userMap = new Map<string, any>(currentUsers.map((u) => [u.id, u]));
+
+  // Enforce username immutability: Existing user's username cannot be modified!
+  const sanitizedUsers = incomingUsers.map((incUser: any) => {
+    if (!incUser || typeof incUser !== 'object') return incUser;
+    const existing = userMap.get(incUser.id);
+    if (existing && existing.username) {
+      if (incUser.username !== existing.username) {
+        console.warn(`[SECURITY WARNING] تلاش برای تغییر نام‌کاربری نامتغیر «${existing.username}» به «${incUser.username}» در سرور مسدود شد.`);
+      }
+      return {
+        ...incUser,
+        username: existing.username, // Strictly immutable
+      };
+    }
+    return incUser;
+  });
+
+  // Ensure at least one Master Admin remains active
+  const hasActiveMaster = sanitizedUsers.some((u: any) => u.isMasterAdmin && u.isActive !== false);
+  if (!hasActiveMaster) {
+    return res.status(400).json({
+      ok: false,
+      error: 'عملیات ناموفق: سامانه باید حداقل یک «مدیر ارشد» فعال و با دسترسی کامل داشته باشد.',
+    });
+  }
+
+  db.users = sanitizedUsers;
   const success = saveDatabase(db);
   if (success) {
-    res.json({ ok: true, message: 'کاربران در دیتابیس شبکه ذخیره شدند', version: dbVersion });
+    res.json({ ok: true, message: 'کاربران با اعمال سیاست امنیت و ثبات نام‌کاربری در دیتابیس شبکه ذخیره شدند', version: dbVersion });
   } else {
     res.status(500).json({ ok: false, error: 'خطا در ذخیره کاربران در دیتابیس شبکه' });
   }
+});
+
+// Managerial Excel Reports Permission Enforcement API
+app.post(['/api/lan/reports/permission', '/api/reports/permission'], (req, res) => {
+  const { requesterId, requesterUsername, reportType } = req.body || {};
+  const db = readDatabase() || {};
+  const users: any[] = Array.isArray(db.users) ? db.users : INITIAL_USERS;
+
+  const user = users.find(
+    (u) =>
+      (requesterId && u.id === requesterId) ||
+      (requesterUsername && u.username?.toLowerCase() === String(requesterUsername).toLowerCase())
+  );
+
+  if (!user || (!user.isMasterAdmin && user.roleTitle !== 'مدیریت ارشد سیستم')) {
+    console.warn(`[SECURITY AUDIT - FORBIDDEN] تلاش غیرمجاز برای دریافت گزارش اکسل «${reportType || 'عمومی'}» توسط کاربر: ${requesterUsername || requesterId || 'ناشناس'} از IP: ${req.ip}`);
+    return res.status(403).json({
+      ok: false,
+      error: 'دسترسی غیرمجاز. خروجی اکسل گزارش‌های مدیریتی منحصراً برای نقش مدیر ارشد مجاز می‌باشد.',
+    });
+  }
+
+  res.json({ ok: true, message: 'مجوز صادر شد.', allowed: true });
 });
 
 // ====================================================================
@@ -1202,6 +1253,28 @@ app.get(['/api/lan/security-status', '/api/security-status'], (req, res) => {
       timestamp: new Date().toISOString(),
     },
   });
+});
+
+// Download setup installer scripts
+app.get('/api/setup/download/:script', (req, res) => {
+  const allowed = [
+    'SETUP_INSTALLER.bat',
+    'setup_installer.ps1',
+    'setup_installer.sh',
+    'START_LAN_SERVER.bat',
+    'SETUP_FIREWALL.bat',
+    'CREATE_DESKTOP_SHORTCUT.bat',
+    'UNINSTALL.bat',
+  ];
+  const scriptName = req.params.script;
+  if (!allowed.includes(scriptName)) {
+    return res.status(404).send('فایل مورد نظر یافت نشد.');
+  }
+  const filePath = path.join(__dirname, scriptName);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('فایل روی سرور موجود نیست.');
+  }
+  res.download(filePath, scriptName);
 });
 
 // Setup Frontend Serving: Vite dev middleware or Static Production

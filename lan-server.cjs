@@ -382,6 +382,28 @@ app.get('/api/lan/backup/download/:filename', (req, res) => {
   }
 });
 
+// دانلود اسکریپت‌های نصب و راه‌اندازی اولیه
+app.get('/api/setup/download/:script', (req, res) => {
+  const allowed = [
+    'SETUP_INSTALLER.bat',
+    'setup_installer.ps1',
+    'setup_installer.sh',
+    'START_LAN_SERVER.bat',
+    'SETUP_FIREWALL.bat',
+    'CREATE_DESKTOP_SHORTCUT.bat',
+    'UNINSTALL.bat',
+  ];
+  const scriptName = req.params.script;
+  if (!allowed.includes(scriptName)) {
+    return res.status(404).send('فایل مورد نظر یافت نشد.');
+  }
+  const filePath = path.join(__dirname, scriptName);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('فایل روی سرور موجود نیست.');
+  }
+  res.download(filePath, scriptName);
+});
+
 // سرو کردن فایل‌های استاتیک برنامه ساخته‌شده (Production dist)
 if (fs.existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR));

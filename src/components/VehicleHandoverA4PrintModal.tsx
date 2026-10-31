@@ -145,11 +145,11 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
           <div className="w-1/3 flex flex-col items-start justify-center">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-base shrink-0">
-                ص
+                ح
               </div>
               <div>
                 <div className="font-black text-slate-950 text-xs sm:text-sm tracking-tight">
-                  شرکت ترابری و لجستیک صداقت بار پیشرو
+                  شرکت ترابری و لجستیک حامی
                 </div>
                 <div className="text-[9px] text-slate-600 font-mono">
                   تلفن تماس: ۱۷۸۶ | پشتیبانی ناوگان
@@ -180,7 +180,7 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
             </div>
             <div className="text-right text-[9.5px] text-slate-600 truncate">
               <span className="font-bold">محل تحویل: </span>
-              <span>{isBlankForm ? 'پایانه مرکزی ناوگان صداقت بار پیشرو' : (record.address || 'پایانه مرکزی صداقت بار پیشرو')}</span>
+              <span>{isBlankForm ? 'پایانه مرکزی ناوگان حامی' : (record.address || 'پایانه مرکزی حامی')}</span>
             </div>
           </div>
         </div>
@@ -263,7 +263,7 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
         {/* ================= 3. 3-COLUMN 66-ITEM CHECKLIST TABLE ================= */}
         <div className="border border-slate-900 rounded-lg overflow-hidden mb-2">
           <div className="bg-slate-100 border-b border-slate-900 py-0.5 px-2 text-center font-bold text-[10px] text-slate-900 flex items-center justify-between">
-            <span>چک‌لیست رسمی سلامت قطعات، تجهیزات، ادوات فنی و اسناد خودرو (۶۶ قلم استاندارد صداقت بار پیشرو)</span>
+            <span>چک‌لیست رسمی سلامت قطعات، تجهیزات، ادوات فنی و اسناد خودرو (۶۶ قلم استاندارد سامانه حامی)</span>
             {isBlankForm && (
               <span className="text-[9px] text-slate-600 font-normal">
                 (جهت بازرسی حضوری: داخل مربع مربوطه را با خودکار علامت بزنید)
@@ -449,7 +449,7 @@ export const VehicleHandoverA4PrintModal: FC<VehicleHandoverA4PrintModalProps> =
         <div className="border border-slate-900 rounded-lg p-2.5 grid grid-cols-2 gap-4 text-[10px] font-bold text-slate-900 bg-slate-50/50">
           <div className="flex flex-col items-center justify-between min-h-[50px] border-l border-slate-300 pl-3">
             <div>
-              نماینده تحویل‌دهنده (شرکت ترابری و لجستیک صداقت بار پیشرو):{' '}
+              نماینده تحویل‌دهنده (شرکت ترابری و لجستیک حامی):{' '}
               <span className="font-normal">{record.delivererName || 'مسئول اعزام و ترابری'}</span>
             </div>
             <div className="text-[9px] text-slate-600 font-normal">امضا و مهر رسمی شرکت:</div>

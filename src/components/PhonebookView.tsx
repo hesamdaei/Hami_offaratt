@@ -53,12 +53,15 @@ import { StaffMember } from '../types';
 import { toFaDigits } from '../utils/jalaali';
 import { VoipPhoneButton } from './VoipPhoneButton';
 import { PhonebookContactModal } from './PhonebookContactModal';
+import { assertMasterAdminExcelPermission, canExportExcel } from '../utils/excelExportSecurity';
+import { getStoredSession } from '../utils/authService';
 import * as XLSX from 'xlsx';
 
 interface PhonebookViewProps {
   drivers: DriverDirectoryItem[];
   staffMembers: StaffMember[];
   isStandalone?: boolean;
+  currentUser?: any;
   onCallPhone?: (phone: string, name?: string, role?: string) => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -67,9 +70,11 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
   drivers = [],
   staffMembers = [],
   isStandalone = false,
+  currentUser,
   onCallPhone,
   onShowToast,
 }) => {
+  const activeUser = currentUser || getStoredSession();
   // Settings & Storage
   const [settings, setSettings] = useState<PhonebookCustomSettings>(getPhonebookSettings());
   const [customContacts, setCustomContacts] = useState<PhonebookContact[]>(getCustomPhonebookContacts());
@@ -209,9 +214,11 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
     window.open(url, '_blank', 'width=1280,height=850,menubar=no,toolbar=no,location=no');
   };
 
-  // Export to Excel
+  // Export to Excel (Strictly restricted to Master Admin)
   const handleExportExcel = () => {
     try {
+      assertMasterAdminExcelPermission(activeUser, 'دفترچه تلفن مخاطبین');
+
       const exportRows = filteredContacts.map((c, idx) => ({
         ردیف: idx + 1,
         'نام و نام خانوادگی': c.name,
@@ -243,8 +250,8 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
       XLSX.utils.book_append_sheet(wb, ws, 'دفترچه_تلفن');
       XLSX.writeFile(wb, `Hamibar_Phonebook_${new Date().toISOString().slice(0, 10)}.xlsx`);
       onShowToast?.('فایل اکسل دفترچه تلفن با موفقیت صادر شد.', 'success');
-    } catch {
-      onShowToast?.('خطا در صدور فایل اکسل.', 'error');
+    } catch (err: any) {
+      onShowToast?.(err.message || 'خطا در صدور فایل اکسل.', 'error');
     }
   };
 
@@ -327,15 +334,20 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
             </button>
           )}
 
-          {/* Export Excel */}
+          {/* Export Excel (Master Admin Only) */}
           <button
             type="button"
             onClick={handleExportExcel}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-            title="دریافت فایل اکسل مخاطبین"
+            className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+              canExportExcel(activeUser)
+                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                : 'bg-slate-850 text-slate-500 border-slate-800 opacity-80 hover:bg-slate-800'
+            }`}
+            title={canExportExcel(activeUser) ? 'دریافت خروجی اکسل دفترچه تلفن' : 'خروجی اکسل منحصراً ویژه مدیر ارشد سامانه است'}
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <FileSpreadsheet className={`w-3.5 h-3.5 ${canExportExcel(activeUser) ? 'text-emerald-400' : 'text-slate-500'}`} />
             <span className="hidden sm:inline">اکسل</span>
+            {!canExportExcel(activeUser) && <span className="text-[10px] text-amber-500/80">🔒</span>}
           </button>
 
           {/* Quick Print */}

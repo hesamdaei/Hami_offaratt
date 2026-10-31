@@ -3461,7 +3461,7 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
         data={filteredVehicles}
         summaryCards={fleetSpecSummaryCards}
         defaultOrientation="landscape"
-        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+        companyName="شرکت ترابری و لجستیک حامی"
       />
     </div>
   );

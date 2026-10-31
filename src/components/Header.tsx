@@ -28,6 +28,7 @@ import {
   PhoneCall,
   KeyRound,
   Activity,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { QuickSearchSpotlight } from './QuickSearchSpotlight';
@@ -47,6 +48,7 @@ export type ActiveAppTab =
   | 'OIL_SERVICE'
   | 'HANDOVER'
   | 'REGULATIONS'
+  | 'REPORTS'
   | 'USERS_LOGS'
   | 'PHONEBOOK';
 
@@ -225,9 +227,15 @@ export const Header: FC<HeaderProps> = ({
       icon: BookOpen,
     },
     {
+      id: 'REPORTS',
+      title: 'گزارش‌های مدیریتی و اکسل',
+      shortTitle: 'گزارش‌ها',
+      icon: FileSpreadsheet,
+    },
+    {
       id: 'USERS_LOGS',
-      title: 'مدیریت کاربران و لاگ',
-      shortTitle: 'کاربران و لاگ',
+      title: 'مدیریت کاربران و سطوح دسترسی',
+      shortTitle: 'مدیریت کاربران',
       icon: Shield,
     },
     {
@@ -257,6 +265,8 @@ export const Header: FC<HeaderProps> = ({
         return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
       case 'REGULATIONS':
         return canViewModule(currentUser, 'regulations');
+      case 'REPORTS':
+        return isMasterAdmin(currentUser);
       case 'USERS_LOGS':
         return canManageUsers(currentUser) || isMasterAdmin(currentUser);
       case 'PHONEBOOK':

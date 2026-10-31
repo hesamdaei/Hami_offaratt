@@ -22,7 +22,8 @@ export type AuditActionType =
   | 'REGULATION_UPDATE'
   | 'BACKUP_EXPORT'
   | 'BACKUP_RESTORE'
-  | 'NETWORK_SYNC';
+  | 'NETWORK_SYNC'
+  | 'SECURITY_ACCESS_DENIED';
 
 export type AuditSeverity = 'INFO' | 'WARNING' | 'CRITICAL' | 'SUCCESS';
 
@@ -36,6 +37,7 @@ export type AuditModule =
   | 'FLEET'
   | 'REGULATIONS'
   | 'BACKUP'
+  | 'SECURITY'
   | 'SYSTEM';
 
 export interface AuditLogItem {

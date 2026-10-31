@@ -90,7 +90,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
         receiptNumber: '10482',
         date: formatPersianDateKey(today.jy, today.jm, today.jd),
         time: '۰۸:۳۰',
-        address: 'پایانه مرکزی ناوگان صداقت بار پیشرو',
+        address: 'پایانه مرکزی ناوگان لجستیک حامی',
         driverName: 'رحیم',
         driverLastName: 'بدرلو',
         driverFatherName: 'علی',
@@ -117,7 +117,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
           },
         ],
         affidavitText: DEFAULT_HANDOVER_AFFIDAVIT,
-        delivererName: 'مسئول اعزام و ترابری صداقت بار پیشرو',
+        delivererName: 'مسئول اعزام و ترابری سامانه حامی',
         receiverName: 'رحیم بدرلو',
         createdAt: formatPersianDateKey(today.jy, today.jm, today.jd),
       },
@@ -153,7 +153,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
   const [handoverTime, setHandoverTime] = useState(() =>
     new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
   );
-  const [address, setAddress] = useState('پایانه مرکزی ناوگان صداقت بار پیشرو');
+  const [address, setAddress] = useState('پایانه مرکزی ناوگان لجستیک حامی');
 
   const [driverName, setDriverName] = useState('');
   const [driverLastName, setDriverLastName] = useState('');
@@ -176,7 +176,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
 
   const [damages, setDamages] = useState<BodyDamageMarker[]>([]);
   const [affidavitText, setAffidavitText] = useState(DEFAULT_HANDOVER_AFFIDAVIT);
-  const [delivererName, setDelivererName] = useState('مسئول اعزام و ترابری صداقت بار پیشرو');
+  const [delivererName, setDelivererName] = useState('مسئول اعزام و ترابری سامانه حامی');
   const [receiverName, setReceiverName] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -254,7 +254,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
     setReceiptNumber(nextReceiptNum);
     setHandoverDate(todayDateStr);
     setHandoverTime(nowTime);
-    setAddress('پایانه مرکزی ناوگان صداقت بار پیشرو');
+    setAddress('پایانه مرکزی ناوگان لجستیک حامی');
 
     setDriverName('');
     setDriverLastName('');
@@ -274,7 +274,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
 
     setDamages([]);
     setAffidavitText(DEFAULT_HANDOVER_AFFIDAVIT);
-    setDelivererName('مسئول اعزام و ترابری صداقت بار پیشرو');
+    setDelivererName('مسئول اعزام و ترابری سامانه حامی');
     setReceiverName('');
     setNotes('');
 
@@ -1239,11 +1239,11 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
                   <div className="w-1/3 flex flex-col items-start justify-center">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-base">
-                        ص
+                        ح
                       </div>
                       <div>
                         <div className="font-black text-slate-900 text-sm tracking-tight">
-                          ترابری و لجستیک صداقت بار پیشرو
+                          شرکت ترابری و لجستیک حامی
                         </div>
                         <div className="text-[9px] text-slate-600 font-mono">
                           تلفن تماس: ۱۷۸۶
@@ -1273,7 +1273,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
                     </div>
                     <div className="text-right text-[10px] text-slate-600 truncate">
                       <span className="font-bold">آدرس: </span>
-                      <span>{viewingRecord.address || 'پایانه مرکزی ناوگان صداقت بار پیشرو'}</span>
+                      <span>{viewingRecord.address || 'پایانه مرکزی ناوگان لجستیک حامی'}</span>
                     </div>
                   </div>
                 </div>
@@ -1413,7 +1413,7 @@ export const VehicleHandoverManager: FC<VehicleHandoverManagerProps> = ({
                 <div className="border border-slate-900 rounded-lg p-3 grid grid-cols-2 gap-6 text-[10.5px]">
                   <div className="text-center border-l border-slate-300 pl-4 space-y-8">
                     <div className="font-bold text-slate-900">
-                      نماینده تحویل‌دهنده (شرکت ترابری و لجستیک صداقت بار پیشرو):
+                      نماینده تحویل‌دهنده (شرکت ترابری و لجستیک حامی):
                     </div>
                     <div className="text-slate-700 font-semibold">{viewingRecord.delivererName}</div>
                     <div className="text-[9.5px] text-slate-500">امضا و اثر انگشت:</div>

@@ -62,6 +62,8 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { NotificationPopover } from './components/NotificationPopover';
 import { UserManagementModal } from './components/UserManagementModal';
 import { IntegratedUserAndAuditHubView } from './components/IntegratedUserAndAuditHubView';
+import { ReportsManagementView } from './components/ReportsManagementView';
+import { APP_BUILD_TAG } from './constants/version';
 import { recordAuditLog } from './utils/auditLogger';
 import { BaleMessengerModal } from './components/BaleMessengerModal';
 import { MasterAdminModal } from './components/MasterAdminModal';
@@ -476,6 +478,8 @@ export const App: FC = () => {
           return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
         case 'REGULATIONS':
           return canViewModule(currentUser, 'regulations');
+        case 'REPORTS':
+          return isMasterAdmin(currentUser);
         case 'USERS_LOGS':
           return canManageUsers(currentUser) || isMasterAdmin(currentUser);
         case 'PHONEBOOK':
@@ -2005,6 +2009,7 @@ export const App: FC = () => {
           drivers={driverDirectory}
           staffMembers={staffMembers}
           isStandalone={true}
+          currentUser={currentUser}
           onCallPhone={handleStartVoipCall}
           onShowToast={showToast}
         />
@@ -2298,7 +2303,22 @@ export const App: FC = () => {
             </div>
           )}
 
-          {/* Module 6: Integrated User Management & System Audit Logs Hub */}
+          {/* Module 6: Managerial Excel Reports Hub */}
+          {activeTab === 'REPORTS' && (
+            <div className="animate-in fade-in duration-150">
+              <ReportsManagementView
+                currentUser={currentUser}
+                drivers={drivers}
+                driverDirectory={driverDirectory}
+                staff={staffMembers}
+                vehicles={vehicles}
+                records={records}
+                onShowToast={(msg, type) => showToast(msg, type)}
+              />
+            </div>
+          )}
+
+          {/* Module 7: Integrated User Management & System Audit Logs Hub */}
           {activeTab === 'USERS_LOGS' && (
             <div className="animate-in fade-in duration-150">
               <IntegratedUserAndAuditHubView
@@ -2312,13 +2332,14 @@ export const App: FC = () => {
             </div>
           )}
 
-          {/* Module 7: Smart Customizable Phonebook Hub (دفترچه تلفن و سانترال هوشمند) */}
+          {/* Module 8: Smart Customizable Phonebook Hub (دفترچه تلفن و سانترال هوشمند) */}
           {activeTab === 'PHONEBOOK' && (
             <div className="animate-in fade-in duration-150">
               <PhonebookView
                 drivers={driverDirectory}
                 staffMembers={staffMembers}
                 isStandalone={false}
+                currentUser={currentUser}
                 onCallPhone={handleStartVoipCall}
                 onShowToast={showToast}
               />
@@ -2336,7 +2357,7 @@ export const App: FC = () => {
             <span>مدیریت حضور و غیاب، پرونده رانندگان و پرسنل، تعویض روغن و آیین‌نامه انضباطی</span>
           </div>
           <div className="text-slate-400 font-mono text-[11px]">
-            نسخه اختصاصی سامانه حامی
+            {APP_BUILD_TAG}
           </div>
         </div>
       </footer>

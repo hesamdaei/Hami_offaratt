@@ -1671,7 +1671,7 @@ export const FleetManagementView: FC<FleetManagementViewProps> = ({
         data={sortedVehicles}
         summaryCards={fleetPrintSummaryCards}
         defaultOrientation="landscape"
-        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+        companyName="شرکت ترابری و لجستیک حامی"
       />
     </div>
   );

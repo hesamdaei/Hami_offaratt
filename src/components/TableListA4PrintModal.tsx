@@ -43,7 +43,7 @@ export const TableListA4PrintModal: FC<TableListA4PrintModalProps> = ({
   data,
   summaryCards = [],
   defaultOrientation = 'landscape',
-  companyName = 'شرکت ترابری و لجستیک صداقت بار پیشرو',
+  companyName = 'شرکت ترابری و لجستیک حامی',
   footerNote,
 }) => {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(defaultOrientation);
@@ -312,7 +312,7 @@ export const TableListA4PrintModal: FC<TableListA4PrintModalProps> = ({
               </div>
 
               <div className="border border-slate-400 rounded-lg p-2.5 flex flex-col justify-between min-h-[70px] bg-slate-50/50">
-                <div>مدیرعامل / تأیید مدیریت صداقت بار پیشرو</div>
+                <div>مدیرعامل / تأیید مدیریت سامانه حامی</div>
                 <div className="text-[9.5px] text-slate-600 font-normal">امضا و مهر رسمی شرکت:</div>
               </div>
             </div>
@@ -321,7 +321,7 @@ export const TableListA4PrintModal: FC<TableListA4PrintModalProps> = ({
             <div className="mt-3 text-center text-[9px] text-slate-600 font-mono flex items-center justify-between border-t border-slate-300 pt-2">
               <div>
                 {footerNote ||
-                  'این گزارش چاپی استاندارد توسط سامانه رسمی مدیریت ناوگان و دیسپچ صداقت بار پیشرو صادر شده و معتبر است.'}
+                  'این گزارش چاپی استاندارد توسط سامانه رسمی مدیریت ناوگان و دیسپچ حامی صادر شده و معتبر است.'}
               </div>
               <div>
                 تاریخ پرینت: {toFaDigits(todayDateStr)} • ساعت: {toFaDigits(nowTimeStr)}

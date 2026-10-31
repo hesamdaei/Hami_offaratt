@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx';
 import { Driver, AttendanceRecords } from '../types';
+import { AppUser } from '../types/auth';
+import { assertMasterAdminExcelPermission } from './excelExportSecurity';
 import {
   getMonthDaysCount,
   getPersianWeekday,
@@ -13,8 +15,10 @@ export function exportToExcel(
   drivers: Driver[],
   records: AttendanceRecords,
   year: number,
-  month: number
+  month: number,
+  currentUser?: AppUser | null
 ) {
+  assertMasterAdminExcelPermission(currentUser, 'گزارش حضور و غیاب ماهانه رانندگان');
   const daysInMonth = getMonthDaysCount(year, month);
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const monthName = PERSIAN_MONTH_NAMES[month - 1];
@@ -133,8 +137,10 @@ export function exportStaffToExcel(
   staff: { id: string; name: string; code: string; role: string; department: string }[],
   records: AttendanceRecords,
   year: number,
-  month: number
+  month: number,
+  currentUser?: AppUser | null
 ) {
+  assertMasterAdminExcelPermission(currentUser, 'گزارش حضور و غیاب ماهانه پرسنل');
   const daysInMonth = getMonthDaysCount(year, month);
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const monthName = PERSIAN_MONTH_NAMES[month - 1];

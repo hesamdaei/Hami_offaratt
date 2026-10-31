@@ -33,9 +33,12 @@ import {
   RotateCcw,
   Sparkles,
   Layers,
-  BarChart3,
   UserX,
   FileText,
+  BarChart3,
+  Lock,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { AppUser, UserPermissions, ModulePermission } from '../types/auth';
 import {
@@ -97,6 +100,8 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'MASTER' | 'OPERATOR' | 'FLEET'>('ALL');
   const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [userPage, setUserPage] = useState<number>(1);
+  const [userPageSize, setUserPageSize] = useState<number>(12);
 
   // SQL Architecture Modal State
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
@@ -269,19 +274,8 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       return;
     }
 
-    const cleanEditUsername = editUsername.trim().toLowerCase();
-    if (!cleanEditUsername) {
-      onShowToast('نام کاربری نمی‌تواند خالی باشد.', 'error');
-      return;
-    }
-
-    const usernameConflict = users.some(
-      (u) => u.id !== editingUser.id && u.username.toLowerCase() === cleanEditUsername
-    );
-    if (usernameConflict) {
-      onShowToast('این نام کاربری قبلاً توسط کاربر دیگری در سامانه ثبت شده است.', 'error');
-      return;
-    }
+    // Username is strictly immutable after creation (Architecture & Security Requirement 6.4)
+    const immutableUsername = editingUser.username;
 
     const oldValues = {
       fullName: editingUser.fullName,
@@ -295,7 +289,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
         return {
           ...u,
           fullName: cleanFullName,
-          username: cleanEditUsername,
+          username: immutableUsername,
           roleTitle: editRoleTitle.trim() || u.roleTitle,
           password: editPassword.trim() ? editPassword.trim() : u.password,
           passwordHash: editPassword.trim() ? undefined : u.passwordHash,
@@ -324,12 +318,12 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       action: 'USER_UPDATE',
       module: 'USERS',
       title: 'ویرایش مشخصات و دسترسی‌های کاربر',
-      description: `مشخصات کاربر «${cleanFullName}» (نام کاربری: ${cleanEditUsername}) توسط «${currentUser?.fullName || 'مدیر'}» به‌روزرسانی شد.`,
+      description: `مشخصات کاربر «${cleanFullName}» (نام کاربری: ${immutableUsername}) توسط «${currentUser?.fullName || 'مدیر'}» به‌روزرسانی شد.`,
       targetId: editingUser.id,
       targetName: cleanFullName,
       severity: 'WARNING',
       previousValue: JSON.stringify(oldValues),
-      newValue: JSON.stringify({ fullName: cleanFullName, username: cleanEditUsername, roleTitle: editRoleTitle }),
+      newValue: JSON.stringify({ fullName: cleanFullName, username: immutableUsername, roleTitle: editRoleTitle }),
     });
 
     setAuditLogs(getAuditLogs());
@@ -373,6 +367,19 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     if (!userToDelete) return;
     if (userToDelete.isMasterAdmin) {
       onShowToast('کاربر مدیر ارشد سیستم غیرقابل حذف است.', 'error');
+      setUserToDelete(null);
+      return;
+    }
+
+    // Protect historical records and audit trail integrity (Requirement Phase 7 & 9)
+    const hasHistoricalLogs = auditLogs.some(
+      (l) => l.userId === userToDelete.id || l.userName.toLowerCase() === userToDelete.username.toLowerCase()
+    );
+    if (hasHistoricalLogs) {
+      onShowToast(
+        'این حساب دارای وقایع و لاگ‌های ثبتی تاریخی در سامانه است و حذف فیزیکی آن مجاز نیست. جهت تعلیق دسترسی، وضعیت حساب را روی «غیرفعال» قرار دهید.',
+        'error'
+      );
       setUserToDelete(null);
       return;
     }
@@ -449,12 +456,20 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   };
 
   const handleExportLogs = () => {
+    if (!isMasterAdmin(currentUser)) {
+      onShowToast('دسترسی غیرمجاز: دریافت و دانلود گزارش‌های اکسل منحصراً در اختیار مدیر ارشد سامانه است.', 'error');
+      return;
+    }
     if (filteredLogs.length === 0) {
       onShowToast('هیچ لاگی با فیلترهای جاری برای دانلود یافت نشد.', 'error');
       return;
     }
-    exportAuditLogsToExcel(filteredLogs);
-    onShowToast(`خروجی اکسل ${toFaDigits(filteredLogs.length)} رکورد با موفقیت دریافت شد.`, 'success');
+    try {
+      exportAuditLogsToExcel(filteredLogs, currentUser);
+      onShowToast(`خروجی اکسل ${toFaDigits(filteredLogs.length)} رکورد با موفقیت دریافت شد.`, 'success');
+    } catch (err: any) {
+      onShowToast(err.message || 'خطا در صدور فایل اکسل', 'error');
+    }
   };
 
   // -------------------------------------------------------------
@@ -481,6 +496,12 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       return true;
     });
   }, [users, userSearchQuery, userRoleFilter, userStatusFilter]);
+
+  const totalUserPages = Math.ceil(filteredUsers.length / userPageSize) || 1;
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userPageSize;
+    return filteredUsers.slice(start, start + userPageSize);
+  }, [filteredUsers, userPage, userPageSize]);
 
   const filteredLogs = useMemo(() => {
     return auditLogs.filter((log) => {
@@ -766,7 +787,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
 
           {/* User Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {filteredUsers.map((user) => {
+            {paginatedUsers.map((user) => {
               const isUserSelf = currentUser?.id === user.id;
 
               return (
@@ -953,6 +974,71 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
               );
             })}
           </div>
+
+          {/* Pagination Toolbar for 20 to 100+ Users Scale */}
+          {filteredUsers.length > 0 && (
+            <div className="bg-[#0b1325] border border-slate-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300">
+              <div className="flex items-center gap-2">
+                <span>نمایش</span>
+                <span className="font-bold text-white font-mono">
+                  {toFaDigits((userPage - 1) * userPageSize + 1)}
+                </span>
+                <span>تا</span>
+                <span className="font-bold text-white font-mono">
+                  {toFaDigits(Math.min(userPage * userPageSize, filteredUsers.length))}
+                </span>
+                <span>از مجموع</span>
+                <span className="font-bold text-amber-400 font-mono">
+                  {toFaDigits(filteredUsers.length)}
+                </span>
+                <span>کاربر</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-[11px]">تعداد در هر صفحه:</span>
+                <select
+                  value={userPageSize}
+                  onChange={(e) => {
+                    setUserPageSize(parseInt(e.target.value, 10));
+                    setUserPage(1);
+                  }}
+                  className="bg-[#070d18] border border-slate-700 rounded-lg px-2 py-1 text-white text-xs font-mono focus:outline-none"
+                >
+                  <option value={6}>۶</option>
+                  <option value={12}>۱۲</option>
+                  <option value={24}>۲۴</option>
+                  <option value={48}>۴۸</option>
+                  <option value={96}>۹۶</option>
+                </select>
+
+                <div className="flex items-center gap-1 mr-2">
+                  <button
+                    type="button"
+                    disabled={userPage <= 1}
+                    onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                    className="p-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    title="صفحه قبل"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  <span className="px-2.5 py-1 rounded-lg bg-[#070d18] border border-slate-800 font-mono text-white text-xs">
+                    {toFaDigits(userPage)} / {toFaDigits(totalUserPages)}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={userPage >= totalUserPages}
+                    onClick={() => setUserPage((p) => Math.min(totalUserPages, p + 1))}
+                    className="p-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    title="صفحه بعد"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1621,18 +1707,24 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                 </div>
 
                 <div>
-                  <label className="block text-amber-300 font-bold mb-1 flex items-center justify-between">
-                    <span>نام کاربری ورود به سیستم (قابل ویرایش) *</span>
-                    <span className="text-[10px] text-slate-400 font-mono">لاتین</span>
+                  <label className="block text-slate-300 font-bold mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>نام کاربری ورود (تغییرناپذیر)</span>
+                    </span>
+                    <span className="text-[10px] text-amber-400 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">غیرقابل ویرایش</span>
                   </label>
                   <input
                     type="text"
                     dir="ltr"
-                    required
-                    value={editUsername}
-                    onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
-                    className="w-full bg-[#0a1222] border border-amber-500/50 rounded-xl px-3 py-2 text-amber-200 focus:outline-none focus:border-amber-400 font-mono"
+                    readOnly
+                    disabled
+                    value={editingUser.username}
+                    className="w-full bg-[#070d18] border border-slate-800 rounded-xl px-3 py-2 text-slate-400 cursor-not-allowed font-mono opacity-80"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    نام کاربری پس از ایجاد اولیه ثابت بوده و جهت حفظ یکپارچگی سوابق و ردپای ممیزی غیرقابل تغییر است.
+                  </p>
                 </div>
 
                 <div>

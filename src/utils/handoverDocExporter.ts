@@ -5,6 +5,8 @@ import {
 } from '../types/vehicleHandover';
 import { toFaDigits } from './jalaali';
 import { parseIranianPlate } from '../components/IranianPlate';
+import { AppUser } from '../types/auth';
+import { assertMasterAdminExcelPermission } from './excelExportSecurity';
 
 /**
  * Export Vehicle Handover Form to Microsoft Word (.doc)
@@ -27,7 +29,7 @@ export function exportHandoverToWord(
   const receiptNo = isBlank ? '................' : toFaDigits(record.receiptNumber);
   const dateStr = isBlank ? '.... / .... / ....' : toFaDigits(record.date);
   const timeStr = isBlank ? '.... : ....' : toFaDigits(record.time);
-  const addressStr = isBlank ? 'پایانه مرکزی ناوگان صداقت بار پیشرو' : (record.address || 'پایانه مرکزی صداقت بار پیشرو');
+  const addressStr = isBlank ? 'پایانه مرکزی ناوگان لجستیک حامی' : (record.address || 'پایانه مرکزی ناوگان لجستیک حامی');
 
   const driverNameStr = isBlank ? '................................' : record.driverName;
   const driverLastNameStr = isBlank ? '................................' : record.driverLastName;
@@ -161,7 +163,7 @@ export function exportHandoverToWord(
           xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="utf-8">
-      <title>صورت‌جلسه تحویل خودرو صداقت بار پیشرو</title>
+      <title>صورت‌جلسه تحویل خودرو سامانه لجستیک حامی</title>
       <!--[if gte mso 9]>
       <xml>
         <w:WordDocument>
@@ -207,7 +209,7 @@ export function exportHandoverToWord(
       <table class="header-box">
         <tr>
           <td style="width: 32%; text-align: right; vertical-align: middle;">
-            <div style="font-weight: 900; font-size: 12pt;">شرکت ترابری و لجستیک صداقت بار پیشرو</div>
+            <div style="font-weight: 900; font-size: 12pt;">شرکت ترابری و لجستیک حامی</div>
             <div style="font-size: 8.5pt; color: #444;">شماره تماس: ۱۷۸۶ | پشتیبانی ناوگان</div>
           </td>
           <td style="width: 36%; text-align: center; vertical-align: middle;">
@@ -255,7 +257,7 @@ export function exportHandoverToWord(
       <!-- 3. Checklist Table (66 Items in 3 Columns) -->
       <div style="border: 2px solid #000; margin-bottom: 8px;">
         <div style="background-color: #0f172a; color: #ffffff; text-align: center; font-weight: bold; padding: 4px; font-size: 10pt;">
-          چک‌لیست رسمی سلامت قطعات، تجهیزات، ادوات فنی و اسناد خودرو (۶۶ قلم استاندارد صداقت بار پیشرو)
+          چک‌لیست رسمی سلامت قطعات، تجهیزات، ادوات فنی و اسناد خودرو (۶۶ قلم استاندارد سامانه حامی)
         </div>
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
@@ -298,7 +300,7 @@ export function exportHandoverToWord(
       <table style="width: 100%; border: 2px solid #000; margin-top: 6px;">
         <tr>
           <td style="width: 50%; padding: 12px; text-align: center; border-left: 1px solid #000; vertical-align: top;">
-            <div style="font-weight: bold; font-size: 10pt;">نماینده تحویل‌دهنده (شرکت ترابری و لجستیک صداقت بار پیشرو):</div>
+            <div style="font-weight: bold; font-size: 10pt;">نماینده تحویل‌دهنده (شرکت ترابری و لجستیک حامی):</div>
             <div style="margin-top: 6px; font-size: 9.5pt;">${record.delivererName || 'مسئول اعزام و ترابری'}</div>
             <div style="margin-top: 35px; font-size: 8.5pt; color: #555;">امضا و مهر رسمی شرکت:</div>
           </td>
@@ -321,7 +323,7 @@ export function exportHandoverToWord(
   const link = document.createElement('a');
   link.href = url;
   const fileNameSuffix = isBlank ? 'خام_سفید' : (record.receiptNumber || 'تکمیل_شده');
-  link.download = `صورت_جلسه_تحویل_خودرو_صداقت_بار_پیشرو_${fileNameSuffix}.doc`;
+  link.download = `صورت_جلسه_تحویل_خودرو_حامی_${fileNameSuffix}.doc`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -334,8 +336,10 @@ export function exportHandoverToWord(
  */
 export function exportHandoverToExcel(
   record: VehicleHandoverRecord,
-  isBlank: boolean = false
+  isBlank: boolean = false,
+  currentUser?: AppUser | null
 ): void {
+  assertMasterAdminExcelPermission(currentUser, 'صورت‌جلسه تحویل و تحول خودرو');
   const col1Items = HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 1);
   const col2Items = HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 2);
   const col3Items = HANDOVER_CHECKLIST_ITEMS.filter((i) => i.column === 3);
@@ -346,7 +350,7 @@ export function exportHandoverToExcel(
     : `${parsedPlate.twoDigits} ${parsedPlate.letter} ${parsedPlate.threeDigits} - ایران ${parsedPlate.provinceCode}`;
 
   const rows: (string | number)[][] = [
-    ['شرکت ترابری و لجستیک صداقت بار پیشرو - صورت‌جلسه رسمی تحویل و تحول خودرو'],
+    ['سامانه لجستیک و ترابری حامی - صورت‌جلسه رسمی تحویل و تحول خودرو'],
     [],
     ['مشخصات صورت‌جلسه', '', '', 'مشخصات راننده (تحویل‌گیرنده)', '', '', 'مشخصات خودرو (مورد تحویل)'],
     [
@@ -381,7 +385,7 @@ export function exportHandoverToExcel(
     ],
     [
       'محل تحویل:',
-      record.address || 'پایانه مرکزی ناوگان صداقت بار پیشرو',
+      record.address || 'پایانه مرکزی ناوگان لجستیک حامی',
       '',
       'وضعیت فرم:',
       isBlank ? 'نسخه خام (سفید جهت بازرسی میدانی)' : 'صورت‌جلسه تکمیل‌شده',
@@ -435,7 +439,7 @@ export function exportHandoverToExcel(
   ]);
   rows.push([]);
   rows.push([
-    'نماینده تحویل‌دهنده (شرکت ترابری و لجستیک صداقت بار پیشرو):',
+    'نماینده تحویل‌دهنده (شرکت ترابری و لجستیک حامی):',
     record.delivererName || 'مسئول اعزام',
     '',
     '',
@@ -463,5 +467,5 @@ export function exportHandoverToExcel(
   XLSX.utils.book_append_sheet(workbook, worksheet, 'صورت‌جلسه تحویل خودرو');
 
   const fileNameSuffix = isBlank ? 'خام_سفید' : (record.receiptNumber || 'تکمیل_شده');
-  XLSX.writeFile(workbook, `صورت_جلسه_تحویل_خودرو_صداقت_بار_پیشرو_${fileNameSuffix}.xlsx`);
+  XLSX.writeFile(workbook, `صورت_جلسه_تحویل_خودرو_حامی_${fileNameSuffix}.xlsx`);
 }

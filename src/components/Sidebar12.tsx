@@ -16,6 +16,7 @@ import {
   LogOut,
   FileCheck,
   PhoneCall,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { ActiveAppTab } from './Header';
 import { toFaDigits } from '../utils/jalaali';
@@ -162,8 +163,14 @@ export const Sidebar12: FC<Sidebar12Props> = ({
       ],
     },
     {
-      title: 'قوانین و نظارت',
+      title: 'گزارش‌ها و مدیریت',
       items: [
+        {
+          id: 'REPORTS',
+          label: 'گزارش‌های مدیریتی',
+          subLabel: 'استخراج اکسل و تحلیل‌ها',
+          icon: FileSpreadsheet,
+        },
         {
           id: 'REGULATIONS',
           label: 'آیین‌نامه انضباطی',
@@ -172,8 +179,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
         },
         {
           id: 'USERS_LOGS',
-          label: 'مدیریت کاربران و لاگ',
-          subLabel: 'کاربران، امنیت و رهگیری',
+          label: 'مدیریت کاربران',
+          subLabel: 'کاربران، امنیت و دسترسی‌ها',
           icon: Shield,
         },
       ],
@@ -203,6 +210,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
             return true;
           case 'REGULATIONS':
             return canViewModule(currentUser, 'regulations');
+          case 'REPORTS':
+            return isMasterAdmin(currentUser);
           case 'USERS_LOGS':
             return canManageUsers(currentUser) || isMasterAdmin(currentUser);
           default:

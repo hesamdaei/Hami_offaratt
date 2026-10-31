@@ -1268,7 +1268,7 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
         columns={driverPrintColumns}
         data={sortedDrivers}
         defaultOrientation="landscape"
-        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+        companyName="شرکت ترابری و لجستیک حامی"
         summaryCards={[
           { label: 'کل رانندگان', value: drivers.length },
           { label: 'آماده به کار', value: drivers.filter((d) => d.status === 'AVAILABLE').length },

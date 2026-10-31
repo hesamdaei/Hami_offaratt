@@ -1917,7 +1917,7 @@ export const VehicleAssignmentHubView: FC<VehicleAssignmentHubViewProps> = ({
         data={sortedAssignmentVehicles}
         summaryCards={assignmentPrintSummaryCards}
         defaultOrientation="landscape"
-        companyName="شرکت ترابری و لجستیک صداقت بار پیشرو"
+        companyName="شرکت ترابری و لجستیک حامی"
       />
     </div>
   );

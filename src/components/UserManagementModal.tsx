@@ -154,27 +154,15 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
     const targetUser = users.find((u) => u.id === userId);
     if (!targetUser) return;
 
-    const cleanEditUsername = editUsername.trim().toLowerCase();
-    if (!cleanEditUsername) {
-      onShowToast('نام کاربری نمی‌تواند خالی باشد.', 'error');
-      return;
-    }
-
-    const usernameConflict = users.some(
-      (u) => u.id !== userId && u.username.toLowerCase() === cleanEditUsername
-    );
-    if (usernameConflict) {
-      onShowToast('این نام کاربری توسط کاربر دیگری استفاده شده است.', 'error');
-      return;
-    }
-
+    // Username is strictly immutable after creation (Architecture & Security Requirement 6.4)
+    const immutableUsername = targetUser.username;
     const isTargetMaster = isMasterAdmin(targetUser);
 
     const updatedUsers = users.map((u) => {
       if (u.id === userId) {
         const updated: AppUser = {
           ...u,
-          username: cleanEditUsername,
+          username: immutableUsername,
           fullName: editFullName.trim() || u.fullName,
           roleTitle: editRoleTitle.trim() || u.roleTitle,
           password: editPassword.trim() || u.password,
@@ -363,16 +351,20 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                               />
                             </div>
                             <div>
-                              <label className="text-[11px] text-amber-400 font-bold block mb-1 flex items-center justify-between">
-                                <span>نام کاربری ورود به سیستم (قابل ویرایش)</span>
-                                <span className="text-[10px] text-slate-500 font-normal">انگلیسی</span>
+                              <label className="text-[11px] text-slate-300 font-bold block mb-1 flex items-center justify-between">
+                                <span className="flex items-center gap-1">
+                                  <Lock className="w-3 h-3 text-amber-400" />
+                                  <span>نام کاربری (تغییرناپذیر)</span>
+                                </span>
+                                <span className="text-[10px] text-amber-400 font-mono">ثابت</span>
                               </label>
                               <input
                                 type="text"
                                 dir="ltr"
-                                value={editUsername}
-                                onChange={(e) => setEditUsername(e.target.value)}
-                                className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-1.5 text-xs text-amber-300 font-mono focus:border-amber-400 focus:outline-none"
+                                readOnly
+                                disabled
+                                value={user.username}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-400 font-mono cursor-not-allowed opacity-80"
                               />
                             </div>
                             <div>

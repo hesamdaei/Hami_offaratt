@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { AuditLogItem, AuditModule, AuditSeverity } from '../types/auditLog';
 import { getTodayJalaali, toFaDigits } from './jalaali';
 import { AppUser } from '../types/auth';
+import { assertMasterAdminExcelPermission } from './excelExportSecurity';
 
 const STORAGE_KEY_AUDIT_LOGS = 'hamibar_system_audit_logs_v2';
 const MAX_LOGS_COUNT = 1500;
@@ -224,7 +225,8 @@ export function clearAuditLogs(): void {
 /**
  * Export audit logs to Excel
  */
-export function exportAuditLogsToExcel(logs: AuditLogItem[]): void {
+export function exportAuditLogsToExcel(logs: AuditLogItem[], currentUser?: AppUser | null): void {
+  assertMasterAdminExcelPermission(currentUser, 'دفتر وقایع و تغییرات سامانه');
   const today = getTodayJalaali();
   const dateStr = `${today.jy}-${today.jm}-${today.jd}`;
 
