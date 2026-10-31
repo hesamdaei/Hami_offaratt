@@ -15,6 +15,7 @@ import {
   Moon,
   LogOut,
   FileCheck,
+  PhoneCall,
 } from 'lucide-react';
 import { ActiveAppTab } from './Header';
 import { toFaDigits } from '../utils/jalaali';
@@ -151,6 +152,13 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           icon: UserCheck,
           badge: totalStaff > 0 ? toFaDigits(totalStaff) : undefined,
         },
+        {
+          id: 'PHONEBOOK',
+          label: 'دفترچه تلفن هوشمند',
+          subLabel: 'مخاطبین، سانترال، امداد و تعمیرگاه',
+          icon: PhoneCall,
+          badge: 'جدید',
+        },
       ],
     },
     {
@@ -191,6 +199,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
             return canViewModule(currentUser, 'staff');
           case 'OIL_SERVICE':
             return canViewModule(currentUser, 'oilService');
+          case 'PHONEBOOK':
+            return true;
           case 'REGULATIONS':
             return canViewModule(currentUser, 'regulations');
           case 'USERS_LOGS':

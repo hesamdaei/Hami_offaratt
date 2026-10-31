@@ -47,7 +47,8 @@ export type ActiveAppTab =
   | 'OIL_SERVICE'
   | 'HANDOVER'
   | 'REGULATIONS'
-  | 'USERS_LOGS';
+  | 'USERS_LOGS'
+  | 'PHONEBOOK';
 
 export interface HeaderProps {
   activeTab?: ActiveAppTab;
@@ -229,6 +230,13 @@ export const Header: FC<HeaderProps> = ({
       shortTitle: 'کاربران و لاگ',
       icon: Shield,
     },
+    {
+      id: 'PHONEBOOK',
+      title: 'دفترچه تلفن و مخاطبین',
+      shortTitle: 'دفترچه تلفن',
+      icon: PhoneCall,
+      badge: 'جدید',
+    },
   ];
 
   // Filter modules based on logged-in user permissions
@@ -251,6 +259,8 @@ export const Header: FC<HeaderProps> = ({
         return canViewModule(currentUser, 'regulations');
       case 'USERS_LOGS':
         return canManageUsers(currentUser) || isMasterAdmin(currentUser);
+      case 'PHONEBOOK':
+        return true;
       default:
         return true;
     }

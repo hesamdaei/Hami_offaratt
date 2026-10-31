@@ -33,6 +33,7 @@ import { StaffDirectoryView } from './components/StaffDirectoryView';
 import { OilServiceManagementView } from './components/OilServiceManagementView';
 import { DriverRegulationsView } from './components/DriverRegulationsView';
 import { VehicleHandoverManager } from './components/VehicleHandoverManager';
+import { PhonebookView } from './components/PhonebookView';
 import { TimelineModal } from './components/TimelineModal';
 import { AddDriverModal } from './components/AddDriverModal';
 import { RangeAssignModal } from './components/RangeAssignModal';
@@ -83,8 +84,21 @@ const PDF_SYNC_KEY = 'hamibar_backup_14050806_sync_v6';
 export const App: FC = () => {
   const today = useMemo(() => getTodayJalaali(), []);
 
-  // Main active navigation tab (default to Attendance Hub)
-  const [activeTab, setActiveTab] = useState<ActiveAppTab>('ATTENDANCE');
+  // Standalone Phonebook Tab Check (?tab=PHONEBOOK or ?standalone=true)
+  const isStandalonePhonebook = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const p = new URLSearchParams(window.location.search);
+    return p.get('tab') === 'PHONEBOOK' || p.get('standalone') === 'true';
+  }, []);
+
+  // Main active navigation tab (default to Attendance Hub, or Phonebook if requested via URL)
+  const [activeTab, setActiveTab] = useState<ActiveAppTab>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('tab') === 'PHONEBOOK') return 'PHONEBOOK';
+    }
+    return 'ATTENDANCE';
+  });
   const [fleetSubTab, setFleetSubTab] = useState<'SPECIFICATIONS' | 'DASHBOARD' | 'INSURANCE_ALERTS' | 'ENTRY' | 'HISTORY' | 'RULES'>('SPECIFICATIONS');
   const [highlightedInsuranceVehicleId, setHighlightedInsuranceVehicleId] = useState<string | null>(null);
 
@@ -464,6 +478,8 @@ export const App: FC = () => {
           return canViewModule(currentUser, 'regulations');
         case 'USERS_LOGS':
           return canManageUsers(currentUser) || isMasterAdmin(currentUser);
+        case 'PHONEBOOK':
+          return true;
         default:
           return true;
       }
@@ -477,6 +493,38 @@ export const App: FC = () => {
       else if (canManageUsers(currentUser)) setActiveTab('USERS_LOGS');
     }
   }, [currentUser, activeTab]);
+
+  // Internal LAN Security: Auto-logout on 30 minutes of workstation inactivity
+  useEffect(() => {
+    if (!currentUser) return;
+    const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    let timeoutId: any;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        recordAuditLog(currentUser, {
+          action: 'AUTH_LOGOUT',
+          module: 'AUTH',
+          title: 'خروج خودکار به دلیل عدم فعالیت (امنیت شبکه داخلی)',
+          description: `نشست کاربر «${currentUser.fullName}» به دلیل ۳۰ دقیقه عدم فعالیت در رایانه شبکه داخلی بسته شد.`,
+          severity: 'WARNING',
+        });
+        logoutUser();
+        setCurrentUser(null);
+        showToast('نشست کاری شما به دلیل ۳۰ دقیقه عدم فعالیت برای حفظ امنیت شبکه بسته شد.', 'warning');
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
+    activityEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
+    };
+  }, [currentUser]);
 
   // Helper to read auxiliary modules (regulations, affidavit, rules) from localStorage for central DB
   const getAuxiliaryModulesData = () => {
@@ -1944,6 +1992,57 @@ export const App: FC = () => {
     return <LoginView onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // Dedicated Standalone Phonebook Tab Window Mode (باز شونده در تب/پنجره اختصاصی)
+  if (isStandalonePhonebook) {
+    return (
+      <div
+        dir="rtl"
+        className={`min-h-screen ${
+          theme === 'light' ? 'bg-slate-100 text-slate-900 light' : 'bg-[#0a101f] text-slate-100 dark'
+        } p-3 sm:p-6`}
+      >
+        <PhonebookView
+          drivers={driverDirectory}
+          staffMembers={staffMembers}
+          isStandalone={true}
+          onCallPhone={handleStartVoipCall}
+          onShowToast={showToast}
+        />
+        {/* VoIP Click-to-Call Modal */}
+        {voipCallTarget && (
+          <VoipCallModal
+            isOpen={true}
+            onClose={() => setVoipCallTarget(null)}
+            phoneNumber={voipCallTarget.phone}
+            recipientName={voipCallTarget.name}
+            recipientRole={voipCallTarget.role}
+            currentUser={currentUser}
+            onOpenSettings={() => {
+              setVoipCallTarget(null);
+              handleOpenMasterAdmin('voip');
+            }}
+            onShowToast={(msg, type) => showToast(msg, type)}
+          />
+        )}
+        {/* VoIP PBX Settings & History Modal */}
+        <VoipSettingsModal
+          isOpen={isVoipSettingsOpen}
+          onClose={() => setIsVoipSettingsOpen(false)}
+          currentUser={currentUser}
+          onShowToast={showToast}
+        />
+        {/* Toast */}
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       dir="rtl"
@@ -2209,6 +2308,19 @@ export const App: FC = () => {
                   saveStoredSession(updated);
                 }}
                 onShowToast={(msg, type) => showToast(msg, type)}
+              />
+            </div>
+          )}
+
+          {/* Module 7: Smart Customizable Phonebook Hub (دفترچه تلفن و سانترال هوشمند) */}
+          {activeTab === 'PHONEBOOK' && (
+            <div className="animate-in fade-in duration-150">
+              <PhonebookView
+                drivers={driverDirectory}
+                staffMembers={staffMembers}
+                isStandalone={false}
+                onCallPhone={handleStartVoipCall}
+                onShowToast={showToast}
               />
             </div>
           )}

@@ -183,8 +183,19 @@ initializeDatabaseIfEmpty();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// CORS for multi-device network clients
+// Security Headers for LAN hardening & multi-device isolation
 app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  if (req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+  }
+
+  // CORS for multi-device network clients
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -875,10 +886,23 @@ interface AsteriskAmiParams {
   autoAnswer?: boolean;
 }
 
+// Parameter sanitizer to prevent Asterisk AMI CRLF Socket Injection
+function sanitizeAmiParam(val: any): string {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/[\r\n\x00-\x1f]/g, '').trim();
+}
+
 function executeAsteriskAmiOriginate(params: AsteriskAmiParams): Promise<{ ok: boolean; message: string; details?: any }> {
   return new Promise((resolve) => {
-    const host = params.host || '127.0.0.1';
+    const host = sanitizeAmiParam(params.host) || '127.0.0.1';
     const port = params.port || 5038;
+    const user = sanitizeAmiParam(params.user);
+    const secret = sanitizeAmiParam(params.secret);
+    const channel = sanitizeAmiParam(params.channel);
+    const exten = sanitizeAmiParam(params.exten);
+    const context = sanitizeAmiParam(params.context || 'from-internal');
+    const callerId = sanitizeAmiParam(params.callerId || 'حامی بار');
+
     const socket = new net.Socket();
     let buffer = '';
     let step: 'await_banner' | 'await_login' | 'await_originate' | 'done' = 'await_banner';
@@ -901,7 +925,7 @@ function executeAsteriskAmiOriginate(params: AsteriskAmiParams): Promise<{ ok: b
       if (step === 'await_banner' && buffer.includes('Asterisk Call Manager')) {
         step = 'await_login';
         buffer = '';
-        socket.write(`Action: Login\r\nUsername: ${params.user}\r\nSecret: ${params.secret}\r\n\r\n`);
+        socket.write(`Action: Login\r\nUsername: ${user}\r\nSecret: ${secret}\r\n\r\n`);
       } else if (step === 'await_login' && (buffer.includes('Response: Success') || buffer.includes('Response: Error'))) {
         if (buffer.includes('Response: Error') || buffer.includes('Authentication failed')) {
           step = 'done';
@@ -927,11 +951,11 @@ function executeAsteriskAmiOriginate(params: AsteriskAmiParams): Promise<{ ok: b
 
         const originateCmd =
           `Action: Originate\r\n` +
-          `Channel: ${params.channel}\r\n` +
-          `Exten: ${params.exten}\r\n` +
-          `Context: ${params.context || 'from-internal'}\r\n` +
+          `Channel: ${channel}\r\n` +
+          `Exten: ${exten}\r\n` +
+          `Context: ${context}\r\n` +
           `Priority: 1\r\n` +
-          `CallerID: "${params.callerId || 'حامی بار'}" <${params.channel.replace(/^[A-Za-z0-9_]+\//, '')}>\r\n` +
+          `CallerID: "${callerId}" <${channel.replace(/^[A-Za-z0-9_]+\//, '')}>\r\n` +
           `Timeout: 35000\r\n` +
           `Async: true\r\n` +
           autoAnswerHeaders +
@@ -1161,6 +1185,21 @@ app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message || 'خطا در تست اتصال' });
   }
+// Dedicated LAN Security Status Endpoint
+app.get(['/api/lan/security-status', '/api/security-status'], (req, res) => {
+  const ips = getLocalNetworkIps();
+  res.json({
+    ok: true,
+    lanSecurity: {
+      headersEnabled: true,
+      amiCrlfProtection: true,
+      rateLimiterActive: true,
+      strictNoStoreOnApi: true,
+      sessionAutoTimeoutMinutes: 30,
+      activeIpAddresses: ips,
+      timestamp: new Date().toISOString(),
+    },
+  });
 });
 
 // Setup Frontend Serving: Vite dev middleware or Static Production
