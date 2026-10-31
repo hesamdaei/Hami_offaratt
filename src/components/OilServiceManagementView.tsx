@@ -1176,6 +1176,12 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
                 }
                 onOpenSpecifications={(target) => setSpecsVehicle(target)}
                 onOpenPrintModal={(target) => setPrintingVehicle(target)}
+                onOpenUsage={(target) => {
+                  setEditingUsageVehicle(target);
+                  setUsageMileage(typeof target.currentMileage === 'number' ? target.currentMileage : 125000);
+                  setUsageTrips(typeof target.tripsSinceChange === 'number' ? target.tripsSinceChange : 0);
+                  setUsageDate(target.lastStatusDate || todayStr);
+                }}
                 onOpenOilService={(target) => handleOpenManualOilModal(target)}
                 onShowToast={showToast}
               />
@@ -1463,59 +1469,50 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
                         )}
                       </td>
                       <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Dedicated Vehicle Specifications Button */}
-                          <button
-                            onClick={() => setSpecsVehicle(v)}
-                            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs"
-                            title="مشاهده و ویرایش مشخصات فنی و شناسنامه خودرو"
-                          >
-                            <FileText className="w-3 h-3 text-amber-400" />
-                            <span>مشخصات خودرو</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            {/* 1. Quick Daily Mileage Registration (Only records current odometer) */}
+                            <button
+                              onClick={() => {
+                                setEditingUsageVehicle(v);
+                                setUsageMileage(v._currentMileage);
+                                setUsageTrips(v._tripsDriven);
+                                setUsageDate(v.lastStatusDate || todayStr);
+                              }}
+                              className="px-2 py-1 rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 hover:text-white border border-sky-500/25 text-[11px] font-medium transition flex items-center gap-1 cursor-pointer"
+                              title="ثبت کیلومتر جاری و کارکرد خودرو (فقط کارکرد روزانه بدون تعویض روغن)"
+                            >
+                              <Gauge className="w-3 h-3 text-sky-400" />
+                              <span>ثبت کیلومتر</span>
+                            </button>
 
-                          {/* Main Button: Manual Oil Change Mileage Entry */}
-                          <button
-                            onClick={() => handleOpenManualOilModal(v)}
-                            className="px-2 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/30 text-[11px] font-bold transition-all flex items-center gap-1"
-                            title="ثبت یا ویرایش دستی کیلومتر تعویض روغن"
-                          >
-                            <Droplet className="w-3 h-3 text-sky-400" />
-                            <span>ثبت روغن</span>
-                          </button>
+                            {/* 2. Oil Change Service Button */}
+                            <button
+                              onClick={() => handleOpenManualOilModal(v)}
+                              className="px-2 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-white border border-amber-500/25 text-[11px] font-medium transition flex items-center gap-1 cursor-pointer"
+                              title="ثبت انجام تعویض روغن و فیلترها"
+                            >
+                              <Droplet className="w-3 h-3 text-amber-400" />
+                              <span>تعویض روغن</span>
+                            </button>
 
-                          {/* Quick Service Completed */}
-                          <button
-                            onClick={() => handleQuickCompleteService(v)}
-                            className="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 transition-all"
-                            title="سرویس شد سریع (تعویض در تاریخ امروز)"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                          </button>
+                            {/* 3. Dedicated Vehicle Specifications Button */}
+                            <button
+                              onClick={() => setSpecsVehicle(v)}
+                              className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs transition cursor-pointer"
+                              title="مشاهده و ویرایش مشخصات فنی و شناسنامه خودرو"
+                            >
+                              <FileText className="w-3 h-3" />
+                            </button>
 
-                          {/* Edit Daily Usage (Current Mileage) */}
-                          <button
-                            onClick={() => {
-                              setEditingUsageVehicle(v);
-                              setUsageMileage(v._currentMileage);
-                              setUsageTrips(v._tripsDriven);
-                              setUsageDate(v.lastStatusDate || todayStr);
-                            }}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
-                            title="ثبت کیلومتر فعلی و تعداد سفر"
-                          >
-                            <Gauge className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* View History */}
-                          <button
-                            onClick={() => setHistoryVehicle(v)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition"
-                            title="مشاهده تاریخچه سرویس"
-                          >
-                            <History className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                            {/* 4. View History */}
+                            <button
+                              onClick={() => setHistoryVehicle(v)}
+                              className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer"
+                              title="مشاهده تاریخچه سرویس‌های تعویض روغن"
+                            >
+                              <History className="w-3 h-3" />
+                            </button>
+                          </div>
                       </td>
                     </tr>
                   );
@@ -2244,26 +2241,38 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
         </div>
       )}
 
-      {/* MODAL 1: EDIT DAILY USAGE (CURRENT MILEAGE & TRIPS) */}
+      {/* MODAL 1: EDIT DAILY USAGE (CURRENT MILEAGE ONLY - NOT OIL CHANGE) */}
       {editingUsageVehicle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
-          <div className="bg-[#111b2e] border border-[#1f2c45] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
-            <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[#1f2c45] bg-[#0d1524] shrink-0">
-              <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                <Gauge className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="line-clamp-1">
-                  ثبت کیلومترشمار جاری خودرو کد {toFaDigits(editingUsageVehicle.code)} ({editingUsageVehicle.driverName})
-                </span>
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl w-full max-w-md shadow-2xl overflow-hidden my-auto flex flex-col text-right">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-slate-800 bg-[#0a1120] shrink-0">
+              <div className="flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-sky-400 shrink-0" />
+                <div>
+                  <h3 className="font-bold text-white text-sm">
+                    ثبت کیلومترشمار روزانه خودرو کد {toFaDigits(editingUsageVehicle.code)}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    فقط ثبت کارکرد جاری روی داشبورد (بدون ثبت تعویض روغن)
+                  </p>
+                </div>
+              </div>
               <button
+                type="button"
                 onClick={() => setEditingUsageVehicle(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white shrink-0"
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveUsage} className="p-4 sm:p-5 space-y-4 text-xs overflow-y-auto flex-1">
+            <form onSubmit={handleSaveUsage} className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1">
+              {/* Vehicle & Driver Micro Badge */}
+              <div className="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-[11px]">
+                <span className="text-slate-400">راننده: <strong className="text-slate-200">{editingUsageVehicle.driverName}</strong></span>
+                <span className="text-slate-400 font-mono">پلاک {editingUsageVehicle.plateNumber}</span>
+              </div>
+
               {/* Persian DatePicker for recording date */}
               <div>
                 <PersianDatePicker
@@ -2277,7 +2286,7 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
 
               <div>
                 <label className="block text-slate-300 font-medium mb-1">
-                  کیلومترشمار فعلی خودرو (کیلومتر)
+                  کیلومترشمار فعلی خودرو (کیلومتر روی داشبورد)
                 </label>
                 <input
                   type="number"
@@ -2285,7 +2294,7 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
                   min="0"
                   value={usageMileage}
                   onChange={(e) => setUsageMileage(Number(e.target.value))}
-                  className="w-full bg-[#0a101f] border border-[#1f2c45] text-slate-100 rounded-lg px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-[#070d18] border border-slate-700 text-white font-mono font-bold text-base rounded-lg px-3 py-2 focus:border-sky-500 focus:outline-none"
                 />
               </div>
 
@@ -2303,40 +2312,40 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
                 const overdue = Math.max(0, usageMileage - nextMil);
 
                 return (
-                  <div className="bg-[#091120] border border-[#1a2842] rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between text-[11px]">
+                  <div className="bg-[#070d18] border border-slate-800/80 rounded-lg p-2.5 space-y-1.5 text-[11px]">
+                    <div className="flex items-center justify-between">
                       <span className="text-slate-400">کیلومتر آخرین تعویض روغن:</span>
-                      <strong className="text-sky-300 font-mono font-bold">
+                      <span className="text-sky-300 font-mono font-bold">
                         {toFaDigits(lastMil.toLocaleString())} km
-                      </strong>
+                      </span>
                     </div>
 
                     {isConflict ? (
-                      <div className="p-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[11px] flex items-center gap-1.5">
+                      <div className="p-2 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[10px] flex items-center gap-1.5">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
-                        <span>هشدار: کیلومتر جاری کمتر از آخرین تعویض روغن ثبت شده است!</span>
+                        <span>توجه: کیلومتر جاری کمتر از آخرین تعویض روغن ثبت‌شده است.</span>
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-slate-400">تفاضل پیمایش پس از تعویض:</span>
-                          <strong className="text-white font-mono font-bold">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">پیمایش پس از تعویض روغن:</span>
+                          <span className="text-slate-200 font-mono font-bold">
                             {toFaDigits(diff.toLocaleString())} km
-                          </strong>
+                          </span>
                         </div>
 
-                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-800">
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-800">
                           <span className="text-slate-400">
-                            {usageMileage >= nextMil ? 'اضافه پیمایش (سررسید گذشته):' : 'باقیمانده تا تعویض بعدی:'}
+                            {usageMileage >= nextMil ? 'سررسید گذشته:' : 'باقیمانده تا سرویس بعدی:'}
                           </span>
                           {usageMileage >= nextMil ? (
-                            <strong className="text-rose-400 font-mono font-bold">
-                              +{toFaDigits(overdue.toLocaleString())} km
-                            </strong>
+                            <span className="text-rose-400 font-mono font-bold">
+                              +{toFaDigits(overdue.toLocaleString())} km تأخیر
+                            </span>
                           ) : (
-                            <strong className={remaining <= 500 ? 'text-amber-400 font-mono font-bold' : 'text-emerald-400 font-mono font-bold'}>
+                            <span className={remaining <= 500 ? 'text-amber-400 font-mono font-bold' : 'text-emerald-400 font-mono font-bold'}>
                               {toFaDigits(remaining.toLocaleString())} km
-                            </strong>
+                            </span>
                           )}
                         </div>
                       </>
@@ -2346,32 +2355,32 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
               })()}
 
               <div>
-                <label className="block text-slate-300 font-medium mb-1">
+                <label className="block text-slate-400 text-[11px] mb-1">
                   تعداد سفرهای انجام‌شده از آخرین تعویض روغن
                 </label>
                 <input
                   type="number"
-                  required
                   min="0"
                   value={usageTrips}
                   onChange={(e) => setUsageTrips(Number(e.target.value))}
-                  className="w-full bg-[#0a101f] border border-[#1f2c45] text-slate-100 rounded-lg px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-[#070d18] border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 font-mono text-xs focus:border-sky-500 focus:outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#1f2c45]">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setEditingUsageVehicle(null)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold"
+                  className="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition flex items-center gap-1.5"
                 >
-                  ذخیره کارکرد
+                  <Check className="w-3.5 h-3.5" />
+                  <span>ثبت کیلومتر</span>
                 </button>
               </div>
             </form>

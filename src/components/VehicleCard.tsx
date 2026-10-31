@@ -40,6 +40,7 @@ interface VehicleCardProps {
   onOpenEndOfWork?: (vehicle: VehicleItem) => void;
   onOpenStatusModal?: (vehicle: VehicleItem) => void;
   onOpenOilService?: (vehicle: VehicleItem) => void;
+  onOpenUsage?: (vehicle: VehicleItem) => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -53,6 +54,7 @@ export const VehicleCard: FC<VehicleCardProps> = ({
   onOpenEndOfWork,
   onOpenStatusModal,
   onOpenOilService,
+  onOpenUsage,
   onShowToast,
 }) => {
   const [copiedPhone, setCopiedPhone] = useState(false);
@@ -77,7 +79,7 @@ export const VehicleCard: FC<VehicleCardProps> = ({
   const ceilingKm = vRule.maxMileage || 5000;
   const warningKm = vRule.warningMileage || 500;
   const mileageStats = calculateMileageStatus(currentKm, lastOilKm, ceilingKm, warningKm, vehicle.lastChangeDate, vRule.maxDays);
-  const { drivenKm, nextTargetKm, remainingKm, overdueKm, wearPercent, isOverdue, isInconsistent, status } = mileageStats;
+  const { drivenKm, nextTargetKm, remainingKm, overdueKm, wearPercent, isOverdue, isInconsistent } = mileageStats;
 
   const handleCopyPhone = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -99,41 +101,41 @@ export const VehicleCard: FC<VehicleCardProps> = ({
 
   return (
     <>
-      <div className="vehicle-card-print bg-[#0f172a] hover:bg-[#131f38] border border-[#1e293b] hover:border-amber-500/60 rounded-2xl p-4 sm:p-5 shadow-md hover:shadow-xl transition-all duration-200 flex flex-col justify-between group relative text-slate-100 print:bg-white print:border-2 print:border-black print:text-black print:shadow-none print:break-inside-avoid print:p-4">
+      <div className="vehicle-card-print bg-[#0b1325] hover:bg-[#0e172e] border border-slate-800 hover:border-slate-700 rounded-xl p-4 transition-colors flex flex-col justify-between group relative text-slate-100 print:bg-white print:border print:border-black print:text-black print:p-4">
         {/* Top Header: Code Badge, Model, Plate & Status */}
         <div>
-          <div className="flex items-start justify-between gap-3 pb-3.5 border-b border-[#1e2c45] print:border-black">
-            <div className="flex items-center gap-3">
-              {/* Vehicle Code Badge */}
-              <div className="w-13 h-13 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/35 flex flex-col items-center justify-center font-black font-mono text-amber-300 shadow-inner shrink-0 print:bg-white print:border-2 print:border-black print:text-black">
-                <span className="text-[9px] text-amber-400/80 font-sans print:text-black">کد</span>
-                <span className="text-base leading-none">{toFaDigits(vehicle.code)}</span>
+          <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80 print:border-black">
+            <div className="flex items-center gap-2.5">
+              {/* Minimal Vehicle Code Badge */}
+              <div className="w-11 h-11 rounded-lg bg-slate-800/80 border border-slate-700/60 flex flex-col items-center justify-center font-mono text-amber-300 shrink-0 print:bg-white print:border print:border-black print:text-black">
+                <span className="text-[8px] text-slate-400 font-sans leading-tight">کد</span>
+                <span className="text-sm font-bold leading-none">{toFaDigits(vehicle.code)}</span>
               </div>
 
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-black text-white text-base group-hover:text-amber-300 transition-colors print:text-black">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h3 className="font-bold text-white text-sm group-hover:text-amber-300 transition-colors print:text-black">
                     {typeLabel}
                   </h3>
                   {vehicle.modelYear && (
-                    <span className="text-[11px] text-slate-400 font-mono print:text-black">
-                      (مدل {toFaDigits(vehicle.modelYear)})
+                    <span className="text-[10px] text-slate-400 font-mono print:text-black">
+                      ({toFaDigits(vehicle.modelYear)})
                     </span>
                   )}
                 </div>
 
-                <div className="text-xs text-slate-400 mt-1 print:text-black">
-                  <span>{vehicle.color || 'سفید روغنی'}</span>
+                <div className="text-[11px] text-slate-400 mt-0.5 print:text-black flex items-center gap-1">
+                  <span>{vehicle.color || 'سفید'}</span>
                   {vehicle.chassisType && (
                     <>
-                      <span aria-hidden="true" className="mx-1 text-slate-600 print:text-black">·</span>
+                      <span className="text-slate-600">·</span>
                       <span>{vehicle.chassisType}</span>
                     </>
                   )}
                   {vehicle.capacityTons && (
                     <>
-                      <span aria-hidden="true" className="mx-1 text-slate-600 print:text-black">·</span>
-                      <span className="font-mono font-bold text-amber-300 print:text-black">
+                      <span className="text-slate-600">·</span>
+                      <span className="font-mono text-slate-300">
                         {toFaDigits(vehicle.capacityTons)}
                       </span>
                     </>
@@ -142,279 +144,274 @@ export const VehicleCard: FC<VehicleCardProps> = ({
               </div>
             </div>
 
-            {/* Iranian Plate & Operational Status */}
-            <div className="flex flex-col items-end gap-1.5 shrink-0">
+            {/* Iranian Plate & Minimal Status Pill */}
+            <div className="flex flex-col items-end gap-1 shrink-0">
               <IranianPlate plateNumber={vehicle.plateNumber} size="sm" />
               <span
-                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border print:bg-white print:text-black print:border-black ${
+                className={`text-[10px] font-medium px-2 py-0.5 rounded-md border print:bg-white print:text-black print:border-black flex items-center gap-1 ${
                   isReady
-                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                     : isMission
-                    ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                    ? 'bg-sky-500/10 text-sky-400 border-sky-500/20'
                     : isMaintenance
-                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                    : 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
                 }`}
               >
-                {isReady && '🟢 آماده بارگیری'}
-                {isMission && '🔵 در مأموریت'}
-                {isMaintenance && '🟠 تعمیرگاه'}
-                {isParking && '🟣 پارکینگ'}
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  isReady ? 'bg-emerald-400' : isMission ? 'bg-sky-400' : isMaintenance ? 'bg-amber-400' : 'bg-purple-400'
+                }`} />
+                <span>
+                  {isReady && 'آماده بارگیری'}
+                  {isMission && 'در مأموریت'}
+                  {isMaintenance && 'تعمیرگاه'}
+                  {isParking && 'پارکینگ'}
+                </span>
               </span>
             </div>
           </div>
 
           {/* Details Section */}
-          <div className="py-3.5 space-y-2.5 text-xs">
-            {/* Driver Assignment Row with 1-click & Modal Assignment Controls */}
-            <div className="bg-[#0a1120] p-2.5 rounded-xl border border-[#1c2a44] print:bg-white print:border-black space-y-2">
+          <div className="py-3 space-y-2.5 text-xs">
+            {/* Driver Assignment Row */}
+            <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80 print:bg-white print:border-black space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5 min-w-0 print:text-black">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 print:border print:border-black print:bg-white print:text-black ${
-                    isAssigned ? 'bg-blue-500/15 text-blue-400' : 'bg-slate-800 text-slate-400'
+                <div className="flex items-center gap-2 min-w-0 print:text-black">
+                  <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
+                    isAssigned ? 'bg-sky-500/10 text-sky-400' : 'bg-slate-800 text-slate-500'
                   }`}>
-                    {isAssigned ? <UserCheck className="w-4 h-4 text-sky-400" /> : <User className="w-4 h-4" />}
+                    {isAssigned ? <UserCheck className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
                   </div>
                   <div className="min-w-0 truncate">
-                    <div className="font-bold text-slate-200 text-xs flex items-center gap-1.5 print:text-black truncate">
+                    <div className="font-semibold text-slate-200 text-xs flex items-center gap-1.5 print:text-black truncate">
                       {isAssigned ? (
                         <span className="truncate">{vehicle.driverName}</span>
                       ) : (
-                        <span className="text-slate-400 font-normal">فاقد راننده اختصاصی</span>
+                        <span className="text-slate-400 font-normal">فاقد راننده</span>
                       )}
                     </div>
                     {vehicle.driverPhone ? (
                       <div
-                        className="text-[11px] text-slate-400 font-mono mt-0.5 print:text-black flex items-center gap-1"
+                        className="text-[10px] text-slate-400 font-mono mt-0.5 print:text-black flex items-center gap-1"
                         style={{ direction: 'ltr' }}
                       >
                         <span>{toFaDigits(vehicle.driverPhone)}</span>
                         <button
                           type="button"
                           onClick={handleCopyPhone}
-                          className="text-slate-500 hover:text-slate-200 p-0.5 rounded cursor-pointer print:hidden"
+                          className="text-slate-500 hover:text-slate-300 p-0.5 rounded cursor-pointer print:hidden"
                           title="کپی شماره تماس"
                         >
                           {copiedPhone ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
                         </button>
                       </div>
                     ) : (
-                      <div className="text-[10px] text-amber-400/80 mt-0.5">
-                        آماده اتصال به ناوگان
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        آماده تخصیص
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Ready Time & Date */}
-                <div className="text-left font-mono text-[11px] shrink-0 print:text-black">
-                  <div className="text-emerald-400 font-bold flex items-center gap-1 justify-end print:text-black">
-                    <Clock className="w-3 h-3 text-emerald-400 print:text-black" />
+                <div className="text-left font-mono text-[10px] shrink-0 print:text-black">
+                  <div className="text-emerald-400 font-medium flex items-center gap-1 justify-end print:text-black">
+                    <Clock className="w-2.5 h-2.5" />
                     <span>{toFaDigits(vehicle.readyTime || '۰۸:۰۰')}</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 print:text-black">
+                  <div className="text-slate-500 print:text-black">
                     {toFaDigits(vehicle.readyDate || 'امروز')}
                   </div>
                 </div>
               </div>
 
-              {/* Action Strip for Driver Assignment & Unassignment (no-print) */}
-              <div className="flex items-center justify-between pt-1.5 border-t border-[#16233b] print:hidden gap-1 text-[11px]">
+              {/* Action Strip for Driver Assignment (no-print) */}
+              <div className="flex items-center justify-between pt-1.5 border-t border-slate-800 print:hidden gap-1 text-[11px]">
                 {isAssigned ? (
                   <>
                     <button
                       type="button"
                       onClick={() => setIsAssignModalOpen(true)}
-                      className="px-2 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 hover:text-white border border-blue-500/25 flex items-center gap-1 font-medium transition cursor-pointer"
-                      title="تعویض راننده این خودرو با یکی از رانندگان سامانه"
+                      className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700 text-[10px] flex items-center gap-1 transition cursor-pointer"
+                      title="تعویض راننده خودرو"
                     >
-                      <ArrowLeftRight className="w-3 h-3 text-blue-400" />
+                      <ArrowLeftRight className="w-2.5 h-2.5 text-sky-400" />
                       <span>تغییر راننده</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => onUnassignDriver ? onUnassignDriver(vehicle) : onAssignDriver?.(vehicle, 'بدون راننده', '')}
-                      className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/25 flex items-center gap-1 font-medium transition cursor-pointer"
-                      title="لغو انتساب راننده و تبدیل وضعیت به بدون راننده"
+                      className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 text-[10px] flex items-center gap-1 transition cursor-pointer"
+                      title="آزادسازی خودرو"
                     >
-                      <UserX className="w-3 h-3 text-rose-400" />
-                      <span>لغو انتساب (آزادسازی)</span>
+                      <UserX className="w-2.5 h-2.5 text-rose-400" />
+                      <span>لغو انتساب</span>
                     </button>
                   </>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setIsAssignModalOpen(true)}
-                    className="w-full py-1.5 px-3 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold flex items-center justify-center gap-1.5 shadow-sm transition active:scale-98 cursor-pointer"
+                    className="w-full py-1 px-2.5 rounded bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 hover:text-white border border-sky-500/30 font-medium text-[11px] flex items-center justify-center gap-1 transition cursor-pointer"
                   >
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span>+ اختصاص راننده به این خودرو</span>
+                    <UserCheck className="w-3 h-3 text-sky-400" />
+                    <span>+ تخصیص راننده</span>
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Insurance & Inspection Compliance Trio */}
-            <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+            {/* Insurance & Inspection Minimal Trio */}
+            <div className="grid grid-cols-3 gap-1.5 text-center text-[10px]">
               {/* Third Party Insurance */}
               <div
-                className={`p-2 rounded-xl border flex flex-col justify-between print:bg-white print:border-black ${
+                className={`p-1.5 rounded-lg border flex flex-col justify-between print:bg-white print:border-black ${
                   alert.hasExpiredPolicy
                     ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
                     : alert.hasCriticalExpiry
                     ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                    : 'bg-[#0a1120] border-[#1c2a44] text-slate-300'
+                    : 'bg-slate-900/60 border-slate-800/80 text-slate-300'
                 }`}
               >
-                <div className="text-[10px] font-bold text-slate-400 print:text-black">شخص ثالث</div>
-                <div className="font-mono font-bold text-[11px] mt-0.5 text-emerald-400 print:text-black">
+                <div className="text-[9px] text-slate-400 print:text-black">شخص ثالث</div>
+                <div className="font-mono font-medium text-[10px] mt-0.5 text-emerald-400 print:text-black">
                   {toFaDigits(vehicle.thirdPartyExpiry || '—')}
                 </div>
               </div>
 
               {/* Technical Inspection */}
-              <div className="p-2 rounded-xl bg-[#0a1120] border border-[#1c2a44] text-slate-300 flex flex-col justify-between print:bg-white print:border-black">
-                <div className="text-[10px] font-bold text-slate-400 print:text-black">معاینه فنی</div>
-                <div className="font-mono font-bold text-[11px] mt-0.5 text-sky-400 print:text-black">
+              <div className="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-slate-300 flex flex-col justify-between print:bg-white print:border-black">
+                <div className="text-[9px] text-slate-400 print:text-black">معاینه فنی</div>
+                <div className="font-mono font-medium text-[10px] mt-0.5 text-sky-400 print:text-black">
                   {toFaDigits(vehicle.inspectionExpiry || '—')}
                 </div>
               </div>
 
               {/* Body Insurance */}
-              <div className="p-2 rounded-xl bg-[#0a1120] border border-[#1c2a44] text-slate-300 flex flex-col justify-between print:bg-white print:border-black">
-                <div className="text-[10px] font-bold text-slate-400 print:text-black">بیمه بدنه</div>
-                <div className="font-mono font-bold text-[11px] mt-0.5 text-amber-400 print:text-black">
+              <div className="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-slate-300 flex flex-col justify-between print:bg-white print:border-black">
+                <div className="text-[9px] text-slate-400 print:text-black">بیمه بدنه</div>
+                <div className="font-mono font-medium text-[10px] mt-0.5 text-amber-400 print:text-black">
                   {toFaDigits(vehicle.insuranceExpiry || 'دارد')}
                 </div>
               </div>
             </div>
 
-            {/* Mileage & Oil Service Gauge Box - Polished Element Layout */}
-            <div className="p-2.5 rounded-xl bg-[#0a1120] border border-[#1c2a44] print:bg-white print:border-black space-y-2">
+            {/* Mileage & Wear Indicator - Minimal Layout (Click to Quick-Register Mileage) */}
+            <div
+              onClick={() => onOpenUsage?.(vehicle)}
+              className="p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 hover:border-sky-500/30 transition-colors cursor-pointer group/km print:bg-white print:border-black space-y-1.5"
+              title="برای ثبت یا به‌روزرسانی سریع کیلومترشمار کلیک کنید"
+            >
               <div className="flex items-center justify-between text-[11px] print:text-black">
                 <div className="flex items-center gap-1.5 text-slate-300 print:text-black">
-                  <Gauge className="w-3.5 h-3.5 text-amber-400 print:text-black shrink-0" />
-                  <span>کیلومترشمار:</span>
-                  <strong className="font-mono text-white print:text-black font-bold">
+                  <Gauge className="w-3.5 h-3.5 text-sky-400 print:text-black shrink-0" />
+                  <span className="text-[10px] text-slate-400">کیلومترشمار:</span>
+                  <strong className="font-mono text-white print:text-black font-semibold text-xs group-hover/km:text-sky-300 transition-colors">
                     {toFaDigits(currentKm.toLocaleString('fa-IR'))}
                   </strong>
-                  <span className="text-[10px] text-slate-500">km</span>
+                  <span className="text-[9px] text-slate-500">km</span>
                 </div>
 
                 {isInconsistent ? (
-                  <span className="text-[10px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded">
+                  <span className="text-[9px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">
                     ⚠️ نیاز به اصلاح
                   </span>
                 ) : isOverdue ? (
-                  <span className="text-[10px] font-black text-rose-300 bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 rounded-full font-mono">
+                  <span className="text-[9px] font-bold text-rose-300 bg-rose-500/15 border border-rose-500/25 px-1.5 py-0.5 rounded font-mono">
                     +{toFaDigits(overdueKm.toLocaleString('fa-IR'))} km تأخیر
                   </span>
                 ) : (
-                  <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full ${
+                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
                     remainingKm <= warningKm
-                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                      : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                      ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                      : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
                   }`}>
-                    {toFaDigits(remainingKm.toLocaleString('fa-IR'))} km تا سرویس
+                    {toFaDigits(remainingKm.toLocaleString('fa-IR'))} km مانده
                   </span>
                 )}
               </div>
 
-              {/* Sub-metrics: Driven since last service & Target ceiling */}
-              <div className="grid grid-cols-2 gap-1.5 text-[10px] bg-[#070d18] p-1.5 rounded-lg border border-[#141f33] print:bg-white print:border-black">
-                <div className="flex items-center justify-between text-slate-400 print:text-black">
-                  <span>پیمایش از سرویس:</span>
-                  <span className="font-mono font-bold text-sky-400 print:text-black">
-                    {toFaDigits(drivenKm.toLocaleString('fa-IR'))} km
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-400 print:text-black">
-                  <span>سقف استاندارد:</span>
-                  <span className="font-mono font-bold text-slate-300 print:text-black">
-                    {toFaDigits(ceilingKm.toLocaleString('fa-IR'))} km
-                  </span>
-                </div>
+              {/* Sub-metrics: Driven since last service */}
+              <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono pt-0.5 print:text-black">
+                <span>پیمایش از سرویس قبلی:</span>
+                <span className="text-sky-400 font-semibold print:text-black">
+                  {toFaDigits(drivenKm.toLocaleString('fa-IR'))} km (سقف: {toFaDigits(ceilingKm.toLocaleString('fa-IR'))} km)
+                </span>
               </div>
 
-              {/* Visual Wear Progress Bar */}
-              <div className="space-y-1 print:hidden">
-                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-300 ${
-                      isInconsistent || wearPercent >= 100
-                        ? 'bg-rose-500'
-                        : wearPercent >= 85
-                        ? 'bg-amber-400'
-                        : 'bg-emerald-400'
-                    }`}
-                    style={{ width: `${isInconsistent ? 100 : wearPercent}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
-                  <span>استهلاک دوره روغن</span>
-                  <span>{toFaDigits(wearPercent)}%</span>
-                </div>
+              {/* Minimal Progress Bar */}
+              <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden print:hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    isInconsistent || wearPercent >= 100
+                      ? 'bg-rose-500'
+                      : wearPercent >= 85
+                      ? 'bg-amber-400'
+                      : 'bg-emerald-400'
+                  }`}
+                  style={{ width: `${isInconsistent ? 100 : wearPercent}%` }}
+                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Footer: Capacity & Actions Toolbar */}
-        <div className="pt-3 border-t border-[#1e2c45] flex items-center justify-between gap-2 print:border-black">
-          <div className="text-xs text-slate-400 font-mono print:text-black">
-            ظرفیت: {vehicle.capacityKg ? `${toFaDigits(vehicle.capacityKg)} کیلوگرم` : vehicle.capacityTons || '۶ تن'}
+        {/* Footer: Capacity & Minimal Clear Action Buttons */}
+        <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 print:border-black">
+          <div className="text-[10px] text-slate-400 font-mono print:text-black">
+            ظرفیت: {vehicle.capacityKg ? `${toFaDigits(vehicle.capacityKg)} kg` : vehicle.capacityTons || '۶ تن'}
           </div>
 
-          {/* Action Buttons Toolbar (Hidden when printing on paper) */}
-          <div className="flex items-center gap-1.5 no-print">
-            {/* Dedicated Print Vehicle Passport / Spec Button */}
-            <button
-              type="button"
-              onClick={handlePrintClick}
-              className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-              title="چاپ شناسنامه و پرونده فنی رسمی خودرو (بهینه لیزری کاغذ سفید بدون پس‌زمینه)"
-            >
-              <Printer className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-[11px] font-bold">چاپ شناسنامه</span>
-            </button>
-
-            {/* Specifications Button */}
-            {onOpenSpecifications && (
+          {/* Action Buttons Toolbar (Minimalist, Distinct, Separated Actions) */}
+          <div className="flex items-center gap-1 no-print">
+            {/* 1. SEPARATE BUTTON: Quick Daily Mileage / Usage Registration ONLY (فقط ثبت کارکرد بدون تعویض روغن) */}
+            {onOpenUsage && (
               <button
                 type="button"
-                onClick={() => onOpenSpecifications(vehicle)}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
-                title="مشاهده و ویرایش مشخصات فنی خودرو"
+                onClick={() => onOpenUsage(vehicle)}
+                className="px-2 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 hover:text-white border border-sky-500/25 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
+                title="ثبت کیلومتر روزانه و کارکرد خودرو (فقط ثبت کارکرد بدون تغییر در تعویض روغن)"
               >
-                <Edit className="w-3.5 h-3.5" />
-                <span className="text-[11px]">مشخصات</span>
+                <Gauge className="w-3 h-3 text-sky-400" />
+                <span>ثبت کیلومتر</span>
               </button>
             )}
 
-            {/* Oil Service Button */}
+            {/* 2. SEPARATE BUTTON: Oil Service & Filter Change (مخصوص ثبت انجام تعویض روغن و فیلترها) */}
             {onOpenOilService && (
               <button
                 type="button"
                 onClick={() => onOpenOilService(vehicle)}
-                className="p-1.5 rounded-xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 transition cursor-pointer"
-                title="ثبت تعویض روغن و فیلتر"
+                className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-white border border-amber-500/25 text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
+                title="ثبت تعویض روغن و فیلترهای خودرو"
               >
-                <Droplet className="w-3.5 h-3.5 text-sky-400" />
+                <Droplet className="w-3 h-3 text-amber-400" />
+                <span>تعویض روغن</span>
               </button>
             )}
 
-            {/* End of Work Button */}
-            {onOpenEndOfWork && (
+            {/* 3. Specifications Dossier Button */}
+            {onOpenSpecifications && (
               <button
                 type="button"
-                onClick={() => onOpenEndOfWork(vehicle)}
-                className="p-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition cursor-pointer"
-                title="اعلام پایان کار و ثبت ساعت آمادگی"
+                onClick={() => onOpenSpecifications(vehicle)}
+                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs transition cursor-pointer"
+                title="مشاهده و ویرایش شناسنامه فنی خودرو"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <FileText className="w-3 h-3" />
               </button>
             )}
+
+            {/* 4. Dedicated Print Vehicle Passport Button */}
+            <button
+              type="button"
+              onClick={handlePrintClick}
+              className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs transition cursor-pointer"
+              title="چاپ شناسنامه رسمی خودرو A4"
+            >
+              <Printer className="w-3 h-3" />
+            </button>
           </div>
         </div>
       </div>

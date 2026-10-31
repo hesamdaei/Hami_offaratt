@@ -12,9 +12,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3000', 10);
-const HOST = '0.0.0.0';
 const isProd = process.env.NODE_ENV === 'production';
+const PORT = isProd ? parseInt(process.env.PORT || '8080', 10) : 3000;
+const HOST = '0.0.0.0';
 
 // Database & backup storage paths
 const DATA_DIR = path.join(__dirname, 'data');
@@ -1185,6 +1185,8 @@ app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message || 'خطا در تست اتصال' });
   }
+});
+
 // Dedicated LAN Security Status Endpoint
 app.get(['/api/lan/security-status', '/api/security-status'], (req, res) => {
   const ips = getLocalNetworkIps();
