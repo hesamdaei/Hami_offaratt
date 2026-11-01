@@ -710,12 +710,17 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
 
               {/* IP Phone CTI Configuration Box */}
               {voipConfig.mode === 'ipphone_cti' && (
-                <div className="p-4 rounded-xl bg-[#111a30] border border-slate-800 space-y-3">
-                  <div className="flex items-center gap-2 border-b border-slate-800/80 pb-2">
-                    <Radio className="w-4 h-4 text-purple-400" />
-                    <span className="text-xs font-bold text-white">تنظیمات مستقیم تلفن رومیزی تحت شبکه (CTI Action URI)</span>
+                <div className="p-4 rounded-xl bg-[#111a30] border border-slate-800 space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                    <div className="flex items-center gap-2">
+                      <Radio className="w-4 h-4 text-purple-400" />
+                      <span className="text-xs font-bold text-white">تنظیمات مستقیم تلفن رومیزی تحت شبکه (CTI Action URI - یالینک / گرنداستریم)</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-purple-300 bg-purple-500/10 border border-purple-500/30 px-2 py-0.5 rounded-md" dir="ltr">
+                      Dial: {(voipConfig.dialPrefix || '') + '09123456789'}
+                    </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                     <div>
                       <label className="block text-[11px] text-slate-400 mb-1">مدل تلفن:</label>
                       <select
@@ -740,6 +745,17 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
                       />
                     </div>
                     <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">نام کاربری وب تلفن:</label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={voipConfig.ipPhoneUser || 'admin'}
+                        onChange={(e) => setVoipConfig({ ...voipConfig, ipPhoneUser: e.target.value })}
+                        placeholder="admin"
+                        className="w-full px-3 py-1.5 bg-[#0b1222] border border-slate-700 rounded-lg text-slate-200 font-mono text-left"
+                      />
+                    </div>
+                    <div>
                       <label className="block text-[11px] text-slate-400 mb-1">رمز وب تلفن (پیش‌فرض admin):</label>
                       <input
                         type="password"
@@ -747,6 +763,49 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
                         value={voipConfig.ipPhonePass}
                         onChange={(e) => setVoipConfig({ ...voipConfig, ipPhonePass: e.target.value })}
                         className="w-full px-3 py-1.5 bg-[#0b1222] border border-slate-700 rounded-lg text-slate-200 font-mono text-left"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Trunk Line Release Digit for Yealink / PBX */}
+                  <div className="p-3 rounded-xl bg-[#0b1222] border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <label className="block text-xs font-bold text-purple-300">
+                        عدد آزاد کردن خط سانترال در یالینک (پیش‌شماره خط شهری / Trunk Prefix):
+                      </label>
+                      <p className="text-[11px] text-slate-400">
+                        اگر در سانترال شما قبل از شماره‌گیری باید عددی (مثلاً <span className="text-amber-300 font-mono font-bold">9</span> یا <span className="text-amber-300 font-mono font-bold">0</span>) برای آزاد شدن خط شهری زده شود، اینجا وارد کنید.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700">
+                        {[
+                          { label: 'بدون کد', val: '' },
+                          { label: 'عدد 9', val: '9' },
+                          { label: 'عدد 0', val: '0' },
+                          { label: 'عدد 1', val: '1' },
+                        ].map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => setVoipConfig({ ...voipConfig, dialPrefix: preset.val })}
+                            className={`px-2 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                              (voipConfig.dialPrefix || '') === preset.val
+                                ? 'bg-purple-600 text-white shadow'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={voipConfig.dialPrefix || ''}
+                        onChange={(e) => setVoipConfig({ ...voipConfig, dialPrefix: e.target.value })}
+                        placeholder="مثلاً 9"
+                        className="w-20 px-2.5 py-1.5 bg-slate-950 border border-purple-500/50 rounded-lg text-amber-300 font-mono font-black text-center text-xs focus:outline-none focus:border-purple-400"
                       />
                     </div>
                   </div>

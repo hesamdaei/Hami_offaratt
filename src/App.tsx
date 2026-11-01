@@ -72,11 +72,6 @@ import { VoipCallModal } from './components/VoipCallModal';
 import { VoipSettingsModal } from './components/VoipSettingsModal';
 import { AppNotification } from './types/notification';
 import { generateSystemNotifications } from './utils/notificationService';
-import { AppRouterProvider, useAppRouter } from './router/RouterContext';
-import { tabToPath, pathToTab } from './router/tabMapping';
-import { NotFoundView } from './components/NotFoundView';
-import { AccessDeniedView } from './components/AccessDeniedView';
-import { BreadcrumbsBar } from './components/BreadcrumbsBar';
 import { OperationalDashboardView } from './components/OperationalDashboardView';
 import { OperationsDashboardView } from './components/OperationsDashboardView';
 import { UnifiedOrdersAndReservationHub } from './components/UnifiedOrdersAndReservationHub';
@@ -100,27 +95,20 @@ interface HamiAppContentProps {
 }
 
 const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }) => {
-  const router = useAppRouter();
-  const { pathname, params, currentRoute, is404, canAccess, navigate } = router;
-
   const today = useMemo(() => getTodayJalaali(), []);
 
   // Standalone Phonebook Tab Check (?tab=PHONEBOOK or ?standalone=true)
   const isStandalonePhonebook = useMemo(() => {
     if (typeof window === 'undefined') return false;
     const p = new URLSearchParams(window.location.search);
-    return p.get('tab') === 'PHONEBOOK' || p.get('standalone') === 'true' || pathname === '/phonebook';
-  }, [pathname]);
+    return p.get('tab') === 'PHONEBOOK' || p.get('standalone') === 'true' || window.location.pathname === '/phonebook';
+  }, []);
 
-  // Main active navigation tab (synced with URL route)
+  // Main active navigation tab
   const [activeTab, setActiveTab] = useState<ActiveAppTab>(() => {
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search);
       if (p.get('tab') === 'PHONEBOOK') return 'PHONEBOOK';
-      const path = window.location.pathname;
-      if (path && path !== '/') {
-        return pathToTab(path);
-      }
     }
     return 'DASHBOARD';
   });
@@ -164,24 +152,8 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   const [fleetSubTab, setFleetSubTab] = useState<'SPECIFICATIONS' | 'DASHBOARD' | 'INSURANCE_ALERTS' | 'ENTRY' | 'HISTORY' | 'RULES'>('SPECIFICATIONS');
   const [highlightedInsuranceVehicleId, setHighlightedInsuranceVehicleId] = useState<string | null>(null);
 
-  // Synchronize activeTab with currentRoute and handle special routes
-  useEffect(() => {
-    if (currentRoute?.navTabId) {
-      setActiveTab(currentRoute.navTabId as ActiveAppTab);
-    }
-    if (pathname === '/drivers/new') {
-      setIsAddDriverOpen(true);
-    } else if (pathname === '/settings') {
-      setIsMasterAdminOpen(true);
-    }
-  }, [currentRoute, pathname]);
-
   const handleTabChange = (tab: ActiveAppTab) => {
     setActiveTab(tab);
-    const targetPath = tabToPath(tab);
-    if (pathname !== targetPath) {
-      navigate(targetPath);
-    }
   };
 
   const handleNavigateToFleetInsurance = (vehicleId?: string) => {
@@ -190,7 +162,6 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
     if (vehicleId) {
       setHighlightedInsuranceVehicleId(vehicleId);
     }
-    navigate('/trucks');
   };
 
   // Preselected Vehicle / Driver for Vehicle Handover Form
@@ -2230,62 +2201,44 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             onToggleTheme={handleToggleTheme}
           />
 
-          {/* Dynamic Breadcrumbs Navigation Bar */}
-          <BreadcrumbsBar />
-
-          {/* 404 Route Not Found View */}
-          {is404 ? (
+          {/* Module 0: Operational Dashboard (داشبورد عملیات) */}
+          {activeTab === 'DASHBOARD' && (
             <div className="animate-in fade-in duration-150">
-              <NotFoundView attemptedPath={pathname} />
-            </div>
-          ) : !canAccess ? (
-            /* 403 Forbidden Access Denied View */
-            <div className="animate-in fade-in duration-150">
-              <AccessDeniedView
-                currentUser={currentUser}
-                requiredRoleName={currentRoute?.masterAdminOnly ? 'مدیر ارشد سامانه' : 'مجوز سازمانی دسترسی'}
+              <OperationalDashboardView
+                vehicles={vehicles}
+                drivers={drivers}
+                driverDirectory={driverDirectory}
+                records={records}
+                onNavigateTab={handleTabChange}
               />
             </div>
-          ) : (
-            <>
-              {/* Module 0: Operational Dashboard (داشبورد عملیات) */}
-              {activeTab === 'DASHBOARD' && (
-                <div className="animate-in fade-in duration-150">
-                  <OperationalDashboardView
-                    vehicles={vehicles}
-                    drivers={drivers}
-                    driverDirectory={driverDirectory}
-                    records={records}
-                    onNavigateTab={handleTabChange}
-                  />
-                </div>
-              )}
+          )}
 
-              {/* Module: Operations & Dispatch (عملیات و اعزام ناوگان) */}
-              {activeTab === 'OPERATIONS' && (
-                <div className="animate-in fade-in duration-150">
-                  <OperationsDashboardView
-                    vehicles={vehicles}
-                    onNavigateToTab={handleTabChange}
-                  />
-                </div>
-              )}
+          {/* Module: Operations & Dispatch (عملیات و اعزام ناوگان) */}
+          {activeTab === 'OPERATIONS' && (
+            <div className="animate-in fade-in duration-150">
+              <OperationsDashboardView
+                vehicles={vehicles}
+                onNavigateToTab={handleTabChange}
+              />
+            </div>
+          )}
 
-              {/* Module: Orders & Reservations Hub (سفارش‌ها و بارها) */}
-              {activeTab === 'ORDERS' && (
-                <div className="animate-in fade-in duration-150">
-                  <UnifiedOrdersAndReservationHub
-                    orders={orders}
-                    onAddOrder={handleAddOrder}
-                    onUpdateOrder={handleUpdateOrder}
-                    onDeleteOrder={handleDeleteOrder}
-                    vehicles={vehicles}
-                    drivers={driverDirectory}
-                    showToast={showToast}
-                    initialSubTab={pathname === '/orders/new' ? 'NEW_ORDER' : 'ORDERS_LIST'}
-                  />
-                </div>
-              )}
+          {/* Module: Orders & Reservations Hub (سفارش‌ها و بارها) */}
+          {activeTab === 'ORDERS' && (
+            <div className="animate-in fade-in duration-150">
+              <UnifiedOrdersAndReservationHub
+                orders={orders}
+                onAddOrder={handleAddOrder}
+                onUpdateOrder={handleUpdateOrder}
+                onDeleteOrder={handleDeleteOrder}
+                vehicles={vehicles}
+                drivers={driverDirectory}
+                showToast={showToast}
+                initialSubTab="ORDERS_LIST"
+              />
+            </div>
+          )}
 
               {/* Module: Customers & Cargo Tracking Portal (مشتریان و رهگیری بار) */}
               {activeTab === 'CUSTOMERS' && (
@@ -2508,10 +2461,8 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
               />
             </div>
           )}
-        </>
-      )}
-    </main>
-  </div>
+        </main>
+      </div>
 
       {/* Modern Compact Footer */}
       <footer className="bg-[#0e1627] border-t border-[#1a2842] py-3.5 px-6 text-slate-400 text-xs mt-6 mb-16 sm:mb-0">
@@ -2539,12 +2490,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
 
       <AddDriverModal
         isOpen={isAddDriverOpen}
-        onClose={() => {
-          setIsAddDriverOpen(false);
-          if (pathname === '/drivers/new') {
-            navigate('/drivers');
-          }
-        }}
+        onClose={() => setIsAddDriverOpen(false)}
         onAdd={handleAddDriver}
       />
 
@@ -2662,12 +2608,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
       {/* Master Admin Settings Modal (شبکه، تنظیمات بله، دسترسی‌ها و بک‌آپ) */}
       <MasterAdminModal
         isOpen={isMasterAdminOpen}
-        onClose={() => {
-          setIsMasterAdminOpen(false);
-          if (pathname === '/settings') {
-            navigate('/dashboard');
-          }
-        }}
+        onClose={() => setIsMasterAdminOpen(false)}
         currentUser={currentUser}
         initialTab={masterAdminTab}
         onManualSync={handleForceFetchFromNetworkDb}
@@ -2726,11 +2667,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
 export const App: FC = () => {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => getStoredSession());
 
-  return (
-    <AppRouterProvider currentUser={currentUser}>
-      <HamiAppContent currentUser={currentUser} setCurrentUser={setCurrentUser} />
-    </AppRouterProvider>
-  );
+  return <HamiAppContent currentUser={currentUser} setCurrentUser={setCurrentUser} />;
 };
 
 export default App;

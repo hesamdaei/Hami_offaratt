@@ -79,7 +79,7 @@ export function clearVoipCallLogs(): void {
 export function sanitizePhoneNumber(phone: string, prefix = ''): string {
   if (!phone) return '';
   // تبدیل اعداد فارسی به انگلیسی
-  let cleaned = normalizePersianDigits(phone).replace(/[^0-9+]/g, '');
+  let cleaned = normalizePersianDigits(phone).replace(/[^0-9+*#]/g, '');
 
   // تبدیل فرمت بین‌المللی +98 به 0
   if (cleaned.startsWith('+98')) {
@@ -88,10 +88,11 @@ export function sanitizePhoneNumber(phone: string, prefix = ''): string {
     cleaned = '0' + cleaned.substring(4);
   }
 
-  // اضافه کردن پیش‌شماره خط شهری در صورت نیاز سانترال (مثلاً 9 یا 0)
+  // اضافه کردن عدد آزاد کردن خط شهری سانترال (مثلاً 9 یا 0 در یالینک و سانترال‌ها)
+  // توجه: حتی اگر شماره با 0 شروع شود (مثل 0912) و کد آزادسازی خط هم 0 باشد، باید به صورت 00912 شماره‌گیری شود
   if (prefix && prefix.trim()) {
-    const cleanPrefix = prefix.trim();
-    if (!cleaned.startsWith(cleanPrefix)) {
+    const cleanPrefix = normalizePersianDigits(prefix).trim().replace(/[^0-9*#,+]/g, '');
+    if (cleanPrefix) {
       cleaned = cleanPrefix + cleaned;
     }
   }

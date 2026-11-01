@@ -271,6 +271,61 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
             </div>
           )}
 
+          {/* Quick Trunk Line Release Prefix Selector for Yealink / IP Phone CTI Mode */}
+          {config.mode === 'ipphone_cti' && (
+            <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <PhoneForwarded className="w-4 h-4 text-purple-400 shrink-0" />
+                <div>
+                  <div className="font-bold text-purple-300 text-xs">عدد آزاد کردن خط سانترال یالینک:</div>
+                  <div className="text-[10px] text-slate-400">
+                    شماره ارسالی به گوشی:{' '}
+                    <span className="font-mono text-amber-300 font-bold" dir="ltr">
+                      {(config.dialPrefix || '') + phoneNumber}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                  {['', '9', '0'].map((p) => (
+                    <button
+                      key={p || 'none'}
+                      type="button"
+                      onClick={() => {
+                        const updated = { ...config, dialPrefix: p };
+                        setConfig(updated);
+                        saveVoipConfig(updated);
+                      }}
+                      className={`px-1.5 py-1 rounded text-[10px] font-bold transition cursor-pointer ${
+                        (config.dialPrefix || '') === p
+                          ? 'bg-purple-600 text-white'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                      title={p ? `آزاد کردن خط با عدد ${p}` : 'بدون پیش‌شماره آزادسازی خط'}
+                    >
+                      {p === '' ? 'بدون کد' : p}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={config.dialPrefix || ''}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    const updated = { ...config, dialPrefix: val };
+                    setConfig(updated);
+                    saveVoipConfig(updated);
+                  }}
+                  placeholder="9"
+                  title="عدد آزادسازی خط سانترال (مثلاً 9 یا 0)"
+                  className="w-12 h-8 text-center font-mono font-black text-sm bg-slate-950 border border-purple-500/40 rounded-lg text-amber-300 focus:outline-none focus:border-purple-400"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Primary Dial Button */}
           <button
             type="button"
@@ -283,7 +338,7 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
               {config.mode === 'asterisk_ami'
                 ? `برقراری تماس با تلفن رومیزی (داخلی ${currentExt || config.operatorExtension})`
                 : config.mode === 'ipphone_cti'
-                ? `شماره‌گیری روی گوشی رومیزی (${config.ipPhoneModel})`
+                ? `شماره‌گیری روی گوشی رومیزی (${config.ipPhoneModel}${config.dialPrefix ? ` با پیش‌شماره ${config.dialPrefix}` : ''})`
                 : 'شماره‌گیری با نرم‌افزار تلفنی (MicroSIP / Zoiper)'}
             </span>
           </button>

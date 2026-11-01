@@ -1093,7 +1093,7 @@ app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) =>
       if (config.ipPhoneModel === 'grandstream') {
         ctiUrl = `http://${phoneIp}/cgi-bin/api-make_call?phonenumber=${encodeURIComponent(targetPhone)}`;
       } else {
-        // Yealink default
+        // Yealink default Action URI
         ctiUrl = `http://${phoneIp}/servlet?key=number=${encodeURIComponent(targetPhone)}`;
       }
 
@@ -1111,7 +1111,8 @@ app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) =>
 
         return res.json({
           ok: true,
-          message: `دستور شماره‌گیری به تلفن رومیزی (${phoneIp}) ارسال شد. تلفن در حال شماره‌گیری است.`,
+          message: `دستور شماره‌گیری (${targetPhone}) به تلفن رومیزی (${phoneIp}) ارسال شد. تلفن در حال شماره‌گیری است.`,
+          details: { dialedNumber: targetPhone, ctiUrl },
         });
       } catch (ctiErr: any) {
         return res.json({

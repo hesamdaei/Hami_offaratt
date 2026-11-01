@@ -462,7 +462,12 @@ export const VoipSettingsModal: FC<VoipSettingsModalProps> = ({
 
               {config.mode === 'ipphone_cti' && (
                 <div className="p-4 bg-slate-900/70 rounded-2xl border border-emerald-900/40 space-y-3.5">
-                  <div className="font-bold text-emerald-300">پیکربندی کنترل مستقیم تلفن تحت شبکه رومیزی (Action URI)</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-bold text-emerald-300">پیکربندی کنترل مستقیم تلفن تحت شبکه رومیزی (Action URI - یالینک / گرنداستریم)</div>
+                    <span className="text-[11px] font-mono text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg" dir="ltr">
+                      number={(config.dialPrefix || '') + '09123456789'}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-slate-300 mb-1">برند تلفن رومیزی</label>
@@ -510,6 +515,49 @@ export const VoipSettingsModal: FC<VoipSettingsModalProps> = ({
                         onChange={(e) => setConfig({ ...config, ipPhonePass: e.target.value })}
                         placeholder="admin"
                         className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* عدد آزاد کردن خط سانترال یالینک */}
+                  <div className="p-3 rounded-xl bg-slate-950/90 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <label className="block text-xs font-bold text-emerald-300">
+                        عدد آزاد کردن خط سانترال یالینک (پیش‌شماره خط شهری):
+                      </label>
+                      <p className="text-[11px] text-slate-400">
+                        عددی که تلفن یالینک باید ابتدای شماره اضافه کند تا خط شهری سانترال آزاد شود (مثلاً <span className="text-amber-300 font-mono font-bold">9</span> یا <span className="text-amber-300 font-mono font-bold">0</span>):
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                        {[
+                          { label: 'بدون کد', val: '' },
+                          { label: 'عدد 9', val: '9' },
+                          { label: 'عدد 0', val: '0' },
+                          { label: 'عدد 1', val: '1' },
+                        ].map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => setConfig({ ...config, dialPrefix: preset.val })}
+                            className={`px-2 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                              (config.dialPrefix || '') === preset.val
+                                ? 'bg-emerald-600 text-white shadow'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={config.dialPrefix || ''}
+                        onChange={(e) => setConfig({ ...config, dialPrefix: e.target.value })}
+                        placeholder="مثلاً 9"
+                        className="w-20 px-2.5 py-1.5 bg-slate-900 border border-emerald-500/50 rounded-xl text-amber-300 font-mono font-black text-center text-xs focus:outline-none focus:border-emerald-400"
                       />
                     </div>
                   </div>
