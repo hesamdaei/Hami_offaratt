@@ -1,4 +1,4 @@
-import { FC, useMemo } from 'react';
+import { FC, useMemo, useState } from 'react';
 import {
   Truck,
   Users,
@@ -15,6 +15,8 @@ import {
   PieChart as PieChartIcon,
   BarChart3,
   Palmtree,
+  Droplet,
+  CalendarClock,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -33,6 +35,11 @@ import { AttendanceRecords, Driver } from '../types';
 import { toFaDigits, getTodayJalaali, formatPersianDateKey } from '../utils/jalaali';
 import { IranianPlate } from './IranianPlate';
 import { ActiveAppTab } from './Header';
+import {
+  evaluateVehicleServiceStatus,
+  getStoredServiceRules,
+  VehicleServiceEvaluation,
+} from '../utils/maintenanceStandardsConfig';
 
 interface OperationalDashboardViewProps {
   vehicles: VehicleItem[];
@@ -178,6 +185,113 @@ export const OperationalDashboardView: FC<OperationalDashboardViewProps> = ({
   vehicles.forEach((v) => {
     typeDistribution[v.vehicleType] = (typeDistribution[v.vehicleType] || 0) + 1;
   });
+
+  // Periodic Oil Service Analytics & Approaching Service Window (Recharts Widget)
+  const [approachingWindowDays, setApproachingWindowDays] = useState<7 | 14 | 30>(14);
+  const [oilWatchFilter, setOilWatchFilter] = useState<'NEAR_AND_OVERDUE' | 'NEAR_ONLY' | 'OVERDUE_ONLY'>('NEAR_AND_OVERDUE');
+
+  const oilServiceAnalytics = useMemo(() => {
+    const rules = getStoredServiceRules();
+    const evaluatedList: {
+      vehicle: VehicleItem;
+      evalResult: VehicleServiceEvaluation;
+      effectiveCategory: 'HEALTHY' | 'APPROACHING' | 'CRITICAL';
+    }[] = vehicles.map((v) => {
+      const evalResult = evaluateVehicleServiceStatus(v, rules);
+      const isApproachingByWindow =
+        evalResult.status !== 'CRITICAL' &&
+        (evalResult.status === 'WARNING' ||
+          evalResult.daysRemaining <= approachingWindowDays ||
+          (evalResult.hasMileage && evalResult.remainingKm <= (approachingWindowDays === 7 ? 500 : approachingWindowDays === 14 ? 1000 : 1500)) ||
+          evalResult.wearPercent >= 75);
+
+      const effectiveCategory: 'HEALTHY' | 'APPROACHING' | 'CRITICAL' =
+        evalResult.status === 'CRITICAL'
+          ? 'CRITICAL'
+          : isApproachingByWindow
+          ? 'APPROACHING'
+          : 'HEALTHY';
+
+      return {
+        vehicle: v,
+        evalResult,
+        effectiveCategory,
+      };
+    });
+
+    const healthyItems = evaluatedList.filter((i) => i.effectiveCategory === 'HEALTHY');
+    const approachingItems = evaluatedList
+      .filter((i) => i.effectiveCategory === 'APPROACHING')
+      .sort((a, b) => a.evalResult.daysRemaining - b.evalResult.daysRemaining);
+    const criticalItems = evaluatedList
+      .filter((i) => i.effectiveCategory === 'CRITICAL')
+      .sort((a, b) => b.evalResult.daysOverdue - a.evalResult.daysOverdue);
+
+    const total = vehicles.length || 1;
+    const pieData = [
+      {
+        name: 'ایمن و استاندارد',
+        shortName: 'سرویس معتبر',
+        value: healthyItems.length,
+        percentage: Math.round((healthyItems.length / total) * 100),
+        color: '#10b981',
+      },
+      {
+        name: `نزدیک به موعد (تا ${toFaDigits(approachingWindowDays)} روز)`,
+        shortName: 'نزدیک به سرویس',
+        value: approachingItems.length,
+        percentage: Math.round((approachingItems.length / total) * 100),
+        color: '#f59e0b',
+      },
+      {
+        name: 'موعد تعویض فرارسیده',
+        shortName: 'سررسید گذشته',
+        value: criticalItems.length,
+        percentage: Math.round((criticalItems.length / total) * 100),
+        color: '#f43f5e',
+      },
+    ];
+
+    const typeKeys = ['KHAAVAR', 'HYUNDAI', 'ISUZU', 'NISSAN'];
+    const barByTypeData = typeKeys.map((tKey) => {
+      const ofType = evaluatedList.filter((item) =>
+        tKey === 'NISSAN'
+          ? item.vehicle.vehicleType !== 'KHAAVAR' &&
+            item.vehicle.vehicleType !== 'HYUNDAI' &&
+            item.vehicle.vehicleType !== 'ISUZU'
+          : item.vehicle.vehicleType === tKey
+      );
+      return {
+        typeLabel:
+          tKey === 'KHAAVAR'
+            ? 'خاور'
+            : tKey === 'HYUNDAI'
+            ? 'هیوندای'
+            : tKey === 'ISUZU'
+            ? 'ایسوزو'
+            : 'نیسان/سایر',
+        'سرویس معتبر': ofType.filter((i) => i.effectiveCategory === 'HEALTHY').length,
+        'نزدیک به سرویس': ofType.filter((i) => i.effectiveCategory === 'APPROACHING').length,
+        'سررسید گذشته': ofType.filter((i) => i.effectiveCategory === 'CRITICAL').length,
+      };
+    });
+
+    const filteredWatchlist =
+      oilWatchFilter === 'NEAR_ONLY'
+        ? approachingItems
+        : oilWatchFilter === 'OVERDUE_ONLY'
+        ? criticalItems
+        : [...criticalItems, ...approachingItems];
+
+    return {
+      healthyItems,
+      approachingItems,
+      criticalItems,
+      pieData,
+      barByTypeData,
+      filteredWatchlist,
+    };
+  }, [vehicles, approachingWindowDays, oilWatchFilter]);
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
@@ -508,6 +622,326 @@ export const OperationalDashboardView: FC<OperationalDashboardViewProps> = ({
             >
               مشاهده جزئیات ناوگان ←
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* RECHARTS WIDGET: PERIODIC OIL SERVICE STATUS & APPROACHING SERVICE VEHICLES */}
+      <div className="bg-[#111b2e] border border-[#1f2c45] rounded-2xl p-4 sm:p-5 shadow-md space-y-5">
+        {/* Widget Header & Window Selector */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-3.5 border-b border-[#1f2c45]">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <Droplet className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-black text-slate-100 text-sm sm:text-base">
+                پایش گرافیکی سرویس دوره‌ای (تعویض روغن) و خودروهای نزدیک به موعد
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                محاسبه یکپارچه بر اساس آخرین تاریخ تعویض روغن (<code className="font-mono text-amber-300">lastChangeDate</code>)، کارکرد کیلومتر و سقف سفرهای مجاز
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-[#0a101f] border border-[#1f2c45] p-1 rounded-xl text-[11px]">
+              <span className="text-slate-400 px-2 font-medium flex items-center gap-1">
+                <CalendarClock className="w-3.5 h-3.5 text-amber-400" />
+                <span>بازه هشدار نزدیک به سرویس:</span>
+              </span>
+              {([7, 14, 30] as const).map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setApproachingWindowDays(days)}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+                    approachingWindowDays === days
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  تا {toFaDigits(days)} روز
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigateTab('OIL_SERVICE')}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold transition cursor-pointer whitespace-nowrap"
+            >
+              ثبت و مدیریت سرویس روغن ←
+            </button>
+          </div>
+        </div>
+
+        {/* 3-Column Analytics Layout: Donut Chart + Stacked Bar by Type + Approaching Vehicles List */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          {/* Column 1 (4 cols): Recharts Donut & Summary Counts */}
+          <div className="lg:col-span-4 bg-[#0a101f] border border-[#19263e] rounded-xl p-4 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-200 mb-2">
+              <span>توزیع وضعیت سرویس روغن ناوگان</span>
+              <span className="text-[11px] font-mono text-slate-400">
+                {toFaDigits(vehicles.length)} خودرو
+              </span>
+            </div>
+
+            <div className="h-48 w-full relative my-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={oilServiceAnalytics.pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={72}
+                    paddingAngle={4}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {oilServiceAnalytics.pieData.map((entry, idx) => (
+                      <Cell key={`oil-pie-${idx}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(val: any, name: any) => [`${toFaDigits(val)} دستگاه`, name]}
+                    contentStyle={{
+                      backgroundColor: '#0b1324',
+                      borderColor: '#1f2c45',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      color: '#f1f5f9',
+                      textAlign: 'right',
+                      direction: 'rtl',
+                    }}
+                    itemStyle={{ color: '#e2e8f0', fontWeight: 700 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-xl font-black text-amber-400 font-mono tabular-nums">
+                  {toFaDigits(
+                    oilServiceAnalytics.approachingItems.length + oilServiceAnalytics.criticalItems.length
+                  )}
+                </span>
+                <span className="text-[10px] text-slate-400 font-bold">نیازمند توجه</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 mt-2">
+              {oilServiceAnalytics.pieData.map((item) => (
+                <div
+                  key={item.shortName}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#111b2e] border border-[#1f2c45] text-xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-slate-200 font-bold">{item.shortName}</span>
+                  </div>
+                  <div className="flex items-center gap-2 font-mono tabular-nums">
+                    <span className="font-black text-white">{toFaDigits(item.value)} دستگاه</span>
+                    <span className="text-[11px] text-slate-400">({toFaDigits(item.percentage)}٪)</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Column 2 (4 cols): Recharts Bar Chart by Vehicle Class */}
+          <div className="lg:col-span-4 bg-[#0a101f] border border-[#19263e] rounded-xl p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between text-xs font-bold text-slate-200">
+                <span>وضعیت سرویس به تفکیک تیپ خودرو</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                مقایسه خودروهای دارای سرویس معتبر، نزدیک به موعد و سررسید گذشته
+              </p>
+            </div>
+
+            <div className="h-56 w-full my-2" dir="ltr">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={oilServiceAnalytics.barByTypeData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  barSize={18}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis
+                    dataKey="typeLabel"
+                    tick={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 700 }}
+                    axisLine={{ stroke: '#1e293b' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(30, 41, 59, 0.45)' }}
+                    formatter={(val: any, name: any) => [`${toFaDigits(val)} دستگاه`, name]}
+                    contentStyle={{
+                      backgroundColor: '#0b1324',
+                      borderColor: '#1f2c45',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      color: '#f1f5f9',
+                      textAlign: 'right',
+                      direction: 'rtl',
+                    }}
+                  />
+                  <Bar dataKey="سرویس معتبر" stackId="oil" fill="#10b981" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="نزدیک به سرویس" stackId="oil" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="سررسید گذشته" stackId="oil" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="flex items-center justify-center gap-4 text-[11px] pt-2 border-t border-[#19263e]">
+              <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                <span className="w-2.5 h-2.5 rounded-xs bg-emerald-500 inline-block" />
+                سرویس معتبر
+              </span>
+              <span className="flex items-center gap-1.5 text-amber-400 font-bold">
+                <span className="w-2.5 h-2.5 rounded-xs bg-amber-500 inline-block" />
+                نزدیک به سرویس
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-400 font-bold">
+                <span className="w-2.5 h-2.5 rounded-xs bg-rose-500 inline-block" />
+                سررسید گذشته
+              </span>
+            </div>
+          </div>
+
+          {/* Column 3 (4 cols): Watchlist of Vehicles Approaching / Overdue Oil Service */}
+          <div className="lg:col-span-4 bg-[#0a101f] border border-[#19263e] rounded-xl p-4 flex flex-col justify-between">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-slate-200">
+                  فهرست خودروهای نزدیک به سرویس و سررسید
+                </span>
+                <span className="text-[11px] font-mono font-bold text-amber-400 tabular-nums">
+                  {toFaDigits(oilServiceAnalytics.filteredWatchlist.length)} دستگاه
+                </span>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="grid grid-cols-3 gap-1 bg-[#111b2e] p-1 rounded-lg border border-[#1f2c45] text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setOilWatchFilter('NEAR_AND_OVERDUE')}
+                  className={`py-1 px-2 rounded-md font-bold transition cursor-pointer whitespace-nowrap ${
+                    oilWatchFilter === 'NEAR_AND_OVERDUE'
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  همه ({toFaDigits(oilServiceAnalytics.approachingItems.length + oilServiceAnalytics.criticalItems.length)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOilWatchFilter('NEAR_ONLY')}
+                  className={`py-1 px-2 rounded-md font-bold transition cursor-pointer whitespace-nowrap ${
+                    oilWatchFilter === 'NEAR_ONLY'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  نزدیک موعد ({toFaDigits(oilServiceAnalytics.approachingItems.length)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOilWatchFilter('OVERDUE_ONLY')}
+                  className={`py-1 px-2 rounded-md font-bold transition cursor-pointer whitespace-nowrap ${
+                    oilWatchFilter === 'OVERDUE_ONLY'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  سررسید ({toFaDigits(oilServiceAnalytics.criticalItems.length)})
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar my-3 pr-0.5">
+              {oilServiceAnalytics.filteredWatchlist.length === 0 ? (
+                <div className="py-10 text-center text-slate-500 text-xs">
+                  هیچ خودرویی در این بازه زمانی نیازمند تعویض روغن نیست.
+                </div>
+              ) : (
+                oilServiceAnalytics.filteredWatchlist.slice(0, 8).map(({ vehicle: v, evalResult, effectiveCategory }) => {
+                  const isCritical = effectiveCategory === 'CRITICAL';
+                  return (
+                    <div
+                      key={v.id}
+                      onClick={() => onNavigateTab('OIL_SERVICE')}
+                      className={`p-2.5 rounded-xl border transition cursor-pointer ${
+                        isCritical
+                          ? 'bg-rose-950/20 border-rose-500/30 hover:border-rose-500/60'
+                          : 'bg-amber-950/15 border-amber-500/30 hover:border-amber-500/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-100 truncate">
+                            <span>کد {toFaDigits(v.code)}</span>
+                            <span className="text-slate-500">·</span>
+                            <span className="text-slate-300 font-normal truncate">{v.driverName}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono mt-1 tabular-nums">
+                            <span>آخرین تعویض: {toFaDigits(evalResult.lastChangeDate)}</span>
+                            <span>·</span>
+                            <span className={isCritical ? 'text-rose-400 font-bold' : 'text-amber-300 font-bold'}>
+                              {isCritical
+                                ? `${toFaDigits(evalResult.daysOverdue)} روز گذشته`
+                                : `${toFaDigits(evalResult.daysRemaining)} روز مانده`}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-left">
+                          <IranianPlate plateNumber={v.plateNumber} size="sm" />
+                        </div>
+                      </div>
+
+                      {/* Wear Progress Bar */}
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="flex-1 bg-[#111b2e] h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              isCritical ? 'bg-rose-500' : 'bg-amber-400'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(10, evalResult.wearPercent))}%` }}
+                          />
+                        </div>
+                        <span
+                          className={`text-[10px] font-mono font-bold tabular-nums ${
+                            isCritical ? 'text-rose-400' : 'text-amber-300'
+                          }`}
+                        >
+                          {toFaDigits(evalResult.wearPercent)}٪
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-[#19263e] flex items-center justify-between text-[11px] text-slate-400">
+              <span>مبنای محاسبه: تاریخ واحد تعویض روغن</span>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('OIL_SERVICE')}
+                className="text-amber-400 hover:text-amber-300 font-bold cursor-pointer"
+              >
+                مشاهده همه در سرویس روغن ←
+              </button>
+            </div>
           </div>
         </div>
       </div>

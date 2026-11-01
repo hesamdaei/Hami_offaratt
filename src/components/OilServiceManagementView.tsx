@@ -40,6 +40,7 @@ import { PersianDatePicker } from './PersianDatePicker';
 import { getFleetInsuranceAlerts } from '../utils/insuranceAlerts';
 import { FleetInsuranceAlertsView } from './FleetInsuranceAlertsView';
 import { VehicleCard } from './VehicleCard';
+import { OilServiceCard } from './OilServiceCard';
 import { VehicleSpecPrintModal } from './VehicleSpecPrintModal';
 import { TableListA4PrintModal, TableListColumn } from './TableListA4PrintModal';
 import {
@@ -120,10 +121,12 @@ interface OilServiceManagementViewProps {
   availableDrivers?: DriverDirectoryItem[];
   onAssignDriverToVehicle?: (vehicleId: string, driverNameOrNone: string, driverPhone?: string) => void;
   onNavigateToFleet?: () => void;
+  onNavigateToOil?: () => void;
   showToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
   initialSubTab?: SubTab;
   highlightedVehicleId?: string | null;
   onOpenBaleForDriver?: (info: { name: string; phone?: string; vehicleCode?: number; plateNumber?: string }) => void;
+  mode?: 'OIL' | 'FLEET';
 }
 
 export type SubTab = 'SPECIFICATIONS' | 'DASHBOARD' | 'INSURANCE_ALERTS' | 'ENTRY' | 'HISTORY' | 'RULES';
@@ -133,10 +136,13 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
   onUpdateVehicle,
   availableDrivers = [],
   onAssignDriverToVehicle,
+  onNavigateToFleet,
+  onNavigateToOil,
   showToast,
   initialSubTab,
   highlightedVehicleId,
   onOpenBaleForDriver,
+  mode = 'OIL',
 }) => {
   const todayInfo = getTodayJalaali();
   const todayStr = `${todayInfo.jy}/${String(todayInfo.jm).padStart(2, '0')}/${String(todayInfo.jd).padStart(2, '0')}`;
@@ -149,21 +155,16 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
   };
 
   const [subTab, setSubTab] = useState<SubTab>(() => normalizeSubTab(initialSubTab));
-  // Unified view mode inside the main Fleet Hub: 'TABLE' (compact operational list) or 'CARDS' (visual cards)
-  const [viewMode, setViewMode] = useState<'TABLE' | 'CARDS'>(() =>
-    initialSubTab === 'SPECIFICATIONS' ? 'CARDS' : 'TABLE'
-  );
+  // Default to CARDS view so the redesigned OilServiceCard or VehicleCard is immediately visible
+  const [viewMode, setViewMode] = useState<'TABLE' | 'CARDS'>('CARDS');
 
   useEffect(() => {
     if (initialSubTab) {
       setSubTab(normalizeSubTab(initialSubTab));
-      if (initialSubTab === 'DASHBOARD' || initialSubTab === 'ENTRY') {
-        setViewMode('TABLE');
-      } else if (initialSubTab === 'SPECIFICATIONS') {
-        setViewMode('CARDS');
-      }
+    } else {
+      setSubTab('SPECIFICATIONS');
     }
-  }, [initialSubTab]);
+  }, [initialSubTab, mode]);
 
   // Compute fleet insurance alert metrics
   const insuranceAlertData = useMemo(() => {
@@ -707,6 +708,150 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
     }
   };
 
+  // Direct 1-Step Daily Usage Update from OilServiceCard (Current Mileage + Trips together)
+  const handleCardUpdateUsageSingleStep = (
+    v: VehicleItem,
+    newCurrentMileage: number,
+    newTrips: number
+  ) => {
+    const vRule = rules[v.vehicleType] || DEFAULT_SERVICE_RULES[v.vehicleType];
+    const hasMileage = vRule ? vRule.hasMileage : v.vehicleType !== 'KHAAVAR';
+
+    const undoItem: OilUndoAction = {
+      id: `undo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      actionType: 'USAGE_UPDATE',
+      vehicleId: v.id,
+      vehicleCode: v.code,
+      driverName: v.driverName,
+      title: `بروزرسانی کارکرد خودرو کد ${toFaDigits(v.code)}`,
+      details: hasMileage
+        ? `کیلومتر جاری ${toFaDigits(newCurrentMileage.toLocaleString())} و ${toFaDigits(newTrips)} سفر`
+        : `تعداد سفر جدید: ${toFaDigits(newTrips)} سفر`,
+      timestamp: todayStr,
+      previousVehicleState: { ...v },
+    };
+    setUndoStack((prev) => [undoItem, ...prev.slice(0, 19)]);
+
+    const updated: VehicleItem = normalizeVehicleOilData({
+      ...v,
+      currentMileage: hasMileage ? newCurrentMileage : v.currentMileage,
+      tripsSinceChange: newTrips,
+    });
+
+    onUpdateVehicle(updated);
+    if (showToast) {
+      showToast(
+        hasMileage
+          ? `کیلومتر جاری (${toFaDigits(newCurrentMileage.toLocaleString())}) و تعداد سفر (${toFaDigits(newTrips)}) خودرو کد ${toFaDigits(v.code)} ثبت شد.`
+          : `تعداد سفر خودرو کد ${toFaDigits(v.code)} به ${toFaDigits(newTrips)} سفر بروزرسانی شد.`,
+        'success'
+      );
+    }
+  };
+
+  // Direct Last Oil Change Date Update from OilServiceCard
+  const handleCardChangeOilDate = (v: VehicleItem, newDate: string) => {
+    const undoItem: OilUndoAction = {
+      id: `undo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      actionType: 'MANUAL_ENTRY',
+      vehicleId: v.id,
+      vehicleCode: v.code,
+      driverName: v.driverName,
+      title: `تغییر تاریخ تعویض روغن خودرو کد ${toFaDigits(v.code)}`,
+      details: `تاریخ جدید: ${toFaDigits(newDate)}`,
+      timestamp: todayStr,
+      previousVehicleState: { ...v },
+    };
+    setUndoStack((prev) => [undoItem, ...prev.slice(0, 19)]);
+
+    const updated = normalizeVehicleOilData(
+      {
+        ...v,
+        lastChangeDate: newDate,
+      },
+      newDate
+    );
+
+    onUpdateVehicle(updated);
+    if (showToast) {
+      showToast(
+        `تاریخ آخرین تعویض روغن خودرو کد ${toFaDigits(v.code)} به ${toFaDigits(newDate)} تغییر یافت.`,
+        'success'
+      );
+    }
+  };
+
+  // Quick Oil Change Registration from OilServiceCard (New Mileage + Zero Trips + Date)
+  const handleCardQuickRegisterOilChange = (
+    v: VehicleItem,
+    newServiceMileage: number,
+    serviceDate: string
+  ) => {
+    const evalStatus = evaluateVehicleServiceStatus(v, rules);
+    const hasMileage = evalStatus.rule.hasMileage;
+    const effectiveMileage = hasMileage ? Math.max(0, newServiceMileage) : 0;
+
+    const undoItem: OilUndoAction = {
+      id: `undo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      actionType: 'QUICK_SERVICE',
+      vehicleId: v.id,
+      vehicleCode: v.code,
+      driverName: v.driverName,
+      title: `ثبت سریع تعویض روغن خودرو کد ${toFaDigits(v.code)}`,
+      details: hasMileage
+        ? `کیلومتر جدید ${toFaDigits(effectiveMileage.toLocaleString())}، صفر شدن سفر در تاریخ ${toFaDigits(serviceDate)}`
+        : `ثبت تعویض روغن و صفر شدن سفر در تاریخ ${toFaDigits(serviceDate)}`,
+      timestamp: serviceDate,
+      previousVehicleState: { ...v },
+    };
+    setUndoStack((prev) => [undoItem, ...prev.slice(0, 19)]);
+
+    const newHistoryItem: ServiceHistoryEntry = {
+      id: `srv-${Date.now()}`,
+      date: serviceDate,
+      mileage: hasMileage ? effectiveMileage : undefined,
+      currentMileageAtService: hasMileage ? effectiveMileage : undefined,
+      trips: 0,
+      oilBrand: v.lastOilBrand || 'بهران دیزل سوپر ۱۵W۴۰',
+      oilFilterChanged: true,
+      airFilterChanged: true,
+      fuelFilterChanged: false,
+      notes: hasMileage
+        ? `ثبت سریع تعویض روغن در کیلومتر ${effectiveMileage.toLocaleString()} و صفر شدن سفر`
+        : `ثبت سریع تعویض روغن دوره‌ای خاور و صفر شدن شمارنده سفر`,
+    };
+
+    const existingHistory: ServiceHistoryEntry[] = Array.isArray((v as any).serviceHistory)
+      ? (v as any).serviceHistory
+      : [];
+    const filteredHistory = existingHistory.filter((h) => h.date !== serviceDate);
+
+    const updated: VehicleItem = normalizeVehicleOilData(
+      {
+        ...v,
+        status: v.status === 'IN_MAINTENANCE' ? 'ACTIVE' : v.status,
+        lastChangeDate: serviceDate,
+        lastChangeMileage: hasMileage ? effectiveMileage : 0,
+        currentMileage: hasMileage ? effectiveMileage : 0,
+        tripsSinceChange: 0,
+        oilFilterChanged: true,
+        airFilterChanged: true,
+        serviceHistory: [newHistoryItem, ...filteredHistory],
+      },
+      serviceDate
+    );
+
+    onUpdateVehicle(updated);
+    if (showToast) {
+      showToast(
+        hasMileage
+          ? `تعویض روغن خودرو کد ${toFaDigits(v.code)} با کیلومتر ${toFaDigits(effectiveMileage.toLocaleString())} ثبت و تعداد سفر صفر شد.`
+          : `تعویض روغن خودرو کد ${toFaDigits(v.code)} در تاریخ ${toFaDigits(serviceDate)} ثبت و تعداد سفر صفر شد.`,
+        'success'
+      );
+    }
+  };
+
   // Save Rule changes
   const handleSaveRule = (key: string, updatedRule: ServiceRule) => {
     const newRules = { ...rules, [key]: updatedRule };
@@ -867,28 +1012,39 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
   ];
 
   const isUnifiedFleetHub = subTab === 'SPECIFICATIONS' || subTab === 'DASHBOARD' || subTab === 'ENTRY';
+  const isFleetMode = mode === 'FLEET';
 
   return (
     <div className="space-y-4">
-      {/* Minimal & Unified Top Workspace Header */}
+      {/* Minimal & Separated Top Workspace Header (Fleet Management vs Oil Service) */}
       <div className="bg-[#111b2e] border border-[#1f2c45] rounded-2xl p-4 sm:p-5 shadow-md space-y-4">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
-              <Truck className="w-5 h-5" />
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                isFleetMode
+                  ? 'bg-sky-500/10 border-sky-500/20 text-sky-400'
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              }`}
+            >
+              {isFleetMode ? <Truck className="w-5 h-5" /> : <Droplet className="w-5 h-5" />}
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black text-white">
-                مدیریت یکپارچه ناوگان، تعویض روغن و بیمه‌نامه
+                {isFleetMode
+                  ? 'مدیریت ناوگان، شناسنامه خودروها و بیمه‌نامه'
+                  : 'مدیریت تعویض روغن و کارکرد روزانه ناوگان'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                پایش هوشمند سرویس خاورها (بر اساس سقف ۶۰ روز / ۸۰ سفر) و خودروهای کیلومتردار (بر اساس کیلومترشمار) در یک پنجره واحد
+                {isFleetMode
+                  ? 'مدیریت پرونده فنی خودروها، تخصیص راننده، بیمه‌نامه شخص ثالث/بدنه و معاینه فنی'
+                  : 'بروزرسانی یک‌مرحله‌ای کیلومتر جاری و سفر، تغییر تاریخ تعویض روغن و ثبت سریع سرویس با صفر کردن سفر'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {undoStack.length > 0 && (
+            {!isFleetMode && undoStack.length > 0 && (
               <button
                 type="button"
                 onClick={() => handleUndo()}
@@ -900,6 +1056,28 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
               </button>
             )}
 
+            {isFleetMode && onNavigateToOil && (
+              <button
+                type="button"
+                onClick={onNavigateToOil}
+                className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 font-bold transition cursor-pointer"
+              >
+                <Droplet className="w-3.5 h-3.5 text-amber-400" />
+                <span>رفتن به بخش تعویض روغن ←</span>
+              </button>
+            )}
+
+            {!isFleetMode && onNavigateToFleet && (
+              <button
+                type="button"
+                onClick={onNavigateToFleet}
+                className="bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 font-bold transition cursor-pointer"
+              >
+                <Truck className="w-3.5 h-3.5 text-sky-400" />
+                <span>رفتن به مدیریت ناوگان و بیمه ←</span>
+              </button>
+            )}
+
             <div className="bg-[#0a101f] border border-[#1f2c45] px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 text-slate-300">
               <Clock className="w-3.5 h-3.5 text-sky-400" />
               <span>امروز: <strong className="text-white font-mono">{toFaDigits(todayInfo.fullFa)}</strong></span>
@@ -907,192 +1085,265 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
           </div>
         </div>
 
-        {/* Streamlined 5-Column KPI Strip (Clickable quick filters) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-          <button
-            type="button"
-            onClick={() => {
-              setSubTab('SPECIFICATIONS');
-              setStatusFilter('ALL');
-              setTypeFilter('ALL');
-            }}
-            className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
-              isUnifiedFleetHub && statusFilter === 'ALL' && typeFilter === 'ALL'
-                ? 'bg-blue-600/15 border-blue-500/50'
-                : 'bg-[#0a101f] border-[#1f2c45] hover:border-slate-600'
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span>کل ناوگان فعال</span>
-              <Car className="w-3.5 h-3.5 text-blue-400" />
-            </div>
-            <div className="text-lg font-black text-white font-mono mt-1">{toFaDigits(stats.total)} دستگاه</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">
-              {toFaDigits(stats.khaavarTotal)} خاور • {toFaDigits(stats.withMileage)} کیلومتردار
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSubTab('SPECIFICATIONS');
-              setStatusFilter('CRITICAL');
-            }}
-            className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
-              isUnifiedFleetHub && statusFilter === 'CRITICAL'
-                ? 'bg-rose-500/15 border-rose-500/50'
-                : 'bg-[#0a101f] border-[#1f2c45] hover:border-rose-500/40'
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span>موعد تعویض فوری</span>
-              <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-            </div>
-            <div className="text-lg font-black text-rose-400 font-mono mt-1">{toFaDigits(stats.critical)} دستگاه</div>
-            <div className="text-[10px] text-rose-300/80 mt-0.5">
-              {stats.khaavarCritical > 0
-                ? `شامل ${toFaDigits(stats.khaavarCritical)} خاور سررسید شده`
-                : 'گذشته از سقف مجاز سرویس'}
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSubTab('SPECIFICATIONS');
-              setStatusFilter('KHAAVAR_DUE');
-              setTypeFilter('ALL');
-            }}
-            className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
-              isUnifiedFleetHub && statusFilter === 'KHAAVAR_DUE'
-                ? 'bg-amber-500/15 border-amber-500/50'
-                : 'bg-[#0a101f] border-[#1f2c45] hover:border-amber-500/40'
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span>خاورهای نیازمند سرویس</span>
-              <Truck className="w-3.5 h-3.5 text-amber-400" />
-            </div>
-            <div className="text-lg font-black text-amber-400 font-mono mt-1">
-              {toFaDigits(stats.khaavarDue)} <span className="text-xs font-normal text-slate-400">از {toFaDigits(stats.khaavarTotal)} خاور</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              {toFaDigits(stats.khaavarCritical)} فوری • {toFaDigits(stats.khaavarWarning)} در آستانه (۶۰ روز/۸۰ سفر)
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSubTab('SPECIFICATIONS');
-              setStatusFilter('HEALTHY');
-            }}
-            className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
-              isUnifiedFleetHub && statusFilter === 'HEALTHY'
-                ? 'bg-emerald-500/15 border-emerald-500/50'
-                : 'bg-[#0a101f] border-[#1f2c45] hover:border-emerald-500/40'
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span>وضعیت ایمن و استاندارد</span>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            </div>
-            <div className="text-lg font-black text-emerald-400 font-mono mt-1">{toFaDigits(stats.healthy)} دستگاه</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">
-              دارای مهلت زمانی و کیلومتر کافی
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSubTab('INSURANCE_ALERTS')}
-            className={`p-3 rounded-xl border text-right transition-all cursor-pointer col-span-2 sm:col-span-1 ${
-              subTab === 'INSURANCE_ALERTS'
-                ? 'bg-rose-500/20 border-rose-500/60'
-                : 'bg-[#0a101f] border-[#1f2c45] hover:border-rose-500/40'
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span className="text-rose-300 font-bold">هشدار بیمه و معاینه</span>
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-            </div>
-            <div className="text-lg font-black text-rose-400 font-mono mt-1">
-              {toFaDigits(insuranceAlertData.totalAlertsCount)} دستگاه
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              {insuranceAlertData.expiredCount > 0
-                ? `${toFaDigits(insuranceAlertData.expiredCount)} منقضی • ${toFaDigits(insuranceAlertData.expiringCount)} نزدیک انقضا`
-                : 'پایش سررسید کمتر از ۷ روز'}
-            </div>
-          </button>
-        </div>
-
-        {/* Minimal 4-Tab Navigation Bar */}
-        <div className="pt-2 border-t border-[#1a273f] flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+        {/* KPI Strip tailored to either Fleet Mode or Oil Service Mode */}
+        {isFleetMode ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <button
               type="button"
-              onClick={() => setSubTab('SPECIFICATIONS')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              onClick={() => {
+                setSubTab('SPECIFICATIONS');
+                setStatusFilter('ALL');
+                setTypeFilter('ALL');
+              }}
+              className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
                 isUnifiedFleetHub
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
+                  ? 'bg-blue-600/15 border-blue-500/50'
+                  : 'bg-[#0a101f] border-[#1f2c45] hover:border-slate-600'
               }`}
             >
-              <Truck className="w-3.5 h-3.5" />
-              <span>فهرست ناوگان و سرویس روغن</span>
-              <span className="font-mono text-[10px] opacity-80">({toFaDigits(vehicles.length)})</span>
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span>کل خودروهای ناوگان</span>
+                <Car className="w-3.5 h-3.5 text-blue-400" />
+              </div>
+              <div className="text-lg font-black text-white font-mono mt-1">{toFaDigits(stats.total)} دستگاه</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">شناسنامه و پرونده فنی</div>
             </button>
+
+            <div className="p-3 rounded-xl border bg-[#0a101f] border-[#1f2c45] text-right">
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span>آماده به کار</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <div className="text-lg font-black text-emerald-400 font-mono mt-1">
+                {toFaDigits(vehicles.filter((v) => v.status === 'ACTIVE').length)} دستگاه
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5">فعال در خط عملیات</div>
+            </div>
+
+            <div className="p-3 rounded-xl border bg-[#0a101f] border-[#1f2c45] text-right">
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span>در تعمیرگاه</span>
+                <Wrench className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <div className="text-lg font-black text-amber-400 font-mono mt-1">
+                {toFaDigits(vehicles.filter((v) => v.status === 'IN_MAINTENANCE').length)} دستگاه
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5">تحت تعمیرات فنی</div>
+            </div>
 
             <button
               type="button"
               onClick={() => setSubTab('INSURANCE_ALERTS')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
                 subTab === 'INSURANCE_ALERTS'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
+                  ? 'bg-rose-500/20 border-rose-500/60'
+                  : 'bg-[#0a101f] border-[#1f2c45] hover:border-rose-500/40'
               }`}
             >
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-              <span>بیمه‌نامه و معاینه فنی</span>
-              {insuranceAlertData.totalAlertsCount > 0 && (
-                <span className="text-rose-300 font-mono text-[10px] font-black">
-                  ({toFaDigits(insuranceAlertData.totalAlertsCount)})
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSubTab('HISTORY')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                subTab === 'HISTORY'
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
-              }`}
-            >
-              <History className="w-3.5 h-3.5" />
-              <span>دفتر سوابق سرویس</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSubTab('RULES')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                subTab === 'RULES'
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
-              }`}
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>استانداردها و قواعد سرویس</span>
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span className="text-rose-300 font-bold">هشدار بیمه و معاینه</span>
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+              </div>
+              <div className="text-lg font-black text-rose-400 font-mono mt-1">
+                {toFaDigits(insuranceAlertData.totalAlertsCount)} دستگاه
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">پایش انقضای بیمه‌نامه و معاینه</div>
             </button>
           </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setSubTab('SPECIFICATIONS');
+                setStatusFilter('ALL');
+                setTypeFilter('ALL');
+              }}
+              className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                isUnifiedFleetHub && statusFilter === 'ALL' && typeFilter === 'ALL'
+                  ? 'bg-blue-600/15 border-blue-500/50'
+                  : 'bg-[#0a101f] border-[#1f2c45] hover:border-slate-600'
+              }`}
+            >
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span>کل خودروها</span>
+                <Car className="w-3.5 h-3.5 text-blue-400" />
+              </div>
+              <div className="text-lg font-black text-white font-mono mt-1">{toFaDigits(stats.total)} دستگاه</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">
+                {toFaDigits(stats.khaavarTotal)} خاور • {toFaDigits(stats.withMileage)} کیلومتردار
+              </div>
+            </button>
 
-          {/* View Mode Switcher & Print Button (visible in Unified Fleet Hub) */}
+            <button
+              type="button"
+              onClick={() => {
+                setSubTab('SPECIFICATIONS');
+                setStatusFilter('CRITICAL');
+              }}
+              className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                isUnifiedFleetHub && statusFilter === 'CRITICAL'
+                  ? 'bg-rose-500/15 border-rose-500/50'
+                  : 'bg-[#0a101f] border-[#1f2c45] hover:border-rose-500/40'
+              }`}
+            >
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span>موعد تعویض فوری</span>
+                <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+              </div>
+              <div className="text-lg font-black text-rose-400 font-mono mt-1">{toFaDigits(stats.critical)} دستگاه</div>
+              <div className="text-[10px] text-rose-300/80 mt-0.5">
+                {stats.khaavarCritical > 0
+                  ? `شامل ${toFaDigits(stats.khaavarCritical)} خاور سررسید شده`
+                  : 'گذشته از سقف مجاز سرویس'}
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSubTab('SPECIFICATIONS');
+                setStatusFilter('KHAAVAR_DUE');
+                setTypeFilter('ALL');
+              }}
+              className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                isUnifiedFleetHub && statusFilter === 'KHAAVAR_DUE'
+                  ? 'bg-amber-500/15 border-amber-500/50'
+                  : 'bg-[#0a101f] border-[#1f2c45] hover:border-amber-500/40'
+              }`}
+            >
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span>خاورهای نیازمند سرویس</span>
+                <Truck className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <div className="text-lg font-black text-amber-400 font-mono mt-1">
+                {toFaDigits(stats.khaavarDue)} <span className="text-xs font-normal text-slate-400">از {toFaDigits(stats.khaavarTotal)} خاور</span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                {toFaDigits(stats.khaavarCritical)} فوری • {toFaDigits(stats.khaavarWarning)} در آستانه
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSubTab('SPECIFICATIONS');
+                setStatusFilter('HEALTHY');
+              }}
+              className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                isUnifiedFleetHub && statusFilter === 'HEALTHY'
+                  ? 'bg-emerald-500/15 border-emerald-500/50'
+                  : 'bg-[#0a101f] border-[#1f2c45] hover:border-emerald-500/40'
+              }`}
+            >
+              <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                <span>سرویس معتبر و ایمن</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <div className="text-lg font-black text-emerald-400 font-mono mt-1">{toFaDigits(stats.healthy)} دستگاه</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">
+                دارای مهلت زمانی و کیلومتر کافی
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Sub-Navigation Bar separated for Fleet vs Oil Service */}
+        <div className="pt-2 border-t border-[#1a273f] flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+            {isFleetMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSubTab('SPECIFICATIONS')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    isUnifiedFleetHub
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
+                  }`}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>مشخصات و شناسنامه ناوگان</span>
+                  <span className="font-mono text-[10px] opacity-80">({toFaDigits(vehicles.length)})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubTab('INSURANCE_ALERTS')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    subTab === 'INSURANCE_ALERTS'
+                      ? 'bg-rose-600 text-white shadow-sm'
+                      : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                  <span>بیمه‌نامه و معاینه فنی</span>
+                  {insuranceAlertData.totalAlertsCount > 0 && (
+                    <span className="text-rose-300 font-mono text-[10px] font-black">
+                      ({toFaDigits(insuranceAlertData.totalAlertsCount)})
+                    </span>
+                  )}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSubTab('SPECIFICATIONS')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    isUnifiedFleetHub
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
+                  }`}
+                >
+                  <Droplet className="w-3.5 h-3.5" />
+                  <span>کارت‌های روزمره تعویض روغن و کارکرد</span>
+                  <span className="font-mono text-[10px] opacity-80">({toFaDigits(vehicles.length)})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubTab('HISTORY')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    subTab === 'HISTORY'
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
+                  }`}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>دفتر سوابق سرویس</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubTab('RULES')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    subTab === 'RULES'
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : 'bg-[#0a101f] text-slate-300 hover:text-white border border-[#1f2c45]'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>استانداردها و قواعد سرویس</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* View Mode Switcher & Print Button */}
           {isUnifiedFleetHub && (
             <div className="flex items-center gap-2">
               <div className="flex items-center bg-[#0a101f] p-1 rounded-xl border border-[#1f2c45]">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('CARDS')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    viewMode === 'CARDS' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>{isFleetMode ? 'کارت‌های ناوگان' : 'کارت‌های تعویض روغن'}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setViewMode('TABLE')}
@@ -1102,16 +1353,6 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
                 >
                   <List className="w-3.5 h-3.5" />
                   <span>نمای جدولی</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('CARDS')}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    viewMode === 'CARDS' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                  <span>نمای کارتی</span>
                 </button>
               </div>
 
@@ -1391,27 +1632,37 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
             </div>
           )}
 
-          {/* VIEW MODE B: CLEAN CARDS GRID */}
+          {/* VIEW MODE B: CARDS GRID (Redesigned OilServiceCard in OIL mode, or VehicleCard in FLEET mode) */}
           {viewMode === 'CARDS' && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filteredVehicles.map((v) => (
-                <VehicleCard
-                  key={v.id}
-                  vehicle={v}
-                  availableDrivers={availableDrivers}
-                  onAssignDriver={(target, driverName, driverPhone) =>
-                    onAssignDriverToVehicle?.(target.id, driverName, driverPhone)
-                  }
-                  onUnassignDriver={(target) =>
-                    onAssignDriverToVehicle?.(target.id, 'بدون راننده', '')
-                  }
-                  onOpenSpecifications={(target) => setSpecsVehicle(target)}
-                  onOpenPrintModal={(target) => setPrintingVehicle(target)}
-                  onOpenUsage={(target) => handleOpenManualOilModal(target, 'USAGE')}
-                  onOpenOilService={(target) => handleOpenManualOilModal(target, 'OIL_SERVICE')}
-                  onShowToast={showToast}
-                />
-              ))}
+              {filteredVehicles.map((v) =>
+                isFleetMode ? (
+                  <VehicleCard
+                    key={v.id}
+                    vehicle={v}
+                    availableDrivers={availableDrivers}
+                    onAssignDriver={(target, driverName, driverPhone) =>
+                      onAssignDriverToVehicle?.(target.id, driverName, driverPhone)
+                    }
+                    onUnassignDriver={(target) =>
+                      onAssignDriverToVehicle?.(target.id, 'بدون راننده', '')
+                    }
+                    onOpenSpecifications={(target) => setSpecsVehicle(target)}
+                    onOpenPrintModal={(target) => setPrintingVehicle(target)}
+                    onShowToast={showToast}
+                  />
+                ) : (
+                  <OilServiceCard
+                    key={v.id}
+                    vehicle={v}
+                    rules={rules}
+                    onUpdateUsageSingleStep={handleCardUpdateUsageSingleStep}
+                    onChangeOilDate={handleCardChangeOilDate}
+                    onQuickRegisterOilChange={handleCardQuickRegisterOilChange}
+                    onOpenHistoryModal={(target) => handleOpenManualOilModal(target, 'OIL_SERVICE')}
+                  />
+                )
+              )}
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 {
-  "summary":  "راهنمای نصب سرور محلی و رفع مشکل ارسال فیزیکی ایمیل بازیابی گذرواژه (nodemailer + Gmail SMTP) با موفقیت پیاده‌سازی و نهایی شد.",
-  "updatedAt":  "2026-10-29T12:54:23.626803783Z",
+  "summary":  "Comprehensive implementation plan for adding Developer Documentation both as Markdown files in the project root (README.md and DEVELOPER_GUIDE.md) and as an interactive Developer Documentation section inside the application UI, written in fluent Persian with English technical terms and code blocks.",
+  "updatedAt":  "2026-11-01T21:26:04.098213732Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

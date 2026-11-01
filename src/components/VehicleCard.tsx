@@ -212,136 +212,78 @@ export const VehicleCard: FC<VehicleCardProps> = ({
               </div>
             </div>
 
-            {/* Oil Service & Usage Row (Accurate for both KHAAVAR non-mileage and mileage vehicles) */}
-            <div
-              onClick={() => (onOpenOilService ? onOpenOilService(vehicle) : onOpenUsage?.(vehicle))}
-              className={`p-2.5 rounded-lg border transition-colors cursor-pointer space-y-1.5 print:bg-white print:border-black ${
-                serviceStatus === 'CRITICAL'
-                  ? 'bg-rose-950/20 border-rose-500/30 hover:border-rose-500/50'
-                  : serviceStatus === 'WARNING'
-                  ? 'bg-amber-950/15 border-amber-500/30 hover:border-amber-500/50'
-                  : 'bg-slate-900/50 border-slate-800/80 hover:border-slate-700'
-              }`}
-            >
-              <div className="flex items-center justify-between text-[11px]">
-                {hasMileage ? (
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <Gauge className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                    <span className="text-slate-400">کیلومتر:</span>
-                    <strong className="font-mono text-white font-semibold">
-                      {toFaDigits(currentMileage.toLocaleString('fa-IR'))}
-                    </strong>
-                    <span className="text-[10px] text-slate-500">
-                      (پیمایش: {toFaDigits(drivenKm.toLocaleString('fa-IR'))} از {toFaDigits(ceilingKm.toLocaleString('fa-IR'))})
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-slate-300 flex-wrap">
-                    <Droplet className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span className="text-slate-400">سرویس:</span>
-                    <strong className="font-mono text-white font-semibold">
-                      {toFaDigits(serviceEval.lastChangeDate)}
-                    </strong>
-                    <span className="text-slate-600">·</span>
-                    <strong className="font-mono text-amber-300 font-semibold">
-                      {toFaDigits(daysPassed)}/{toFaDigits(maxDays)} روز
-                    </strong>
-                    <span className="text-slate-600">·</span>
-                    <strong className="font-mono text-sky-300 font-semibold">
-                      {toFaDigits(tripsDriven)}/{toFaDigits(maxTrips)} سفر
-                    </strong>
-                  </div>
-                )}
+            {/* Insurance & Technical Inspection Details for Fleet Management */}
+            <div className="bg-slate-900/50 border border-slate-800/80 rounded-lg p-2.5 space-y-1.5 text-[11px] print:bg-white print:border-black">
+              {(() => {
+                const tpPolicy = alert.policies.find((p) => p.type === 'thirdParty');
+                const bodyPolicy = alert.policies.find((p) => p.type === 'body');
+                const inspPolicy = alert.policies.find((p) => p.type === 'inspection');
+                return (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">بیمه شخص ثالث:</span>
+                      <span
+                        className={`font-mono font-bold tabular-nums ${
+                          tpPolicy?.isExpired
+                            ? 'text-rose-400'
+                            : tpPolicy?.isCritical
+                            ? 'text-amber-400'
+                            : 'text-slate-200'
+                        }`}
+                      >
+                        {toFaDigits(vehicle.thirdPartyExpiry || '—')}
+                      </span>
+                    </div>
 
-                <span
-                  className={`text-[10px] font-bold font-mono ${
-                    serviceStatus === 'CRITICAL'
-                      ? 'text-rose-400'
-                      : serviceStatus === 'WARNING'
-                      ? 'text-amber-400'
-                      : 'text-emerald-400'
-                  }`}
-                >
-                  {hasMileage ? (
-                    isInconsistent ? (
-                      'نیاز به اصلاح کیلومتر'
-                    ) : isMileageOverdue ? (
-                      `+${toFaDigits(overdueKm.toLocaleString('fa-IR'))} km تأخیر`
-                    ) : isDaysOverdue ? (
-                      `${toFaDigits(daysOverdue)} روز تأخیر`
-                    ) : (
-                      `${toFaDigits(remainingKm.toLocaleString('fa-IR'))} km مانده`
-                    )
-                  ) : isDaysOverdue ? (
-                    `${toFaDigits(daysOverdue)} روز گذشته`
-                  ) : serviceEval.isTripsOverdue ? (
-                    `${toFaDigits(serviceEval.tripsOverdue)} سفر گذشته`
-                  ) : (
-                    `${toFaDigits(daysRemaining)} روز مانده`
-                  )}
-                </span>
-              </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">بیمه بدنه:</span>
+                      <span
+                        className={`font-mono font-bold tabular-nums ${
+                          bodyPolicy?.isExpired
+                            ? 'text-rose-400'
+                            : bodyPolicy?.isCritical
+                            ? 'text-amber-400'
+                            : 'text-slate-200'
+                        }`}
+                      >
+                        {toFaDigits(vehicle.bodyInsExpiry || vehicle.insuranceExpiry || '—')}
+                      </span>
+                    </div>
 
-              {/* Minimal Progress Bar */}
-              <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden print:hidden">
-                <div
-                  className={`h-full transition-all duration-300 ${
-                    serviceStatus === 'CRITICAL'
-                      ? 'bg-rose-500'
-                      : serviceStatus === 'WARNING'
-                      ? 'bg-amber-400'
-                      : 'bg-emerald-400'
-                  }`}
-                  style={{ width: `${Math.min(100, wearPercent)}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Insurance & Inspection Trio - Clean unboxed inline metadata */}
-            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 px-1">
-              <div>
-                <span>ثالث: </span>
-                <span className={`font-mono ${alert.hasExpiredPolicy ? 'text-rose-400 font-bold' : 'text-slate-300'}`}>
-                  {toFaDigits(vehicle.thirdPartyExpiry || '—')}
-                </span>
-              </div>
-              <span className="text-slate-700">·</span>
-              <div>
-                <span>معاینه: </span>
-                <span className="font-mono text-slate-300">{toFaDigits(vehicle.inspectionExpiry || '—')}</span>
-              </div>
-              <span className="text-slate-700">·</span>
-              <div>
-                <span>آخرین روغن: </span>
-                <span className="font-mono text-slate-300">{toFaDigits(serviceEval.lastChangeDate)}</span>
-              </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">معاینه فنی:</span>
+                      <span
+                        className={`font-mono font-bold tabular-nums ${
+                          inspPolicy?.isExpired
+                            ? 'text-rose-400'
+                            : inspPolicy?.isCritical
+                            ? 'text-amber-400'
+                            : 'text-slate-200'
+                        }`}
+                      >
+                        {toFaDigits(vehicle.inspectionExpiry || '—')}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
 
-        {/* Footer: Direct, Clean Action Bar */}
+        {/* Footer: Direct, Clean Fleet Dossier & Print Action Bar */}
         <div className="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 print:hidden">
-          <div className="flex items-center gap-1.5">
-            {onOpenOilService && (
-              <button
-                type="button"
-                onClick={() => onOpenOilService(vehicle)}
-                className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
-              >
-                <Droplet className="w-3.5 h-3.5 text-amber-400" />
-                <span>ثبت سرویس روغن</span>
-              </button>
-            )}
-
-            {onOpenUsage && (
-              <button
-                type="button"
-                onClick={() => onOpenUsage(vehicle)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
-              >
-                <Gauge className="w-3.5 h-3.5 text-sky-400" />
-                <span>{hasMileage ? 'به‌روزرسانی کیلومتر' : 'به‌روزرسانی سفر'}</span>
-              </button>
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            {alert.hasExpiredPolicy || alert.hasCriticalExpiry ? (
+              <span className="text-rose-400 font-bold flex items-center gap-1">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>نیازمند تمدید مدارک</span>
+              </span>
+            ) : (
+              <span className="text-emerald-400 font-medium flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>مدارک و بیمه‌نامه معتبر</span>
+              </span>
             )}
           </div>
 
@@ -350,11 +292,11 @@ export const VehicleCard: FC<VehicleCardProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenSpecifications(vehicle)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center gap-1 transition cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/30 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
                 title="مشاهده و ویرایش شناسنامه خودرو"
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>شناسنامه</span>
+                <span>شناسنامه و مدارک</span>
               </button>
             )}
 

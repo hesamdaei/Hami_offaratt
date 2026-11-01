@@ -79,6 +79,7 @@ import { CargoTrackingCustomerPortal } from './components/CargoTrackingCustomerP
 import { ReservationGuideAndCalculatorView } from './components/ReservationGuideAndCalculatorView';
 import { INITIAL_ORDERS, OrderItem } from './utils/ordersData';
 import { normalizeVehicleOilData } from './utils/maintenanceStandardsConfig';
+import { DeveloperDocsView } from './components/DeveloperDocsView';
 
 const STORAGE_KEY_DRIVERS = 'hamibar_drivers_list_v1';
 const STORAGE_KEY_RECORDS = 'hamibar_attendance_records_v1';
@@ -2415,14 +2416,41 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             </div>
           )}
 
-          {/* Module 4: Fleet Management & Oil Service (مدیریت ناوگان و تعویض روغن) */}
-          {activeTab === 'OIL_SERVICE' && (
+          {/* Module 4A: Fleet Management & Specifications (مدیریت ناوگان، شناسنامه و بیمه‌نامه) */}
+          {activeTab === 'FLEET_MANAGEMENT' && (
             <div className="animate-in fade-in duration-150">
               <OilServiceManagementView
+                mode="FLEET"
                 vehicles={vehicles}
                 onUpdateVehicle={handleUpdateVehicle}
                 availableDrivers={driverDirectory}
                 onAssignDriverToVehicle={handleAssignDriverToVehicle}
+                onNavigateToOil={() => setActiveTab('OIL_SERVICE')}
+                showToast={showToast}
+                initialSubTab={fleetSubTab}
+                highlightedVehicleId={highlightedInsuranceVehicleId}
+                onOpenBaleForDriver={(d) =>
+                  handleOpenBale({
+                    name: d.name,
+                    phone: d.phone,
+                    vehicleCode: d.vehicleCode,
+                    plateNumber: d.plateNumber,
+                  })
+                }
+              />
+            </div>
+          )}
+
+          {/* Module 4B: Dedicated Oil Service & Daily Usage Hub (تعویض روغن و کارکرد روزانه) */}
+          {activeTab === 'OIL_SERVICE' && (
+            <div className="animate-in fade-in duration-150">
+              <OilServiceManagementView
+                mode="OIL"
+                vehicles={vehicles}
+                onUpdateVehicle={handleUpdateVehicle}
+                availableDrivers={driverDirectory}
+                onAssignDriverToVehicle={handleAssignDriverToVehicle}
+                onNavigateToFleet={() => setActiveTab('FLEET_MANAGEMENT')}
                 showToast={showToast}
                 initialSubTab={fleetSubTab}
                 highlightedVehicleId={highlightedInsuranceVehicleId}
@@ -2507,6 +2535,13 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
                 onCallPhone={handleStartVoipCall}
                 onShowToast={showToast}
               />
+            </div>
+          )}
+
+          {/* Module 9: Developer Documentation & System Reference (مستندات فنی و راهنمای توسعه) */}
+          {activeTab === 'DEVELOPER_DOCS' && (
+            <div className="animate-in fade-in duration-150">
+              <DeveloperDocsView />
             </div>
           )}
         </main>

@@ -22,6 +22,7 @@ import {
   Compass,
   Calculator,
   ScanLine,
+  Code2,
 } from 'lucide-react';
 import { ActiveAppTab } from './Header';
 import { toFaDigits } from '../utils/jalaali';
@@ -164,16 +165,22 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           badge: totalDrivers > 0 ? toFaDigits(totalDrivers) : undefined,
         },
         {
-          id: 'OIL_SERVICE',
+          id: 'FLEET_MANAGEMENT',
           label: 'مدیریت ناوگان و خودروها',
-          subLabel: 'بیمه، معاینه، مشخصات و سرویس',
-          icon: Droplet,
+          subLabel: 'شناسنامه، بیمه‌نامه و معاینه فنی',
+          icon: Truck,
           badge:
             insuranceAlertData.totalAlertsCount > 0
               ? `${toFaDigits(insuranceAlertData.totalAlertsCount)} هشدار`
               : totalVehiclesCount > 0
               ? toFaDigits(totalVehiclesCount)
               : undefined,
+        },
+        {
+          id: 'OIL_SERVICE',
+          label: 'تعویض روغن و کارکرد',
+          subLabel: 'ثبت کیلومتر، سفر و سرویس روغن',
+          icon: Droplet,
         },
         {
           id: 'STAFF',
@@ -218,6 +225,12 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           subLabel: 'کاربران، امنیت و دسترسی‌ها',
           icon: Shield,
         },
+        {
+          id: 'DEVELOPER_DOCS',
+          label: 'مستندات فنی سیستم',
+          subLabel: 'معماری، API و راهنمای توسعه',
+          icon: Code2,
+        },
       ],
     },
   ];
@@ -248,6 +261,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
             return canViewModule(currentUser, 'drivers');
           case 'STAFF':
             return canViewModule(currentUser, 'staff');
+          case 'FLEET_MANAGEMENT':
+            return canViewModule(currentUser, 'oilService') || canViewModule(currentUser, 'drivers');
           case 'OIL_SERVICE':
             return canViewModule(currentUser, 'oilService');
           case 'PHONEBOOK':
@@ -260,6 +275,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
             return isMasterAdmin(currentUser);
           case 'USERS_LOGS':
             return canManageUsers(currentUser) || isMasterAdmin(currentUser);
+          case 'DEVELOPER_DOCS':
+            return true;
           default:
             return true;
         }

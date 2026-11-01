@@ -34,6 +34,7 @@ import {
   Compass,
   Calculator,
   ScanLine,
+  Code2,
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { QuickSearchSpotlight } from './QuickSearchSpotlight';
@@ -51,6 +52,7 @@ export type ActiveAppTab =
   | 'VEHICLE_ASSIGNMENT'
   | 'DRIVERS'
   | 'STAFF'
+  | 'FLEET_MANAGEMENT'
   | 'OIL_SERVICE'
   | 'HANDOVER'
   | 'CUSTOMERS'
@@ -60,7 +62,8 @@ export type ActiveAppTab =
   | 'REGULATIONS'
   | 'REPORTS'
   | 'USERS_LOGS'
-  | 'PHONEBOOK';
+  | 'PHONEBOOK'
+  | 'DEVELOPER_DOCS';
 
 export interface HeaderProps {
   activeTab?: ActiveAppTab;
@@ -225,11 +228,17 @@ export const Header: FC<HeaderProps> = ({
       badge: totalStaff > 0 ? toFaDigits(totalStaff) : undefined,
     },
     {
-      id: 'OIL_SERVICE',
+      id: 'FLEET_MANAGEMENT',
       title: 'مدیریت ناوگان و خودروها',
       shortTitle: 'مدیریت ناوگان',
-      icon: Droplet,
+      icon: Truck,
       badge: totalVehiclesCount > 0 ? toFaDigits(totalVehiclesCount) : undefined,
+    },
+    {
+      id: 'OIL_SERVICE',
+      title: 'تعویض روغن و کارکرد ناوگان',
+      shortTitle: 'تعویض روغن',
+      icon: Droplet,
     },
     {
       id: 'ORDERS',
@@ -287,6 +296,12 @@ export const Header: FC<HeaderProps> = ({
       icon: PhoneCall,
       badge: 'جدید',
     },
+    {
+      id: 'DEVELOPER_DOCS',
+      title: 'مستندات فنی و راهنمای توسعه',
+      shortTitle: 'مستندات فنی',
+      icon: Code2,
+    },
   ];
 
   // Filter modules based on logged-in user permissions
@@ -304,6 +319,8 @@ export const Header: FC<HeaderProps> = ({
         return canViewModule(currentUser, 'drivers');
       case 'STAFF':
         return canViewModule(currentUser, 'staff');
+      case 'FLEET_MANAGEMENT':
+        return canViewModule(currentUser, 'oilService') || canViewModule(currentUser, 'drivers');
       case 'OIL_SERVICE':
         return canViewModule(currentUser, 'oilService');
       case 'ORDERS':
@@ -323,6 +340,8 @@ export const Header: FC<HeaderProps> = ({
       case 'USERS_LOGS':
         return canManageUsers(currentUser) || isMasterAdmin(currentUser);
       case 'PHONEBOOK':
+        return true;
+      case 'DEVELOPER_DOCS':
         return true;
       default:
         return true;
