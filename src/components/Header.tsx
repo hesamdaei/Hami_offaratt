@@ -90,6 +90,7 @@ export interface HeaderProps {
   onOpenMasterAdmin?: (initialTab?: 'api' | 'voip' | 'network' | 'bale' | 'eitaa' | 'users' | 'backup' | 'debug') => void;
   onNavigateToInsuranceAlerts?: () => void;
   onOpenVoipSettings?: () => void;
+  onOpenPhonebookPopup?: () => void;
   isMobileMenuOpen?: boolean;
   onToggleMobileMenu?: () => void;
   onCloseMobileMenu?: () => void;
@@ -129,6 +130,7 @@ export const Header: FC<HeaderProps> = ({
   onOpenMasterAdmin,
   onNavigateToInsuranceAlerts,
   onOpenVoipSettings,
+  onOpenPhonebookPopup,
   isMobileMenuOpen: propIsMobileMenuOpen,
   onToggleMobileMenu,
   onCloseMobileMenu,
@@ -437,6 +439,19 @@ export const Header: FC<HeaderProps> = ({
             <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span className="hidden xl:inline text-slate-500 dark:text-slate-400">جستجو</span>
           </button>
+
+          {/* 2.1 Minimal Phonebook & Dialer Popup Button */}
+          {onOpenPhonebookPopup && (
+            <button
+              type="button"
+              onClick={onOpenPhonebookPopup}
+              className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 text-xs font-bold transition cursor-pointer gap-1.5"
+              title="پاپ‌آپ مینیمال دفترچه تلفن و شماره‌گیر سریع"
+            >
+              <PhoneCall className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden xl:inline">تلفن</span>
+            </button>
+          )}
 
           {/* 3. Theme Toggle (Icon Only) */}
           {onToggleTheme && (

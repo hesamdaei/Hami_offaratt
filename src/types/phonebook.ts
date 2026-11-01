@@ -33,6 +33,7 @@ export interface PhonebookContact {
 }
 
 export type PhonebookViewMode =
+  | 'MINIMAL'     // نمای مینیمال و فشرده با شماره‌گیری فوری
   | 'ROLODEX'     // کارت‌های تلفنی رولودکس با چیدمان شاخص
   | 'SPEED_DIAL'  // کلیدهای سریع تماس دیسپچ
   | 'TABLE'       // فهرست متراکم اطلاعاتی
@@ -48,9 +49,9 @@ export interface PhonebookCustomSettings {
 }
 
 export const DEFAULT_PHONEBOOK_SETTINGS: PhonebookCustomSettings = {
-  defaultViewMode: 'ROLODEX',
+  defaultViewMode: 'MINIMAL',
   showExtensionsFirst: true,
-  compactCards: false,
+  compactCards: true,
   quickDialColumns: 4,
   autoSyncWithFleet: true,
   sortBy: 'favorites',

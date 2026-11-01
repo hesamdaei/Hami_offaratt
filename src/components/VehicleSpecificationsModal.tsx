@@ -91,10 +91,22 @@ export const VehicleSpecificationsModal: FC<VehicleSpecificationsModalProps> = (
 
   const handleSave = (e: FormEvent) => {
     e.preventDefault();
+    const updatedHistory = Array.isArray(formData.serviceHistory || vehicle.serviceHistory)
+      ? [...(formData.serviceHistory || vehicle.serviceHistory || [])]
+      : [];
+
+    if (formData.lastChangeDate && updatedHistory.length > 0 && updatedHistory[0]) {
+      updatedHistory[0] = {
+        ...updatedHistory[0],
+        date: formData.lastChangeDate,
+      };
+    }
+
     const updated: VehicleItem = {
       ...vehicle,
       ...formData,
       code: Number(formData.code) || vehicle.code,
+      serviceHistory: updatedHistory,
     } as VehicleItem;
 
     if (formData.driverName !== vehicle.driverName) {

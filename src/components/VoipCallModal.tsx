@@ -2,22 +2,24 @@ import { FC, useState, useEffect } from 'react';
 import {
   Phone,
   PhoneCall,
-  PhoneForwarded,
-  PhoneOff,
-  User,
+  X,
+  Headphones,
+  Server,
   Settings,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
   Copy,
   Check,
-  X,
-  Server,
-  Volume2,
-  RefreshCw,
-  AlertCircle,
-  ExternalLink,
-  ShieldCheck,
+  Smartphone,
 } from 'lucide-react';
-import { VoipConfig, VoipCallLog } from '../types/voip';
-import { getVoipConfig, saveVoipConfig, initiateVoipCall } from '../utils/voipService';
+import { VoipConfig } from '../types/voip';
+import {
+  getVoipConfig,
+  saveVoipConfig,
+  initiateVoipCall,
+  sanitizePhoneNumber,
+} from '../utils/voipService';
 import { toFaDigits } from '../utils/jalaali';
 import { AppUser } from '../types/auth';
 import { canManageSystemSettings } from '../utils/authService';
@@ -30,7 +32,7 @@ interface VoipCallModalProps {
   recipientRole?: string;
   currentUser?: AppUser | null;
   onOpenSettings?: () => void;
-  onShowToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  onShowToast?: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
 export const VoipCallModal: FC<VoipCallModalProps> = ({
@@ -38,369 +40,281 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
   onClose,
   phoneNumber,
   recipientName,
-  recipientRole = 'مخاطب',
+  recipientRole = 'راننده / مخاطب',
   currentUser,
   onOpenSettings,
   onShowToast,
 }) => {
-  const [config, setConfig] = useState<VoipConfig>(getVoipConfig());
-  const [currentExt, setCurrentExt] = useState<string>(config.operatorExtension || '101');
-  const [callStatus, setCallStatus] = useState<'idle' | 'calling' | 'ringing' | 'connected' | 'failed'>('idle');
+  const [config, setConfig] = useState<VoipConfig>(() => getVoipConfig());
+  const [extensionInput, setExtensionInput] = useState<string>(config.operatorExtension || '101');
+  const [dialPrefixInput, setDialPrefixInput] = useState<string>(config.dialPrefix || '');
+  const [callState, setCallState] = useState<'IDLE' | 'CALLING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [statusMessage, setStatusMessage] = useState<string>('');
-  const [callDuration, setCallDuration] = useState<number>(0);
-  const [isCopied, setIsCopied] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  // Reload config when opened
+  const canConfigureVoip = canManageSystemSettings(currentUser);
+
   useEffect(() => {
     if (isOpen) {
-      const cfg = getVoipConfig();
-      setConfig(cfg);
-      setCurrentExt(cfg.operatorExtension || '101');
-      setCallStatus('idle');
+      const current = getVoipConfig();
+      setConfig(current);
+      setExtensionInput(current.operatorExtension || '101');
+      setDialPrefixInput(current.dialPrefix || '');
+      setCallState('IDLE');
       setStatusMessage('');
-      setCallDuration(0);
+      setCopied(false);
     }
-  }, [isOpen]);
-
-  // Call duration counter when active
-  useEffect(() => {
-    let timer: any;
-    if (callStatus === 'connected') {
-      timer = setInterval(() => {
-        setCallDuration((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [callStatus]);
+  }, [isOpen, phoneNumber]);
 
   if (!isOpen) return null;
 
-  const handleStartCall = async (overrideMode?: VoipConfig['mode']) => {
-    const ext = currentExt.trim() || '101';
-    const activeConfig = overrideMode
-      ? { ...config, mode: overrideMode, operatorExtension: ext }
-      : { ...config, operatorExtension: ext };
-    
-    // Auto-save extension if changed
-    if (ext !== config.operatorExtension) {
-      saveVoipConfig(activeConfig);
-      setConfig(activeConfig);
+  const cleanNumber = sanitizePhoneNumber(phoneNumber, '');
+  const effectiveDialNumber = sanitizePhoneNumber(
+    phoneNumber,
+    config.mode === 'ipphone_cti' ? dialPrefixInput : config.dialPrefix
+  );
+
+  const handleCopyNumber = () => {
+    navigator.clipboard?.writeText(cleanNumber);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  const handlePlaceCall = async (overrideMode?: VoipConfig['mode']) => {
+    if (!cleanNumber) {
+      setCallState('ERROR');
+      setStatusMessage('شماره تماس معتبر نیست.');
+      return;
     }
 
-    setCallStatus('calling');
-    setStatusMessage(
-      activeConfig.mode === 'asterisk_ami'
-        ? `در حال ارسال دستور تماس به سانترال ویپ (داخلی ${activeConfig.operatorExtension})...`
-        : activeConfig.mode === 'ipphone_cti'
-        ? `در حال ارسال فرمان شماره‌گیری به تلفن رومیزی (${activeConfig.ipPhoneIp})...`
-        : 'در حال اجرای نرم‌افزار تلفنی ویندوز (MicroSIP / Zoiper)...'
-    );
+    setCallState('CALLING');
+    setStatusMessage('در حال برقراری تماس...');
 
-    try {
-      const result = await initiateVoipCall(phoneNumber, recipientName, activeConfig);
-      if (result.ok) {
-        if (activeConfig.mode === 'asterisk_ami') {
-          setCallStatus('ringing');
-          setStatusMessage(result.message || `گوشی تلفن داخلی شما (${activeConfig.operatorExtension}) در حال زنگ خوردن است. لطفاً گوشی را بردارید تا شماره گرفته شود.`);
-        } else if (activeConfig.mode === 'ipphone_cti') {
-          setCallStatus('connected');
-          setStatusMessage(`فرمان شماره‌گیری روی تلفن رومیزی (${activeConfig.ipPhoneIp}) فعال شد.`);
-        } else {
-          setCallStatus('connected');
-          setStatusMessage('شماره‌گیری در نرم‌افزار تلفنی ویندوز با موفقیت آغاز شد.');
-        }
-        onShowToast?.('درخواست تماس ویپ صادر شد.', 'success');
-      } else {
-        setCallStatus('failed');
-        setStatusMessage(result.message || 'خطا در برقراری ارتباط با سانترال');
-        onShowToast?.(result.message || 'خطا در تماس ویپ', 'error');
+    const nextConfig: VoipConfig = {
+      ...config,
+      operatorExtension: extensionInput || config.operatorExtension,
+      dialPrefix: dialPrefixInput.trim(),
+    };
+    saveVoipConfig(nextConfig);
+    setConfig(nextConfig);
+
+    const result = await initiateVoipCall(phoneNumber, recipientName, {
+      ...nextConfig,
+      mode: overrideMode || nextConfig.mode,
+    });
+
+    if (result.ok) {
+      setCallState('SUCCESS');
+      setStatusMessage(result.message);
+      if (onShowToast) {
+        onShowToast(result.message, 'success');
       }
-    } catch (err: any) {
-      setCallStatus('failed');
-      setStatusMessage('خطا: ' + (err.message || 'ارتباط با سرور برقرار نشد'));
+      if ((overrideMode || nextConfig.mode) === 'softphone') {
+        setTimeout(() => {
+          onClose();
+        }, 900);
+      }
+    } else {
+      setCallState('ERROR');
+      setStatusMessage(result.message);
     }
-  };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(phoneNumber);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-    onShowToast?.('شماره تلفن کپی شد.', 'info');
-  };
-
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const modeLabels: Record<VoipConfig['mode'], string> = {
-    softphone: 'سافت‌فون سیستم (MicroSIP / Zoiper)',
-    asterisk_ami: `سانترال استریسک / ایزابل (داخلی ${config.operatorExtension})`,
-    ipphone_cti: `تلفن تحت شبکه (${config.ipPhoneModel})`,
-    webhook: 'وب‌هوک سانترال سازمانی',
   };
 
   return (
     <div
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 animate-fadeIn"
       dir="rtl"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
       onClick={onClose}
     >
       <div
+        className="bg-[#0f172a] border border-slate-700/80 rounded-2xl w-full max-w-[340px] shadow-2xl overflow-hidden text-slate-100"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-[#0d1629] border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden text-slate-100"
       >
-        {/* Header Strip */}
-        <div className="bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-slate-900/60 p-4 border-b border-slate-700/80 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
-              <PhoneCall className="w-5 h-5 animate-pulse" />
+        {/* Minimal Compact Header */}
+        <div className="px-4 py-3 bg-[#131e36] border-b border-slate-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <PhoneCall className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-sm font-black text-white">تماس هوشمند با ویپ (Click-to-Call)</h3>
-              <p className="text-[11px] text-slate-400">سامانه متصل به مرکز تلفن و تلفن‌های رومیزی</p>
+            <div className="min-w-0">
+              <h3 className="text-xs font-black text-white truncate">{recipientName}</h3>
+              <p className="text-[10px] text-slate-400 truncate">{recipientRole}</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer shrink-0"
+            title="بستن"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Recipient Profile Card */}
-        <div className="p-6 text-center border-b border-slate-800/80 bg-slate-900/40">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 via-blue-500/10 to-indigo-500/20 border border-slate-700 text-amber-300 mb-3 shadow-lg">
-            <User className="w-8 h-8" />
-          </div>
-
-          <h2 className="text-base font-black text-white">{recipientName}</h2>
-          <span className="inline-block mt-0.5 text-xs text-slate-400 font-medium">
-            {recipientRole}
-          </span>
-
-          {/* Formatted Phone Number Box */}
-          <div className="mt-4 inline-flex items-center gap-3 px-4 py-2 rounded-2xl bg-slate-950/90 border border-slate-700 font-mono text-base font-black text-emerald-300 tracking-wider">
-            <span dir="ltr">{toFaDigits(phoneNumber)}</span>
+        {/* Minimal Body */}
+        <div className="p-3.5 space-y-3">
+          {/* Phone Number Bar with Copy */}
+          <div className="flex items-center justify-between gap-2 bg-[#0a101f] border border-slate-800 rounded-xl px-3 py-2">
+            <div className="min-w-0">
+              <div className="text-sm font-black font-mono text-emerald-400 tracking-wider" dir="ltr">
+                {toFaDigits(effectiveDialNumber || '---')}
+              </div>
+              {dialPrefixInput.trim() && (
+                <div className="text-[9px] text-cyan-400 font-mono">
+                  کد آزادسازی خط {toFaDigits(dialPrefixInput.trim())} + {toFaDigits(cleanNumber)}
+                </div>
+              )}
+            </div>
             <button
-              onClick={handleCopy}
-              className="text-slate-400 hover:text-white transition cursor-pointer"
+              type="button"
+              onClick={handleCopyNumber}
+              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer shrink-0 flex items-center gap-1 text-[10px]"
               title="کپی شماره"
             >
-              {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'کپی شد' : 'کپی'}</span>
             </button>
           </div>
 
-          {/* Live Call State Animation / Indicator */}
-          {callStatus !== 'idle' && (
-            <div className="mt-4 p-3 rounded-2xl bg-[#091120] border border-blue-500/30 text-xs">
-              {callStatus === 'calling' && (
-                <div className="flex items-center justify-center gap-2 text-sky-300 font-bold">
-                  <RefreshCw className="w-4 h-4 animate-spin text-sky-400" />
-                  <span>در حال برقراری ارتباط با سانترال ویپ...</span>
-                </div>
-              )}
-              {callStatus === 'ringing' && (
-                <div className="space-y-1.5 animate-pulse">
-                  <div className="flex items-center justify-center gap-2 text-amber-300 font-black">
-                    <Volume2 className="w-5 h-5 text-amber-400" />
-                    <span>تلفن رومیزی شما در حال زنگ خوردن است!</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    گوشی تلفن داخلی خود ({config.operatorExtension}) را بردارید؛ تماس به صورت خودکار با شماره مقصد برقرار خواهد شد.
-                  </p>
-                </div>
-              )}
-              {callStatus === 'connected' && (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-center gap-2 text-emerald-300 font-bold">
-                    <Phone className="w-4 h-4 text-emerald-400" />
-                    <span>تماس فعال است</span>
-                    <span className="font-mono text-emerald-400 font-black mr-2">
-                      ({formatTimer(callDuration)})
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400">{statusMessage}</p>
-                </div>
-              )}
-              {callStatus === 'failed' && (
-                <div className="space-y-1 text-rose-300">
-                  <div className="flex items-center justify-center gap-2 font-bold">
-                    <AlertCircle className="w-4 h-4 text-rose-400" />
-                    <span>عدم برقراری تماس</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300">{statusMessage}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Dialing Options & Action Buttons */}
-        <div className="p-5 space-y-3">
-          {/* Quick Desk Phone Extension Selector for Asterisk/Issabel Mode */}
-          {config.mode === 'asterisk_ami' && (
-            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <Server className="w-4 h-4 text-amber-400 shrink-0" />
-                <div>
-                  <div className="font-bold text-amber-300 text-xs">تلفن داخلی میز شما:</div>
-                  <div className="text-[10px] text-slate-400">ابتدا این تلفن زنگ می‌خورد، سپس وصل می‌شود</div>
-                </div>
+          {/* Mode-Specific Compact Control */}
+          {config.mode === 'ipphone_cti' ? (
+            <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-2.5 space-y-2">
+              <div className="flex items-center justify-between text-[10px] text-slate-400">
+                <span>تلفن {config.ipPhoneModel === 'yealink' ? 'Yealink' : config.ipPhoneModel === 'grandstream' ? 'Grandstream' : 'Fanvil'} ({config.ipPhoneIp || 'بدون IP'})</span>
+                <span className="text-cyan-400 font-bold">کد آزادسازی خط:</span>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[11px] text-slate-400">داخلی:</span>
-                <input
-                  type="text"
-                  value={currentExt}
-                  onChange={(e) => {
-                    const val = e.target.value.trim();
-                    setCurrentExt(val);
-                    if (val) {
-                      const updated = { ...config, operatorExtension: val };
-                      setConfig(updated);
-                      saveVoipConfig(updated);
-                    }
-                  }}
-                  placeholder="101"
-                  className="w-16 h-8 text-center font-mono font-black text-sm bg-slate-950 border border-amber-500/40 rounded-lg text-amber-300 focus:outline-none focus:border-amber-400"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Quick Trunk Line Release Prefix Selector for Yealink / IP Phone CTI Mode */}
-          {config.mode === 'ipphone_cti' && (
-            <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <PhoneForwarded className="w-4 h-4 text-purple-400 shrink-0" />
-                <div>
-                  <div className="font-bold text-purple-300 text-xs">عدد آزاد کردن خط سانترال یالینک:</div>
-                  <div className="text-[10px] text-slate-400">
-                    شماره ارسالی به گوشی:{' '}
-                    <span className="font-mono text-amber-300 font-bold" dir="ltr">
-                      {(config.dialPrefix || '') + phoneNumber}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
-                  {['', '9', '0'].map((p) => (
-                    <button
-                      key={p || 'none'}
-                      type="button"
-                      onClick={() => {
-                        const updated = { ...config, dialPrefix: p };
-                        setConfig(updated);
-                        saveVoipConfig(updated);
-                      }}
-                      className={`px-1.5 py-1 rounded text-[10px] font-bold transition cursor-pointer ${
-                        (config.dialPrefix || '') === p
-                          ? 'bg-purple-600 text-white'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                      title={p ? `آزاد کردن خط با عدد ${p}` : 'بدون پیش‌شماره آزادسازی خط'}
-                    >
-                      {p === '' ? 'بدون کد' : p}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex items-center gap-1.5">
+                {[
+                  { label: 'بدون کد', val: '' },
+                  { label: '9', val: '9' },
+                  { label: '0', val: '0' },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setDialPrefixInput(opt.val)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                      dialPrefixInput.trim() === opt.val
+                        ? 'bg-cyan-600 text-white border-cyan-500'
+                        : 'bg-[#0a101f] text-slate-400 border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
                 <input
                   type="text"
                   dir="ltr"
-                  value={config.dialPrefix || ''}
-                  onChange={(e) => {
-                    const val = e.target.value.trim();
-                    const updated = { ...config, dialPrefix: val };
-                    setConfig(updated);
-                    saveVoipConfig(updated);
-                  }}
-                  placeholder="9"
-                  title="عدد آزادسازی خط سانترال (مثلاً 9 یا 0)"
-                  className="w-12 h-8 text-center font-mono font-black text-sm bg-slate-950 border border-purple-500/40 rounded-lg text-amber-300 focus:outline-none focus:border-purple-400"
+                  maxLength={4}
+                  value={dialPrefixInput}
+                  onChange={(e) => setDialPrefixInput(e.target.value.replace(/[^0-9*#]/g, ''))}
+                  placeholder="عدد"
+                  className="w-14 bg-[#0a101f] border border-slate-700 focus:border-cyan-500 rounded-lg px-2 py-1 text-center font-mono text-xs font-bold text-cyan-300 focus:outline-none mr-auto"
                 />
               </div>
             </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2 bg-slate-900/70 border border-slate-800 rounded-xl px-3 py-2">
+              <span className="text-[11px] text-slate-400">داخلی اپراتور:</span>
+              <input
+                type="text"
+                dir="ltr"
+                value={extensionInput}
+                onChange={(e) => setExtensionInput(e.target.value)}
+                placeholder="101"
+                className="w-20 bg-[#0a101f] border border-slate-700 focus:border-emerald-500 rounded-lg px-2 py-1 text-center font-mono text-xs font-bold text-white focus:outline-none"
+              />
+            </div>
           )}
 
-          {/* Primary Dial Button */}
+          {/* Status Feedback */}
+          {callState !== 'IDLE' && (
+            <div
+              className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 ${
+                callState === 'CALLING'
+                  ? 'bg-sky-500/10 border-sky-500/30 text-sky-300'
+                  : callState === 'SUCCESS'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+              }`}
+            >
+              {callState === 'CALLING' && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}
+              {callState === 'SUCCESS' && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
+              {callState === 'ERROR' && <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+              <span className="leading-snug">{statusMessage}</span>
+            </div>
+          )}
+
+          {/* Primary Call Action */}
           <button
             type="button"
-            onClick={() => handleStartCall()}
-            disabled={callStatus === 'calling'}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 hover:from-emerald-500 to-teal-600 text-white font-bold text-sm shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-2 cursor-pointer transition disabled:opacity-50"
+            disabled={callState === 'CALLING'}
+            onClick={() => handlePlaceCall()}
+            className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer"
           >
             <Phone className="w-4 h-4" />
             <span>
               {config.mode === 'asterisk_ami'
-                ? `برقراری تماس با تلفن رومیزی (داخلی ${currentExt || config.operatorExtension})`
+                ? `تماس از داخلی ${toFaDigits(extensionInput || '101')}`
                 : config.mode === 'ipphone_cti'
-                ? `شماره‌گیری روی گوشی رومیزی (${config.ipPhoneModel}${config.dialPrefix ? ` با پیش‌شماره ${config.dialPrefix}` : ''})`
-                : 'شماره‌گیری با نرم‌افزار تلفنی (MicroSIP / Zoiper)'}
+                ? `شماره‌گیری روی تلفن (${config.ipPhoneModel === 'yealink' ? 'Yealink' : config.ipPhoneModel === 'grandstream' ? 'Grandstream' : 'Fanvil'})`
+                : 'برقراری تماس فوری'}
             </span>
           </button>
 
-          {/* Quick Alternative Dialers */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {config.mode !== 'softphone' && (
-              <button
-                type="button"
-                onClick={() => handleStartCall('softphone')}
-                className="py-2.5 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                title="شماره‌گیری مستقیم در نرم‌افزار تلفنی ویندوز"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-                <span>سافت‌فون ویندوز</span>
-              </button>
-            )}
-
-            {config.mode !== 'asterisk_ami' && (
-              <button
-                type="button"
-                onClick={() => handleStartCall('asterisk_ami')}
-                className="py-2.5 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
-                title="ارسال دستور تماس به سانترال ایزابل/استریسک"
-              >
-                <Server className="w-3.5 h-3.5 text-amber-400" />
-                <span>سانترال ویپ (AMI)</span>
-              </button>
-            )}
+          {/* Compact Secondary Actions */}
+          <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={() => handlePlaceCall('softphone')}
+              className="py-1.5 px-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 text-slate-300 text-[10px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+              title="سافت‌فون ویندوز / موبایل"
+            >
+              <Headphones className="w-3 h-3 text-sky-400 shrink-0" />
+              <span className="truncate">سافت‌فون</span>
+            </button>
 
             <button
               type="button"
-              onClick={handleCopy}
-              className="py-2.5 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
+              onClick={() => handlePlaceCall('ipphone_cti')}
+              className="py-1.5 px-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 text-slate-300 text-[10px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+              title="ارسال به تلفن رومیزی Yealink / Grandstream"
             >
-              <Copy className="w-3.5 h-3.5 text-slate-400" />
-              <span>کپی شماره</span>
+              <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
+              <span className="truncate">تلفن رومیزی</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePlaceCall('asterisk_ami')}
+              className="py-1.5 px-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 text-slate-300 text-[10px] font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+              title="تماس از طریق سرور سانترال ایزابل"
+            >
+              <Server className="w-3 h-3 text-amber-400 shrink-0" />
+              <span className="truncate">سانترال</span>
             </button>
           </div>
-
-          {/* Current Mode Info & Settings Shortcut */}
-          <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span>روش فعال: {modeLabels[config.mode]}</span>
-            </div>
-            {onOpenSettings && canManageSystemSettings(currentUser) && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenSettings();
-                }}
-                className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition text-[11px]"
-                title="پیکربندی سانترال ویپ و سرور (مخصوص ادمین)"
-              >
-                <Settings className="w-3 h-3" />
-                <span>تنظیمات سانترال</span>
-              </button>
-            )}
-          </div>
         </div>
+
+        {/* Minimal Footer */}
+        {canConfigureVoip && onOpenSettings && (
+          <div className="px-3.5 py-2 bg-[#0b1120] border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+            <span className="text-slate-500">
+              حالت فعلی: {config.mode === 'ipphone_cti' ? 'تلفن رومیزی' : config.mode === 'asterisk_ami' ? 'سانترال AMI' : 'سافت‌فون'}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenSettings();
+              }}
+              className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 transition cursor-pointer"
+            >
+              <Settings className="w-3 h-3" />
+              <span>تنظیمات ویپ</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

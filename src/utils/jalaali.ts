@@ -166,15 +166,27 @@ export function parseJalaaliDate(dateStr?: string | null): { jy: number; jm: num
   // Convert any common separators (dashes, dots, spaces, underscores) to slashes
   const withSlashes = normalized.replace(/[-.\s_]+/g, '/');
   const cleaned = withSlashes.replace(/[^\d/]/g, '').trim();
-  const parts = cleaned.split('/').map((p) => parseInt(p, 10));
+  const parts = cleaned.split('/').filter(Boolean).map((p) => parseInt(p, 10));
   if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-    let year = parts[0];
+    let p0 = parts[0];
+    const p1 = parts[1];
+    let p2 = parts[2];
+
+    // Detect reversed DD/MM/YYYY format (e.g. 15/06/1405)
+    if (p2 >= 1300 && p0 <= 31) {
+      const tmp = p0;
+      p0 = p2;
+      p2 = tmp;
+    }
+
+    let year = p0;
     // Handle 2-digit Persian years (e.g. 05 -> 1405, 99 -> 1399)
     if (year < 100) {
       year = year < 50 ? 1400 + year : 1300 + year;
     }
-    const month = Math.min(12, Math.max(1, parts[1]));
-    const day = Math.min(31, Math.max(1, parts[2]));
+    const month = Math.min(12, Math.max(1, p1));
+    const maxMonthDays = getMonthDaysCount(year, month);
+    const day = Math.min(maxMonthDays, Math.max(1, p2));
     return { jy: year, jm: month, jd: day };
   }
   return null;
@@ -216,6 +228,14 @@ export function addJalaaliDays(
 ): { jy: number; jm: number; jd: number } {
   const jdn = j2d(date.jy, date.jm, date.jd) + days;
   return d2j(jdn);
+}
+
+// Calculate the exact next due date string (YYYY/MM/DD) by adding maxDays to lastChangeDateStr
+export function calculateNextDueDateJalaali(lastChangeDateStr?: string | null, maxDays = 60): string {
+  const parsed = parseJalaaliDate(lastChangeDateStr);
+  if (!parsed) return '';
+  const due = addJalaaliDays(parsed, Math.max(1, maxDays));
+  return formatJalaaliDate(due.jy, due.jm, due.jd);
 }
 
 // Get the weekday of the 1st of a Jalaali month (0 = Saturday, 1 = Sunday, ..., 6 = Friday)

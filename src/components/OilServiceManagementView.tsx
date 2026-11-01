@@ -1257,6 +1257,8 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
                             <div className="text-[10px] text-slate-400 mt-0.5">
                               {hasMileage
                                 ? `در کیلومتر ${toFaDigits(v._lastChangeMileage.toLocaleString())}`
+                                : v._nextDueDateStr
+                                ? `سررسید: ${toFaDigits(v._nextDueDateStr)}`
                                 : `${toFaDigits(v._daysPassed)} روز پیش`}
                             </div>
                           </td>

@@ -354,10 +354,11 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   const isSaveInFlightRef = useRef<boolean>(false);
   const hasLocalPendingEditsRef = useRef<boolean>(false);
 
-  // User Area, User Management, and Notification Popover states
+  // User Area, User Management, Notification Popover, and Minimal Phonebook Popup states
   const [isUserAreaOpen, setIsUserAreaOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isPhonebookPopupOpen, setIsPhonebookPopupOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Bale Messenger Modal State
@@ -624,6 +625,44 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
         }
         localStorage.setItem(BACKUP_APPLIED_KEY, 'true');
         localStorage.setItem(PDF_SYNC_KEY, 'true');
+      }
+
+      // One-time repair for Vehicle Code 9 (امین تندیس) date calculation & serviceHistory sync
+      const code9Fixed = localStorage.getItem('hamibar_code9_date_fix_v2');
+      if (code9Fixed !== 'true') {
+        setVehicles((prev) => {
+          let changed = false;
+          const next = prev.map((v) => {
+            let vChanged = false;
+            const copy = { ...v };
+            if (
+              Number(copy.code) === 9 &&
+              (copy.lastChangeDate === '1405/05/31' || copy.lastChangeDate === '1405/05/10' || !copy.lastChangeDate)
+            ) {
+              copy.lastChangeDate = '1405/06/15';
+              if (copy.inspectionExpiry === '1405/08/06' || copy.inspectionExpiry === '۱۴۰۵/۰۸/۰۶') {
+                copy.inspectionExpiry = '1405/10/06';
+              }
+              vChanged = true;
+            }
+            if (Array.isArray(copy.serviceHistory) && copy.serviceHistory.length > 0 && copy.lastChangeDate) {
+              if (copy.serviceHistory[0].date !== copy.lastChangeDate) {
+                copy.serviceHistory = [
+                  { ...copy.serviceHistory[0], date: copy.lastChangeDate },
+                  ...copy.serviceHistory.slice(1),
+                ];
+                vChanged = true;
+              }
+            }
+            if (vChanged) changed = true;
+            return vChanged ? copy : v;
+          });
+          if (changed) {
+            localStorage.setItem(STORAGE_KEY_VEHICLES, JSON.stringify(next));
+          }
+          return changed ? next : prev;
+        });
+        localStorage.setItem('hamibar_code9_date_fix_v2', 'true');
       }
     } catch {
       // ignore
@@ -2065,6 +2104,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           drivers={driverDirectory}
           staffMembers={staffMembers}
           isStandalone={true}
+          isPopupMode={true}
           currentUser={currentUser}
           onCallPhone={handleStartVoipCall}
           onShowToast={showToast}
@@ -2197,6 +2237,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             onOpenMasterAdmin={handleOpenMasterAdmin}
             onNavigateToInsuranceAlerts={() => handleNavigateToFleetInsurance()}
             onOpenVoipSettings={() => handleOpenMasterAdmin('voip')}
+            onOpenPhonebookPopup={() => setIsPhonebookPopupOpen(true)}
             theme={theme}
             onToggleTheme={handleToggleTheme}
           />
@@ -2455,6 +2496,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
                 drivers={driverDirectory}
                 staffMembers={staffMembers}
                 isStandalone={false}
+                onOpenPopupModal={() => setIsPhonebookPopupOpen(true)}
                 currentUser={currentUser}
                 onCallPhone={handleStartVoipCall}
                 onShowToast={showToast}
@@ -2649,6 +2691,31 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
         currentUser={currentUser}
         onShowToast={(msg, type) => showToast(msg, type)}
       />
+
+      {/* Minimal Floating Phonebook & Quick Dialer Popup (پاپ‌آپ مینیمال دفترچه تلفن) */}
+      {isPhonebookPopupOpen && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65 backdrop-blur-xs p-2 sm:p-4 animate-fadeIn"
+          dir="rtl"
+          onClick={() => setIsPhonebookPopupOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-[#0a101f] border border-slate-700/80 rounded-2xl p-3 shadow-2xl custom-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PhonebookView
+              drivers={driverDirectory}
+              staffMembers={staffMembers}
+              isStandalone={false}
+              isPopupMode={true}
+              onClosePopup={() => setIsPhonebookPopupOpen(false)}
+              currentUser={currentUser}
+              onCallPhone={handleStartVoipCall}
+              onShowToast={showToast}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Mobile Bottom Navigation Bar (Fast & thumb-friendly navigation on mobile) */}
       <MobileBottomNav

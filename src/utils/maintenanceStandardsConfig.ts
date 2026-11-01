@@ -1,5 +1,5 @@
 import { DECODED_BACKUP } from './backupDecoder';
-import { calculateDaysBetweenJalaali } from './jalaali';
+import { calculateDaysBetweenJalaali, calculateNextDueDateJalaali, formatJalaaliDate, parseJalaaliDate } from './jalaali';
 
 export interface ServiceRule {
   label: string;
@@ -361,23 +361,20 @@ export function evaluateVehicleServiceStatus(
   const ceilingKm = Math.max(100, Number(baseRule.maxMileage) || 5000);
   const warningKmThreshold = Math.max(0, Number(baseRule.warningMileage) || 500);
 
-  // Resolve latest date from vehicle.lastChangeDate AND serviceHistory[0]?.date (in case history has a newer record)
+  // Resolve latest date from vehicle.lastChangeDate (primary source of truth) or serviceHistory[0]?.date
   const historyList = Array.isArray(vehicle.serviceHistory) ? vehicle.serviceHistory : [];
   const latestHistoryDate = historyList.length > 0 && historyList[0]?.date ? String(historyList[0].date) : '';
   const propDate = vehicle.lastChangeDate ? String(vehicle.lastChangeDate) : '';
 
-  let lastChangeDate = propDate || latestHistoryDate || '1405/06/01';
-  if (propDate && latestHistoryDate) {
-    // Pick whichever date is more recent (fewer days passed)
-    const dProp = calculateDaysBetweenJalaali(propDate);
-    const dHist = calculateDaysBetweenJalaali(latestHistoryDate);
-    if (dHist < dProp) {
-      lastChangeDate = latestHistoryDate;
-    }
-  }
+  const rawLastChangeDate = propDate || latestHistoryDate || '1405/06/15';
+  const parsedLastChange = parseJalaaliDate(rawLastChangeDate);
+  const lastChangeDate = parsedLastChange
+    ? formatJalaaliDate(parsedLastChange.jy, parsedLastChange.jm, parsedLastChange.jd)
+    : rawLastChangeDate;
 
   // Time calculations
   const daysPassed = calculateDaysBetweenJalaali(lastChangeDate);
+  const nextDueDateStr = calculateNextDueDateJalaali(lastChangeDate, maxDays);
   const isDaysOverdue = daysPassed >= maxDays;
   const daysRemaining = Math.max(0, maxDays - daysPassed);
   const daysOverdue = Math.max(0, daysPassed - maxDays);
@@ -511,7 +508,7 @@ export function evaluateVehicleServiceStatus(
     rule: baseRule,
     hasMileage,
     lastChangeDate,
-    nextDueDateStr: '',
+    nextDueDateStr,
     daysPassed,
     maxDays,
     daysRemaining,

@@ -232,22 +232,127 @@ export function saveFavoriteContactIds(ids: string[]): void {
   } catch {}
 }
 
+export const STORAGE_KEY_PHONEBOOK_EXTENSIONS = 'hamibar_phonebook_extensions_v1';
+
+export const CATEGORY_META: Record<
+  PhonebookContact['category'],
+  { label: string; shortLabel: string; color: string }
+> = {
+  ALL: { label: 'همه مخاطبین', shortLabel: 'همه', color: 'slate' },
+  FAVORITES: { label: 'ستاره‌دارها و برگزیده', shortLabel: 'ستاره‌دار', color: 'amber' },
+  DRIVER: { label: 'رانندگان ناوگان', shortLabel: 'رانندگان', color: 'sky' },
+  STAFF: { label: 'کادر و پرسنل سازمانی', shortLabel: 'پرسنل', color: 'indigo' },
+  WORKSHOP: { label: 'تعمیرگاه‌ها و امداد خودرو', shortLabel: 'تعمیرگاه و امداد', color: 'orange' },
+  CONTRACTOR: { label: 'باربری‌ها و پیمانکاران همکار', shortLabel: 'پیمانکاران', color: 'emerald' },
+  CUSTOMER: { label: 'مشتریان و نمایندگی‌ها', shortLabel: 'مشتریان', color: 'purple' },
+  EMERGENCY: { label: 'فوریت‌ها، پلیس راه و اورژانس', shortLabel: 'اضطراری', color: 'rose' },
+  CUSTOM: { label: 'سایر مخاطبین دیسپچ', shortLabel: 'سایر', color: 'cyan' },
+};
+
+export function getExtensionOverrides(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PHONEBOOK_EXTENSIONS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch {}
+  return {};
+}
+
+export function assignContactExtension(contactId: string, extension: string): void {
+  try {
+    const map = getExtensionOverrides();
+    const clean = extension.trim();
+    if (clean) {
+      map[contactId] = clean;
+    } else {
+      delete map[contactId];
+    }
+    localStorage.setItem(STORAGE_KEY_PHONEBOOK_EXTENSIONS, JSON.stringify(map));
+
+    // Also update in custom contacts if it exists there
+    const customs = getCustomPhonebookContacts();
+    const idx = customs.findIndex((c) => c.id === contactId);
+    if (idx !== -1) {
+      customs[idx] = { ...customs[idx], extension: clean || undefined };
+      saveCustomPhonebookContacts(customs);
+    }
+  } catch {}
+}
+
+export function toggleContactFavorite(contactId: string): boolean {
+  const favs = getFavoriteContactIds();
+  const exists = favs.includes(contactId);
+  const next = exists ? favs.filter((id) => id !== contactId) : [...favs, contactId];
+  saveFavoriteContactIds(next);
+  return !exists;
+}
+
+export function upsertCustomContact(
+  contactData: Omit<PhonebookContact, 'id'> & { id?: string }
+): PhonebookContact {
+  const customs = getCustomPhonebookContacts();
+  const id = contactData.id || `cnt-custom-${Date.now()}`;
+  const existingIdx = customs.findIndex((c) => c.id === id);
+
+  const savedContact: PhonebookContact = {
+    ...contactData,
+    id,
+    isCustom: contactData.id?.startsWith('drv-') || contactData.id?.startsWith('stf-') ? false : true,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (existingIdx !== -1) {
+    customs[existingIdx] = { ...customs[existingIdx], ...savedContact };
+  } else {
+    customs.unshift({ ...savedContact, createdAt: savedContact.createdAt || new Date().toISOString() });
+  }
+
+  saveCustomPhonebookContacts(customs);
+  if (contactData.extension !== undefined) {
+    assignContactExtension(id, contactData.extension || '');
+  }
+  if (contactData.isFavorite !== undefined) {
+    const favs = getFavoriteContactIds();
+    if (contactData.isFavorite && !favs.includes(id)) {
+      saveFavoriteContactIds([...favs, id]);
+    } else if (!contactData.isFavorite && favs.includes(id)) {
+      saveFavoriteContactIds(favs.filter((f) => f !== id));
+    }
+  }
+
+  return savedContact;
+}
+
+export function deleteCustomContact(contactId: string): void {
+  const customs = getCustomPhonebookContacts().filter((c) => c.id !== contactId);
+  saveCustomPhonebookContacts(customs);
+}
+
 /**
  * تبدیل هوشمند رانندگان و پرسنل به مخاطبین دفترچه تلفن و ادغام با مخاطبین سفارشی
  */
 export function buildUnifiedPhonebook(
   driverDirectory: DriverDirectoryItem[],
   staffMembers: StaffMember[],
-  customContacts: PhonebookContact[],
-  favoriteIds: string[]
+  customContacts: PhonebookContact[] = getCustomPhonebookContacts(),
+  favoriteIds: string[] = getFavoriteContactIds()
 ): PhonebookContact[] {
   const result: PhonebookContact[] = [];
   const favSet = new Set(favoriteIds);
+  const extMap = getExtensionOverrides();
+  const overrideMap = new Map<string, PhonebookContact>();
 
-  // 1. اضافه کردن مخاطبین سفارشی لجستیک
+  // 1. اضافه کردن مخاطبین سفارشی لجستیک (و تفکیک اوررایدهای سیستمی)
   for (const c of customContacts) {
+    if (c.id.startsWith('drv-') || c.id.startsWith('stf-')) {
+      overrideMap.set(c.id, c);
+      continue;
+    }
     result.push({
       ...c,
+      extension: extMap[c.id] !== undefined ? extMap[c.id] : c.extension,
       isFavorite: favSet.has(c.id) || !!c.isFavorite,
     });
   }
@@ -257,19 +362,26 @@ export function buildUnifiedPhonebook(
     if (!d.name || !d.phone) continue;
     const driverId = `drv-${d.id}`;
     const assignedPlate = d.assignedVehicles?.[0];
+    const override = overrideMap.get(driverId);
 
     result.push({
       id: driverId,
-      name: d.name,
-      phone: d.phone,
-      category: 'DRIVER',
-      organization: 'ناوگان حمل‌ونقل حامی بار',
-      role: `راننده ${d.driverType === 'EMPLOYED' ? 'استخدامی' : d.driverType === 'CONTRACTOR' ? 'پیمانکاری' : 'آزاد'}${d.code ? ` (کد ${d.code})` : ''}`,
+      name: override?.name || d.name,
+      phone: override?.phone || d.phone,
+      altPhone: override?.altPhone,
+      extension: extMap[driverId] || override?.extension,
+      category: override?.category || 'DRIVER',
+      organization: override?.organization || 'ناوگان حمل‌ونقل حامی بار',
+      role:
+        override?.role ||
+        `راننده ${d.driverType === 'EMPLOYED' ? 'استخدامی' : d.driverType === 'CONTRACTOR' ? 'پیمانکاری' : 'آزاد'}${
+          d.code ? ` (کد ${d.code})` : ''
+        }`,
       personnelCode: d.personnelCode || d.code,
       vehiclePlate: assignedPlate,
       avatarUrl: d.documents?.avatarPhoto || d.avatarUrl,
       isFavorite: favSet.has(driverId),
-      notes: d.licenseNumber ? `شماره گواهینامه: ${d.licenseNumber}` : undefined,
+      notes: override?.notes || (d.licenseNumber ? `شماره گواهینامه: ${d.licenseNumber}` : undefined),
       tags: ['راننده', assignedPlate ? `پلاک_${assignedPlate}` : 'بدون_خودرو'],
     });
   }
@@ -278,20 +390,24 @@ export function buildUnifiedPhonebook(
   for (const s of staffMembers) {
     if (!s.name || (!s.phone && !s.officePhone)) continue;
     const staffId = `stf-${s.id}`;
+    const override = overrideMap.get(staffId);
+    const defaultExt = s.officePhone ? s.officePhone.replace(/[^0-9]/g, '') : undefined;
 
     result.push({
       id: staffId,
-      name: s.name,
-      phone: s.phone || s.officePhone || '',
-      altPhone: s.officePhone && s.officePhone !== s.phone ? s.officePhone : undefined,
-      extension: s.officePhone ? s.officePhone.replace(/[^0-9]/g, '') : undefined,
-      category: 'STAFF',
-      organization: s.department || 'مدیریت و دفتر مرکزی',
-      role: s.role,
+      name: override?.name || s.name,
+      phone: override?.phone || s.phone || s.officePhone || '',
+      altPhone: override?.altPhone || (s.officePhone && s.officePhone !== s.phone ? s.officePhone : undefined),
+      extension: extMap[staffId] || override?.extension || defaultExt,
+      category: override?.category || 'STAFF',
+      organization: override?.organization || s.department || 'مدیریت و دفتر مرکزی',
+      role: override?.role || s.role,
       personnelCode: s.code,
       avatarUrl: s.photoUrl,
       isFavorite: favSet.has(staffId),
-      notes: `شیفت: ${s.shift === 'night' ? 'شب' : 'روز'} - وضعیت: ${s.status === 'inactive' ? 'غیرفعال' : 'فعال'}`,
+      notes:
+        override?.notes ||
+        `شیفت: ${s.shift === 'night' ? 'شب' : 'روز'} - وضعیت: ${s.status === 'inactive' ? 'غیرفعال' : 'فعال'}`,
       tags: ['پرسنل', s.department || 'اداری'],
     });
   }

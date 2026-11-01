@@ -236,19 +236,20 @@ export const VehicleCard: FC<VehicleCardProps> = ({
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1.5 text-slate-300">
+                  <div className="flex items-center gap-1.5 text-slate-300 flex-wrap">
                     <Droplet className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span className="text-slate-400">کارکرد از سرویس:</span>
+                    <span className="text-slate-400">سرویس:</span>
                     <strong className="font-mono text-white font-semibold">
-                      {toFaDigits(daysPassed)} روز
+                      {toFaDigits(serviceEval.lastChangeDate)}
+                    </strong>
+                    <span className="text-slate-600">·</span>
+                    <strong className="font-mono text-amber-300 font-semibold">
+                      {toFaDigits(daysPassed)}/{toFaDigits(maxDays)} روز
                     </strong>
                     <span className="text-slate-600">·</span>
                     <strong className="font-mono text-sky-300 font-semibold">
-                      {toFaDigits(tripsDriven)} سفر
+                      {toFaDigits(tripsDriven)}/{toFaDigits(maxTrips)} سفر
                     </strong>
-                    <span className="text-[10px] text-slate-500">
-                      (سقف: {toFaDigits(maxDays)} روز / {toFaDigits(maxTrips)} سفر)
-                    </span>
                   </div>
                 )}
 

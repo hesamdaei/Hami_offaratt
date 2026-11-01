@@ -273,7 +273,7 @@ export const RAW_SEED_VEHICLES: VehicleItem[] = [
   { id: 'v-6', code: 6, plateNumber: '۴۴-۱۶۵ع۱۱', vehicleType: 'KHAAVAR', driverName: 'بدون راننده', driverPhone: '', status: 'PARKING', insuranceExpiry: '1406/03/13', inspectionExpiry: '1405/08/04', thirdPartyExpiry: '1406/03/13', bodyInsExpiry: '' },
   { id: 'v-7', code: 7, plateNumber: '۵۱-۷۶۵ع۵۵', vehicleType: 'KHAAVAR', driverName: 'محسن مقدسی / علی کشاورز', driverPhone: '09352234010 / 09305386757', status: 'ACTIVE', insuranceExpiry: '1406/05/29', inspectionExpiry: '1405/10/04', thirdPartyExpiry: '1406/05/29', bodyInsExpiry: '' },
   { id: 'v-8', code: 8, plateNumber: '۶۶-۱۸۹ع۶۲', vehicleType: 'KHAAVAR', driverName: 'مهدی رضائی ده', driverPhone: '09056379934', status: 'ACTIVE', insuranceExpiry: '1405/10/16', inspectionExpiry: '1405/09/30', thirdPartyExpiry: '1405/10/16', bodyInsExpiry: '' },
-  { id: 'v-9', code: 9, plateNumber: '۶۶-۹۸۱ع۳۵', vehicleType: 'KHAAVAR', driverName: 'امین تندیس', driverPhone: '09168440549', status: 'ACTIVE', insuranceExpiry: '1406/03/20', inspectionExpiry: '1405/08/06', thirdPartyExpiry: '1406/03/20', bodyInsExpiry: '' },
+  { id: 'v-9', code: 9, plateNumber: '۶۶-۹۸۱ع۳۵', vehicleType: 'KHAAVAR', driverName: 'امین تندیس', driverPhone: '09168440549', status: 'ACTIVE', insuranceExpiry: '1406/03/20', inspectionExpiry: '1405/10/06', thirdPartyExpiry: '1406/03/20', bodyInsExpiry: '' },
   { id: 'v-10', code: 10, plateNumber: '۴۴-۹۶۹ع۶۵', vehicleType: 'KHAAVAR', driverName: 'بدون راننده', driverPhone: '', status: 'PARKING', insuranceExpiry: '1406/02/05', inspectionExpiry: '1405/08/20', thirdPartyExpiry: '1406/02/05', bodyInsExpiry: '' },
   { id: 'v-11', code: 11, plateNumber: '۶۶-۵۷۲ع۳۲', vehicleType: 'KHAAVAR', driverName: 'حمید خاکی', driverPhone: '09909486156', status: 'ACTIVE', insuranceExpiry: '1405/09/30', inspectionExpiry: '1405/09/29', thirdPartyExpiry: '1405/09/30', bodyInsExpiry: '' },
   { id: 'v-12', code: 12, plateNumber: '۵۵-۹۳۶ع۱۳', vehicleType: 'KHAAVAR', driverName: 'سید مجتبی امجدیان', driverPhone: '09193281288', status: 'ACTIVE', insuranceExpiry: '1405/05/15', inspectionExpiry: '1405/09/07', thirdPartyExpiry: '1405/09/07' },
@@ -359,8 +359,8 @@ export const LEGACY_SEED_VEHICLES: VehicleItem[] = RAW_SEED_VEHICLES.map((v, ind
   const currentMileage = baseMil + ((v.code * 1350) % 45000);
   const drivenSince = 1200 + ((v.code * 620) % 4800);
   const lastChangeMileage = currentMileage - drivenSince;
-  const lastChangeDate = '1405/05/' + String((v.code % 25) + 1).padStart(2, '0');
-  const tripsSinceChange = Math.max(1, Math.floor(drivenSince / 80));
+  const lastChangeDate = v.code === 9 ? '1405/06/15' : '1405/06/' + String((v.code % 20) + 5).padStart(2, '0');
+  const tripsSinceChange = v.code === 9 ? 39 : Math.max(1, Math.floor(drivenSince / 80));
   const oilBrands = ['بهران دیزل سوپر ۱۵W۴۰', 'اسپیدی توربو پلاس', 'ایرانول کارو', 'توتال روبیا TIR', 'کاسترول GTX'];
   const lastOilBrand = oilBrands[v.code % oilBrands.length];
 
