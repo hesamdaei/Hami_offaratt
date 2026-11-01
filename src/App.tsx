@@ -523,11 +523,11 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
         case 'OIL_SERVICE':
           return canViewModule(currentUser, 'oilService');
         case 'ORDERS':
-          return canViewModule(currentUser, 'attendance') || canViewModule(currentUser, 'drivers');
+          return isMasterAdmin(currentUser) || canViewModule(currentUser, 'orders');
         case 'OPERATIONS':
           return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
         case 'FINANCE':
-          return isMasterAdmin(currentUser) || canViewModule(currentUser, 'attendance');
+          return isMasterAdmin(currentUser) || canViewModule(currentUser, 'finance');
         case 'CUSTOMERS':
           return true;
         case 'HANDOVER':
@@ -2266,7 +2266,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module: Orders & Reservations Hub (سفارش‌ها و بارها) */}
-          {activeTab === 'ORDERS' && (
+          {activeTab === 'ORDERS' && (isMasterAdmin(currentUser) || canViewModule(currentUser, 'orders')) && (
             <div className="animate-in fade-in duration-150">
               <UnifiedOrdersAndReservationHub
                 orders={orders}
@@ -2281,26 +2281,26 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             </div>
           )}
 
-              {/* Module: Customers & Cargo Tracking Portal (مشتریان و رهگیری بار) */}
-              {activeTab === 'CUSTOMERS' && (
-                <div className="animate-in fade-in duration-150">
-                  <CargoTrackingCustomerPortal
-                    orderNumber="ORD-1403/9201"
-                    onBackToApp={() => handleTabChange('DASHBOARD')}
-                  />
-                </div>
-              )}
+          {/* Module: Customers & Cargo Tracking Portal (مشتریان و رهگیری بار) */}
+          {activeTab === 'CUSTOMERS' && (
+            <div className="animate-in fade-in duration-150">
+              <CargoTrackingCustomerPortal
+                orderNumber="ORD-1403/9201"
+                onBackToApp={() => handleTabChange('DASHBOARD')}
+              />
+            </div>
+          )}
 
-              {/* Module: Finance & Tariff Calculator (امور مالی و تعرفه‌ها) */}
-              {activeTab === 'FINANCE' && (
-                <div className="animate-in fade-in duration-150">
-                  <ReservationGuideAndCalculatorView
-                    onAddOrder={handleAddOrder}
-                    onNavigateToOrders={() => handleTabChange('ORDERS')}
-                    showToast={showToast}
-                  />
-                </div>
-              )}
+          {/* Module: Finance & Tariff Calculator (امور مالی و تعرفه‌ها) */}
+          {activeTab === 'FINANCE' && (isMasterAdmin(currentUser) || canViewModule(currentUser, 'finance')) && (
+            <div className="animate-in fade-in duration-150">
+              <ReservationGuideAndCalculatorView
+                onAddOrder={handleAddOrder}
+                onNavigateToOrders={() => handleTabChange('ORDERS')}
+                showToast={showToast}
+              />
+            </div>
+          )}
 
               {/* Module 1: Attendance Management Hub (Drivers & Staff) */}
               {activeTab === 'ATTENDANCE' && (

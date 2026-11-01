@@ -140,14 +140,29 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
       return true;
     });
 
+    const extractNumericCode = (val?: string): number => {
+      if (!val) return 999999;
+      const en = val
+        .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+        .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+        .replace(/[^0-9]/g, '');
+      const num = parseInt(en, 10);
+      return Number.isNaN(num) ? 999999 : num;
+    };
+
     return filtered.sort((a, b) => {
+      if (settings.sortBy === 'code') {
+        const codeA = extractNumericCode(a.personnelCode);
+        const codeB = extractNumericCode(b.personnelCode);
+        if (codeA !== codeB) return codeA - codeB;
+      }
       if (settings.sortBy === 'favorites') {
         if (a.isFavorite && !b.isFavorite) return -1;
         if (!a.isFavorite && b.isFavorite) return 1;
       }
       if (settings.sortBy === 'extension') {
-        const extA = parseInt(a.extension || '99999', 10);
-        const extB = parseInt(b.extension || '99999', 10);
+        const extA = extractNumericCode(a.extension);
+        const extB = extractNumericCode(b.extension);
         if (extA !== extB) return extA - extB;
       }
       if (settings.sortBy === 'category') {
@@ -473,6 +488,7 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
                 onChange={(e) => handleUpdateSettings({ sortBy: e.target.value as any })}
                 className="w-full bg-[#0a101f] border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
               >
+                <option value="code">کد (خودرو / پرسنلی)</option>
                 <option value="favorites">ستاره‌دارها در ابتدا</option>
                 <option value="name">حروف الفبا (نام)</option>
                 <option value="extension">شماره داخلی ویپ</option>
@@ -533,6 +549,36 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
                 ✕
               </button>
             )}
+          </div>
+
+          {/* Quick Sort Bar */}
+          <div className="flex items-center gap-1 bg-[#090f1d] p-1 rounded-xl border border-slate-800 shrink-0 overflow-x-auto">
+            <span className="text-[10px] font-bold text-slate-400 px-1.5 shrink-0">مرتب‌سازی:</span>
+            {(
+              [
+                { id: 'code', label: 'بر اساس کد' },
+                { id: 'favorites', label: 'ویژه' },
+                { id: 'name', label: 'نام' },
+                { id: 'extension', label: 'داخلی' },
+                { id: 'category', label: 'واحد' },
+              ] as const
+            ).map((s) => {
+              const active = settings.sortBy === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => handleUpdateSettings({ sortBy: s.id })}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer shrink-0 ${
+                    active
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* View Mode Switcher */}
@@ -968,6 +1014,7 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
                   <thead className="bg-[#090f1d] text-slate-400 border-b border-slate-800">
                     <tr>
                       <th className="py-2.5 px-3 w-8 text-center">★</th>
+                      <th className="py-2.5 px-3 w-16 text-center">کد</th>
                       <th className="py-2.5 px-3">نام مخاطب</th>
                       <th className="py-2.5 px-3">واحد / سمت</th>
                       <th className="py-2.5 px-3 text-center">داخلی</th>
@@ -992,6 +1039,15 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
                                 }`}
                               />
                             </button>
+                          </td>
+                          <td className="py-2 px-3 text-center font-mono">
+                            {c.personnelCode ? (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold text-[10px]">
+                                {toFaDigits(c.personnelCode)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">-</span>
+                            )}
                           </td>
                           <td className="py-2 px-3 font-bold text-white">{c.name}</td>
                           <td className="py-2 px-3">

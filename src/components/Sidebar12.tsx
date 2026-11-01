@@ -227,7 +227,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
-        if (!currentUser || isMasterAdmin(currentUser)) return true;
+        if (!currentUser) return false;
+        if (isMasterAdmin(currentUser)) return true;
         switch (item.id) {
           case 'DASHBOARD':
             return true;
@@ -236,7 +237,7 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           case 'VEHICLE_ASSIGNMENT':
             return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
           case 'ORDERS':
-            return canViewModule(currentUser, 'attendance') || canViewModule(currentUser, 'drivers');
+            return isMasterAdmin(currentUser) || canViewModule(currentUser, 'orders');
           case 'OPERATIONS':
             return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
           case 'HANDOVER':
@@ -252,7 +253,7 @@ export const Sidebar12: FC<Sidebar12Props> = ({
           case 'PHONEBOOK':
             return true;
           case 'FINANCE':
-            return isMasterAdmin(currentUser) || canViewModule(currentUser, 'attendance');
+            return isMasterAdmin(currentUser) || canViewModule(currentUser, 'finance');
           case 'REGULATIONS':
             return canViewModule(currentUser, 'regulations');
           case 'REPORTS':

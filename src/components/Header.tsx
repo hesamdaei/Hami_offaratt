@@ -291,7 +291,8 @@ export const Header: FC<HeaderProps> = ({
 
   // Filter modules based on logged-in user permissions
   const visibleNavModules = navModules.filter((item) => {
-    if (!currentUser || isMasterAdmin(currentUser)) return true;
+    if (!currentUser) return false;
+    if (isMasterAdmin(currentUser)) return true;
     switch (item.id) {
       case 'DASHBOARD':
         return true;
@@ -306,11 +307,11 @@ export const Header: FC<HeaderProps> = ({
       case 'OIL_SERVICE':
         return canViewModule(currentUser, 'oilService');
       case 'ORDERS':
-        return canViewModule(currentUser, 'attendance') || canViewModule(currentUser, 'drivers');
+        return isMasterAdmin(currentUser) || canViewModule(currentUser, 'orders');
       case 'OPERATIONS':
         return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
       case 'FINANCE':
-        return isMasterAdmin(currentUser) || canViewModule(currentUser, 'attendance');
+        return isMasterAdmin(currentUser) || canViewModule(currentUser, 'finance');
       case 'CUSTOMERS':
         return true;
       case 'HANDOVER':

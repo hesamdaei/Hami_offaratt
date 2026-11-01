@@ -57,6 +57,8 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
     staff: 'view',
     oilService: 'none',
     regulations: 'view',
+    orders: 'none',
+    finance: 'none',
     backupRestore: false,
     userManagement: false,
     networkSettings: false,
@@ -74,6 +76,8 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
     staff: 'view',
     oilService: 'view',
     regulations: 'view',
+    orders: 'none',
+    finance: 'none',
     backupRestore: false,
     userManagement: false,
     networkSettings: false,
@@ -502,6 +506,44 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                                   </select>
                                 </div>
 
+                                {/* Orders & Cargo Reservation */}
+                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                                  <span className="text-xs text-slate-300">سفارش‌ها و رزرو بار:</span>
+                                  <select
+                                    value={editPermissions.orders || 'none'}
+                                    onChange={(e) =>
+                                      setEditPermissions({
+                                        ...editPermissions,
+                                        orders: e.target.value as ModulePermission,
+                                      })
+                                    }
+                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
+                                  >
+                                    <option value="full">ثبت و ویرایش کامل</option>
+                                    <option value="view">فقط مشاهده</option>
+                                    <option value="none">بدون دسترسی</option>
+                                  </select>
+                                </div>
+
+                                {/* Finance & Tariffs */}
+                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                                  <span className="text-xs text-slate-300">امور مالی و تعرفه‌ها:</span>
+                                  <select
+                                    value={editPermissions.finance || 'none'}
+                                    onChange={(e) =>
+                                      setEditPermissions({
+                                        ...editPermissions,
+                                        finance: e.target.value as ModulePermission,
+                                      })
+                                    }
+                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
+                                  >
+                                    <option value="full">ثبت و ویرایش کامل</option>
+                                    <option value="view">فقط مشاهده</option>
+                                    <option value="none">بدون دسترسی</option>
+                                  </select>
+                                </div>
+
                                 {/* Backup */}
                                 <label className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer">
                                   <span className="text-xs text-slate-300">بک‌آپ و بازیابی داده‌ها:</span>
@@ -641,6 +683,16 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                                     {user.permissions.regulations !== 'none' && (
                                       <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700">
                                         آیین‌نامه ({user.permissions.regulations === 'full' ? 'کامل' : 'مشاهده'})
+                                      </span>
+                                    )}
+                                    {user.permissions.orders && user.permissions.orders !== 'none' && (
+                                      <span className="text-[10px] bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-500/25">
+                                        سفارش‌ها و رزرو ({user.permissions.orders === 'full' ? 'کامل' : 'مشاهده'})
+                                      </span>
+                                    )}
+                                    {user.permissions.finance && user.permissions.finance !== 'none' && (
+                                      <span className="text-[10px] bg-cyan-500/15 text-cyan-300 px-2 py-0.5 rounded-md border border-cyan-500/25">
+                                        مالی و تعرفه‌ها ({user.permissions.finance === 'full' ? 'کامل' : 'مشاهده'})
                                       </span>
                                     )}
                                     {user.permissions.backupRestore && (
@@ -889,6 +941,50 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                         setNewPermissions({
                           ...newPermissions,
                           regulations: e.target.value as ModulePermission,
+                        })
+                      }
+                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
+                    >
+                      <option value="full">ثبت و ویرایش</option>
+                      <option value="view">فقط مشاهده</option>
+                      <option value="none">بدون دسترسی</option>
+                    </select>
+                  </div>
+
+                  {/* Orders & Cargo Reservation */}
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-200 block">سفارش‌ها و رزرو بار</span>
+                      <span className="text-[10px] text-slate-400">ثبت و مدیریت بارها</span>
+                    </div>
+                    <select
+                      value={newPermissions.orders || 'none'}
+                      onChange={(e) =>
+                        setNewPermissions({
+                          ...newPermissions,
+                          orders: e.target.value as ModulePermission,
+                        })
+                      }
+                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
+                    >
+                      <option value="full">ثبت و ویرایش</option>
+                      <option value="view">فقط مشاهده</option>
+                      <option value="none">بدون دسترسی</option>
+                    </select>
+                  </div>
+
+                  {/* Finance & Tariffs */}
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-200 block">امور مالی و تعرفه‌ها</span>
+                      <span className="text-[10px] text-slate-400">کرایه و جدول نرخ‌ها</span>
+                    </div>
+                    <select
+                      value={newPermissions.finance || 'none'}
+                      onChange={(e) =>
+                        setNewPermissions({
+                          ...newPermissions,
+                          finance: e.target.value as ModulePermission,
                         })
                       }
                       className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"

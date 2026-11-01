@@ -377,7 +377,7 @@ export function buildUnifiedPhonebook(
         `راننده ${d.driverType === 'EMPLOYED' ? 'استخدامی' : d.driverType === 'CONTRACTOR' ? 'پیمانکاری' : 'آزاد'}${
           d.code ? ` (کد ${d.code})` : ''
         }`,
-      personnelCode: d.personnelCode || d.code,
+      personnelCode: override?.personnelCode || d.code || d.personnelCode,
       vehiclePlate: assignedPlate,
       avatarUrl: d.documents?.avatarPhoto || d.avatarUrl,
       isFavorite: favSet.has(driverId),
@@ -402,7 +402,7 @@ export function buildUnifiedPhonebook(
       category: override?.category || 'STAFF',
       organization: override?.organization || s.department || 'مدیریت و دفتر مرکزی',
       role: override?.role || s.role,
-      personnelCode: s.code,
+      personnelCode: override?.personnelCode || s.code,
       avatarUrl: s.photoUrl,
       isFavorite: favSet.has(staffId),
       notes:

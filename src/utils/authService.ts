@@ -50,13 +50,26 @@ export function getStoredUsers(): AppUser[] {
               staff: 'full',
               oilService: 'full',
               regulations: 'full',
+              orders: 'full',
+              finance: 'full',
               backupRestore: true,
               userManagement: true,
               networkSettings: true,
             },
           };
         }
-        return parsed;
+        return parsed.map((u) =>
+          u.isMasterAdmin
+            ? u
+            : {
+                ...u,
+                permissions: {
+                  ...u.permissions,
+                  orders: u.permissions?.orders || 'none',
+                  finance: u.permissions?.finance || 'none',
+                },
+              }
+        );
       }
     }
   } catch (err) {
@@ -501,7 +514,7 @@ export const isDaei = isMasterAdmin;
  */
 export function canViewModule(
   user: AppUser | SafeAppUser | null | undefined,
-  module: 'attendance' | 'drivers' | 'staff' | 'oilService' | 'regulations'
+  module: 'attendance' | 'drivers' | 'staff' | 'oilService' | 'regulations' | 'orders' | 'finance'
 ): boolean {
   if (!user) return false;
   if (isMasterAdmin(user)) return true;
@@ -511,7 +524,7 @@ export function canViewModule(
 
 export function canEditModule(
   user: AppUser | SafeAppUser | null | undefined,
-  module: 'attendance' | 'drivers' | 'staff' | 'oilService' | 'regulations'
+  module: 'attendance' | 'drivers' | 'staff' | 'oilService' | 'regulations' | 'orders' | 'finance'
 ): boolean {
   if (!user) return false;
   if (isMasterAdmin(user)) return true;

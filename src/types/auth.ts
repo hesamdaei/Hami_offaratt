@@ -7,6 +7,8 @@ export interface UserPermissions {
   staff: ModulePermission;
   oilService: ModulePermission;
   regulations: ModulePermission;
+  orders?: ModulePermission; // سفارش‌ها و رزرو بار (پیش‌فرض: فقط ادمین اصلی مگر اعطا شود)
+  finance?: ModulePermission; // امور مالی و تعرفه‌ها (پیش‌فرض: فقط ادمین اصلی مگر اعطا شود)
 
   // Administrative / System permissions
   backupRestore: boolean;
@@ -55,6 +57,8 @@ export const DEFAULT_MASTER_USER: AppUser = {
     staff: 'full',
     oilService: 'full',
     regulations: 'full',
+    orders: 'full',
+    finance: 'full',
     backupRestore: true,
     userManagement: true,
     networkSettings: true,
@@ -79,6 +83,8 @@ export const INITIAL_USERS: AppUser[] = [
       staff: 'view',
       oilService: 'none',
       regulations: 'view',
+      orders: 'none',
+      finance: 'none',
       backupRestore: false,
       userManagement: false,
       networkSettings: false,
@@ -100,6 +106,8 @@ export const INITIAL_USERS: AppUser[] = [
       staff: 'none',
       oilService: 'full',
       regulations: 'full',
+      orders: 'none',
+      finance: 'none',
       backupRestore: false,
       userManagement: false,
       networkSettings: false,
@@ -108,3 +116,4 @@ export const INITIAL_USERS: AppUser[] = [
     avatarColor: 'from-emerald-500 to-teal-600',
   },
 ];
+

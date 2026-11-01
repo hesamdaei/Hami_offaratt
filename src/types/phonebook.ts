@@ -45,7 +45,7 @@ export interface PhonebookCustomSettings {
   compactCards: boolean;
   quickDialColumns: 3 | 4 | 5 | 6;
   autoSyncWithFleet: boolean;
-  sortBy: 'name' | 'category' | 'favorites' | 'extension';
+  sortBy: 'code' | 'name' | 'category' | 'favorites' | 'extension';
 }
 
 export const DEFAULT_PHONEBOOK_SETTINGS: PhonebookCustomSettings = {
@@ -54,5 +54,6 @@ export const DEFAULT_PHONEBOOK_SETTINGS: PhonebookCustomSettings = {
   compactCards: true,
   quickDialColumns: 4,
   autoSyncWithFleet: true,
-  sortBy: 'favorites',
+  sortBy: 'code',
 };
+

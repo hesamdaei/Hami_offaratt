@@ -143,6 +143,8 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     staff: 'view',
     oilService: 'none',
     regulations: 'view',
+    orders: 'none',
+    finance: 'none',
     backupRestore: false,
     userManagement: false,
     networkSettings: false,
@@ -163,6 +165,8 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     staff: 'view',
     oilService: 'view',
     regulations: 'view',
+    orders: 'none',
+    finance: 'none',
     backupRestore: false,
     userManagement: false,
     networkSettings: false,
@@ -193,6 +197,8 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       staff: 'view',
       oilService: 'none',
       regulations: 'view',
+      orders: 'none',
+      finance: 'none',
       backupRestore: false,
       userManagement: false,
       networkSettings: false,
@@ -893,6 +899,30 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                           }`}
                         >
                           روغن: {user.permissions.oilService === 'full' ? 'کامل' : user.permissions.oilService === 'view' ? 'مشاهده' : 'ندارد'}
+                        </span>
+
+                        <span
+                          className={`px-1.5 py-0.5 rounded border ${
+                            user.isMasterAdmin || user.permissions.orders === 'full'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              : user.permissions.orders === 'view'
+                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                              : 'bg-slate-800 text-slate-500 border-slate-700'
+                          }`}
+                        >
+                          سفارش‌ها: {user.isMasterAdmin || user.permissions.orders === 'full' ? 'کامل' : user.permissions.orders === 'view' ? 'مشاهده' : 'ندارد'}
+                        </span>
+
+                        <span
+                          className={`px-1.5 py-0.5 rounded border ${
+                            user.isMasterAdmin || user.permissions.finance === 'full'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              : user.permissions.finance === 'view'
+                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                              : 'bg-slate-800 text-slate-500 border-slate-700'
+                          }`}
+                        >
+                          مالی و تعرفه: {user.isMasterAdmin || user.permissions.finance === 'full' ? 'کامل' : user.permissions.finance === 'view' ? 'مشاهده' : 'ندارد'}
                         </span>
 
                         <span
@@ -1621,6 +1651,36 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                       <option value="none">عدم دسترسی</option>
                     </select>
                   </div>
+
+                  <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
+                    <span className="text-slate-300">سفارش‌ها و رزرو بار:</span>
+                    <select
+                      value={newPermissions.orders || 'none'}
+                      onChange={(e) =>
+                        setNewPermissions((prev) => ({ ...prev, orders: e.target.value as ModulePermission }))
+                      }
+                      className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none"
+                    >
+                      <option value="full">دسترسی کامل</option>
+                      <option value="view">فقط مشاهده</option>
+                      <option value="none">عدم دسترسی</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
+                    <span className="text-slate-300">امور مالی و تعرفه‌ها:</span>
+                    <select
+                      value={newPermissions.finance || 'none'}
+                      onChange={(e) =>
+                        setNewPermissions((prev) => ({ ...prev, finance: e.target.value as ModulePermission }))
+                      }
+                      className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none"
+                    >
+                      <option value="full">دسترسی کامل</option>
+                      <option value="view">فقط مشاهده</option>
+                      <option value="none">عدم دسترسی</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Administrative toggles */}
@@ -1821,6 +1881,36 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                         value={editPermissions.oilService}
                         onChange={(e) =>
                           setEditPermissions((prev) => ({ ...prev, oilService: e.target.value as ModulePermission }))
+                        }
+                        className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
+                      >
+                        <option value="full">دسترسی کامل</option>
+                        <option value="view">فقط مشاهده</option>
+                        <option value="none">عدم دسترسی</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
+                      <span className="text-slate-300">سفارش‌ها و رزرو بار:</span>
+                      <select
+                        value={editPermissions.orders || 'none'}
+                        onChange={(e) =>
+                          setEditPermissions((prev) => ({ ...prev, orders: e.target.value as ModulePermission }))
+                        }
+                        className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
+                      >
+                        <option value="full">دسترسی کامل</option>
+                        <option value="view">فقط مشاهده</option>
+                        <option value="none">عدم دسترسی</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
+                      <span className="text-slate-300">امور مالی و تعرفه‌ها:</span>
+                      <select
+                        value={editPermissions.finance || 'none'}
+                        onChange={(e) =>
+                          setEditPermissions((prev) => ({ ...prev, finance: e.target.value as ModulePermission }))
                         }
                         className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
                       >
