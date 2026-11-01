@@ -1,4 +1,4 @@
-import { DECODED_BACKUP } from './backupDecoder';
+import latestBackup from '../data/latestBackup.json';
 import { calculateDaysBetweenJalaali, calculateNextDueDateJalaali, formatJalaaliDate, parseJalaaliDate } from './jalaali';
 
 export interface ServiceRule {
@@ -10,6 +10,11 @@ export interface ServiceRule {
   warningMileage?: number;
 }
 
+const backupRules = ((latestBackup as any)?.data?.serviceRules || (latestBackup as any)?.data?.rules || {}) as Record<
+  string,
+  ServiceRule
+>;
+
 export const DEFAULT_SERVICE_RULES: Record<string, ServiceRule> = {
   KHAAVAR: { label: 'خاور بنز', hasMileage: false, maxTrips: 80, maxDays: 60, warningMileage: 500 },
   HYUNDAI: { label: 'هیوندا', hasMileage: true, maxMileage: 5000, maxTrips: 60, maxDays: 45, warningMileage: 500 },
@@ -19,7 +24,7 @@ export const DEFAULT_SERVICE_RULES: Record<string, ServiceRule> = {
   INSPECTOR_MOTOR: { label: 'موتور بازرس', hasMileage: true, maxMileage: 3000, maxDays: 180, warningMileage: 300 },
   SEDAN: { label: 'سواری', hasMileage: true, maxMileage: 5000, maxDays: 180, warningMileage: 500 },
   PEUGEOT: { label: 'پژو', hasMileage: true, maxMileage: 5000, maxDays: 180, warningMileage: 500 },
-  ...(DECODED_BACKUP?.rules || {}),
+  ...backupRules,
 };
 
 export type MaintenanceCategory = 'FLUIDS' | 'FILTERS' | 'BRAKES_TIRES' | 'MECHANICAL' | 'ELECTRICAL' | 'OTHER';
