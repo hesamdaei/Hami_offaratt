@@ -1,7 +1,6 @@
-import { Driver, AttendanceRecords, StaffMember } from '../types';
-import { VehicleItem, DriverDirectoryItem } from './fleetSeedData';
-import { ServiceRule } from '../components/OilServiceManagementView';
-import { normalizeVehicleOilData } from './maintenanceStandardsConfig';
+import type { Driver, AttendanceRecords, StaffMember } from '../types';
+import type { VehicleItem, DriverDirectoryItem } from './fleetSeedData';
+import { normalizeVehicleOilData, type ServiceRule } from './maintenanceStandardsConfig';
 import latestBackup from '../data/latestBackup.json';
 
 export interface DecodedBackupResult {

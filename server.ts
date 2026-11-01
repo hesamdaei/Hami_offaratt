@@ -227,6 +227,9 @@ function getLocalNetworkIps() {
 // Read database from file
 function readDatabase() {
   try {
+    if (!fs.existsSync(DB_FILE)) {
+      initializeDatabaseIfEmpty();
+    }
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       return JSON.parse(raw);
