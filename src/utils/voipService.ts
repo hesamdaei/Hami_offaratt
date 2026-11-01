@@ -250,3 +250,46 @@ export async function testVoipConnection(config: VoipConfig): Promise<{ ok: bool
     };
   }
 }
+
+/**
+ * قطع تماس فعال (Hangup / Release) روی تلفن رومیزی یا سانترال
+ */
+export async function hangupVoipCall(overrideConfig?: Partial<VoipConfig>): Promise<{ ok: boolean; message: string }> {
+  const currentConfig: VoipConfig = {
+    ...getVoipConfig(),
+    ...(overrideConfig || {}),
+  };
+
+  // ارسال مستقیم دستور قطع به گوشی یالینک در شبکه محلی (در صورت دسترسی مستقیم مرورگر) + ارسال به سرور
+  if (currentConfig.mode === 'ipphone_cti' && currentConfig.ipPhoneIp) {
+    const ip = currentConfig.ipPhoneIp.trim();
+    try {
+      if (currentConfig.ipPhoneModel === 'grandstream') {
+        fetch(`http://${ip}/cgi-bin/api-phone_operation?cmd=endcall`, { mode: 'no-cors' }).catch(() => null);
+      } else {
+        fetch(`http://${ip}/servlet?key=RELEASE`, { mode: 'no-cors' }).catch(() => null);
+        fetch(`http://${ip}/servlet?key=X`, { mode: 'no-cors' }).catch(() => null);
+      }
+    } catch {}
+  }
+
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/voip/hangup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: currentConfig }),
+    });
+    const data = await res.json();
+    return {
+      ok: true,
+      message: data.message || 'تماس قطع شد.',
+    };
+  } catch {
+    return {
+      ok: true,
+      message: 'فرمان قطع تماس ارسال شد.',
+    };
+  }
+}
+

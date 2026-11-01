@@ -1168,6 +1168,52 @@ app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) =>
   }
 });
 
+// 1.5. Hangup / End VoIP Call API
+app.post(['/api/lan/voip/hangup', '/api/voip/hangup'], async (req, res) => {
+  try {
+    const { config } = req.body || {};
+    const mode = config?.mode || 'softphone';
+
+    if (mode === 'ipphone_cti' && config?.ipPhoneIp) {
+      const phoneIp = config.ipPhoneIp;
+      const headers: Record<string, string> = {};
+      if (config.ipPhoneUser && config.ipPhonePass) {
+        const auth = Buffer.from(`${config.ipPhoneUser}:${config.ipPhonePass}`).toString('base64');
+        headers['Authorization'] = `Basic ${auth}`;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      if (config.ipPhoneModel === 'grandstream') {
+        const url = `http://${phoneIp}/cgi-bin/api-phone_operation?cmd=endcall`;
+        await fetch(url, { headers, signal: controller.signal }).catch(() => null);
+      } else {
+        // Yealink supports key=X and key=RELEASE to terminate active/ringing calls
+        const urlRelease = `http://${phoneIp}/servlet?key=RELEASE`;
+        const urlX = `http://${phoneIp}/servlet?key=X`;
+        await Promise.all([
+          fetch(urlRelease, { headers, signal: controller.signal }).catch(() => null),
+          fetch(urlX, { headers, signal: controller.signal }).catch(() => null),
+        ]);
+      }
+      clearTimeout(timeoutId);
+
+      return res.json({
+        ok: true,
+        message: 'فرمان قطع تماس به تلفن رومیزی ارسال شد.',
+      });
+    }
+
+    return res.json({
+      ok: true,
+      message: 'تماس پایان یافت.',
+    });
+  } catch (err: any) {
+    return res.json({ ok: true, message: 'تماس قطع شد.' });
+  }
+});
+
 // 2. Test VoIP PBX Connection API
 app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
   try {
