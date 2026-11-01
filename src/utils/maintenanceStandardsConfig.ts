@@ -331,12 +331,99 @@ export interface VehicleServiceEvaluation {
  * Evaluate exact oil service status for ANY vehicle (including KHAAVAR without odometer, or HYUNDAI/ISUZU/NISSAN with odometer).
  * Ensures 100% consistent calculation across all tables, cards, modals, notifications, and exports.
  */
+export const DEFAULT_LAST_OIL_CHANGE_DATE = '1405/06/15';
+
+/**
+ * Single source of truth for reading a vehicle's last oil change date.
+ * Always returns a normalized YYYY/MM/DD Jalaali date in ASCII digits.
+ */
+export function getCanonicalLastOilChangeDate(vehicle: any): string {
+  if (!vehicle) return DEFAULT_LAST_OIL_CHANGE_DATE;
+  const primaryDate =
+    typeof vehicle.lastChangeDate === 'string' && vehicle.lastChangeDate.trim()
+      ? vehicle.lastChangeDate.trim()
+      : '';
+  const historyList = Array.isArray(vehicle.serviceHistory) ? vehicle.serviceHistory : [];
+  const fallbackHistoryDate =
+    historyList.length > 0 && typeof historyList[0]?.date === 'string' && historyList[0].date.trim()
+      ? historyList[0].date.trim()
+      : '';
+
+  const rawDate = primaryDate || fallbackHistoryDate || DEFAULT_LAST_OIL_CHANGE_DATE;
+  const parsed = parseJalaaliDate(rawDate);
+  return parsed ? formatJalaaliDate(parsed.jy, parsed.jm, parsed.jd) : DEFAULT_LAST_OIL_CHANGE_DATE;
+}
+
+/**
+ * Normalizes a vehicle object so that its last oil change date is stored in a single
+ * unified place (`vehicle.lastChangeDate`) and `serviceHistory[0].date` is strictly
+ * synchronized with `vehicle.lastChangeDate`, eliminating any conflicting dates.
+ */
+export function normalizeVehicleOilData<T extends Record<string, any>>(
+  vehicle: T,
+  explicitNewDate?: string
+): T {
+  if (!vehicle || typeof vehicle !== 'object') return vehicle;
+
+  const targetDateRaw =
+    typeof explicitNewDate === 'string' && explicitNewDate.trim()
+      ? explicitNewDate.trim()
+      : getCanonicalLastOilChangeDate(vehicle);
+  const parsed = parseJalaaliDate(targetDateRaw);
+  const canonicalDate = parsed
+    ? formatJalaaliDate(parsed.jy, parsed.jm, parsed.jd)
+    : getCanonicalLastOilChangeDate(vehicle);
+
+  const existingHistory = Array.isArray(vehicle.serviceHistory) ? [...vehicle.serviceHistory] : [];
+  let syncedHistory = existingHistory;
+
+  if (existingHistory.length > 0) {
+    syncedHistory = [
+      {
+        ...existingHistory[0],
+        date: canonicalDate,
+        mileage:
+          typeof vehicle.lastChangeMileage === 'number'
+            ? vehicle.lastChangeMileage
+            : existingHistory[0]?.mileage ?? 0,
+        oilBrand: vehicle.lastOilBrand || existingHistory[0]?.oilBrand || 'بهران دیزل ۱۵W۴۰',
+      },
+      ...existingHistory.slice(1),
+    ];
+  } else {
+    syncedHistory = [
+      {
+        id: `sh-sync-${vehicle.id || vehicle.code || Date.now()}`,
+        date: canonicalDate,
+        mileage: typeof vehicle.lastChangeMileage === 'number' ? vehicle.lastChangeMileage : 0,
+        trips: typeof vehicle.tripsSinceChange === 'number' ? vehicle.tripsSinceChange : 0,
+        oilBrand: vehicle.lastOilBrand || 'بهران دیزل ۱۵W۴۰',
+        oilFilterChanged: vehicle.oilFilterChanged ?? true,
+        airFilterChanged: vehicle.airFilterChanged ?? true,
+        fuelFilterChanged: vehicle.fuelFilterChanged ?? false,
+      },
+    ];
+  }
+
+  const normalized: any = {
+    ...vehicle,
+    lastChangeDate: canonicalDate,
+    serviceHistory: syncedHistory,
+  };
+
+  // Strip any legacy/duplicate date keys so they never cause conflicts
+  delete normalized.lastOilChangeDate;
+  delete normalized.lastServiceDate;
+
+  return normalized as T;
+}
+
 export function evaluateVehicleServiceStatus(
   vehicle: {
     vehicleType: string;
     currentMileage?: number;
-    currentKm?: number;
     lastChangeMileage?: number;
+    currentKm?: number;
     lastOilChangeKm?: number;
     lastChangeDate?: string;
     tripsSinceChange?: number;
@@ -361,16 +448,8 @@ export function evaluateVehicleServiceStatus(
   const ceilingKm = Math.max(100, Number(baseRule.maxMileage) || 5000);
   const warningKmThreshold = Math.max(0, Number(baseRule.warningMileage) || 500);
 
-  // Resolve latest date from vehicle.lastChangeDate (primary source of truth) or serviceHistory[0]?.date
-  const historyList = Array.isArray(vehicle.serviceHistory) ? vehicle.serviceHistory : [];
-  const latestHistoryDate = historyList.length > 0 && historyList[0]?.date ? String(historyList[0].date) : '';
-  const propDate = vehicle.lastChangeDate ? String(vehicle.lastChangeDate) : '';
-
-  const rawLastChangeDate = propDate || latestHistoryDate || '1405/06/15';
-  const parsedLastChange = parseJalaaliDate(rawLastChangeDate);
-  const lastChangeDate = parsedLastChange
-    ? formatJalaaliDate(parsedLastChange.jy, parsedLastChange.jm, parsedLastChange.jd)
-    : rawLastChangeDate;
+  // Single unified source of truth for last oil change date
+  const lastChangeDate = getCanonicalLastOilChangeDate(vehicle);
 
   // Time calculations
   const daysPassed = calculateDaysBetweenJalaali(lastChangeDate);

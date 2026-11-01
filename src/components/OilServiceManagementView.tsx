@@ -56,6 +56,7 @@ import {
   resetMaintenanceItemsToDefault,
   resetServiceRulesToDefault,
   evaluateVehicleServiceStatus,
+  normalizeVehicleOilData,
 } from '../utils/maintenanceStandardsConfig';
 
 export type { ServiceRule, MaintenanceItemStandard, MaintenanceCategory };
@@ -475,32 +476,33 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
     v: VehicleItem,
     initialTab: 'OIL_SERVICE' | 'USAGE' | 'HISTORY' = 'OIL_SERVICE'
   ) => {
-    const evalStatus = evaluateVehicleServiceStatus(v, rules);
+    const normalizedV = normalizeVehicleOilData(v);
+    const evalStatus = evaluateVehicleServiceStatus(normalizedV, rules);
     const hasMileage = evalStatus.rule.hasMileage;
     const currMil = evalStatus.currentMileage;
     const lastMil = evalStatus.lastChangeMileage;
 
-    setManualOilVehicle(v);
+    setManualOilVehicle(normalizedV);
     setServiceModalTab(initialTab);
 
-    // Pre-fill Oil Service tab: default to today's date & current mileage for fast 1-step recording
-    setManualOilChangeMileage(hasMileage ? currMil : 0);
+    // Pre-fill Oil Service tab with the vehicle's single canonical lastChangeDate & mileage
+    setManualOilChangeMileage(hasMileage ? lastMil : 0);
     setManualCurrentMileage(hasMileage ? currMil : 0);
-    setManualOilChangeDate(todayStr);
-    setManualTripsSinceChange(0);
-    setManualOilBrand(v.lastOilBrand || 'بهران دیزل سوپر ۱۵W۴۰');
-    setManualOilFilter(v.oilFilterChanged !== false);
-    setManualAirFilter(v.airFilterChanged !== false);
-    setManualFuelFilter(!!v.fuelFilterChanged);
+    setManualOilChangeDate(evalStatus.lastChangeDate);
+    setManualTripsSinceChange(evalStatus.tripsDriven);
+    setManualOilBrand(normalizedV.lastOilBrand || 'بهران دیزل سوپر ۱۵W۴۰');
+    setManualOilFilter(normalizedV.oilFilterChanged !== false);
+    setManualAirFilter(normalizedV.airFilterChanged !== false);
+    setManualFuelFilter(!!normalizedV.fuelFilterChanged);
     setManualShopName('');
     setManualInvoiceNo('');
     setManualCost('');
-    setManualNotes(v.serviceNotes || '');
+    setManualNotes(normalizedV.serviceNotes || '');
 
     // Pre-fill Daily Usage tab
     setUsageMileage(hasMileage ? currMil : lastMil);
     setUsageTrips(evalStatus.tripsDriven);
-    setUsageDate(v.lastStatusDate || todayStr);
+    setUsageDate(evalStatus.lastChangeDate);
   };
 
   // Quick 1-click Service Completed (Today) — handles both Khaavar (non-mileage) and Mileage vehicles accurately
@@ -539,19 +541,25 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
         : `تعویض روغن دوره‌ای خاور و فیلترها در تاریخ ${todayStr} (صفر شدن کارکرد روز و سفر)`,
     };
 
-    const existingHistory: ServiceHistoryEntry[] = (v as any).serviceHistory || [];
+    const existingHistory: ServiceHistoryEntry[] = Array.isArray((v as any).serviceHistory)
+      ? (v as any).serviceHistory
+      : [];
+    const filteredHistory = existingHistory.filter((h) => h.date !== todayStr);
 
-    const updated: VehicleItem = {
-      ...v,
-      status: v.status === 'IN_MAINTENANCE' ? 'ACTIVE' : v.status,
-      lastChangeDate: todayStr,
-      lastChangeMileage: hasMileage ? currMil : 0,
-      currentMileage: hasMileage ? currMil : 0,
-      tripsSinceChange: 0,
-      oilFilterChanged: true,
-      airFilterChanged: true,
-      serviceHistory: [newHistoryItem, ...existingHistory],
-    };
+    const updated: VehicleItem = normalizeVehicleOilData(
+      {
+        ...v,
+        status: v.status === 'IN_MAINTENANCE' ? 'ACTIVE' : v.status,
+        lastChangeDate: todayStr,
+        lastChangeMileage: hasMileage ? currMil : 0,
+        currentMileage: hasMileage ? currMil : 0,
+        tripsSinceChange: 0,
+        oilFilterChanged: true,
+        airFilterChanged: true,
+        serviceHistory: [newHistoryItem, ...filteredHistory],
+      },
+      todayStr
+    );
 
     onUpdateVehicle(updated);
     if (manualOilVehicle?.id === v.id) {
@@ -573,13 +581,16 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
     if (!manualOilVehicle) return;
 
     const v = manualOilVehicle;
+    const evalStatus = evaluateVehicleServiceStatus(v, rules);
     const vRule = rules[v.vehicleType] || DEFAULT_SERVICE_RULES[v.vehicleType];
     const hasMileage = vRule ? vRule.hasMileage : true;
 
     const oilMil = hasMileage ? Number(manualOilChangeMileage) || 0 : 0;
     const currMil = hasMileage ? Math.max(oilMil, Number(manualCurrentMileage) || oilMil) : 0;
     const trips = Number(manualTripsSinceChange) || 0;
-    const date = manualOilChangeDate.trim() || todayStr;
+    const rawDate = manualOilChangeDate.trim() || evalStatus.lastChangeDate || todayStr;
+    const parsed = parseJalaaliDate(rawDate);
+    const date = parsed ? formatJalaaliDate(parsed.jy, parsed.jm, parsed.jd) : rawDate;
 
     const undoItem: OilUndoAction = {
       id: `undo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -616,22 +627,32 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
           : `ثبت تعویض روغن دوره‌ای در تاریخ ${date}`),
     };
 
-    const existingHistory: ServiceHistoryEntry[] = (v as any).serviceHistory || [];
+    const existingHistory: ServiceHistoryEntry[] = Array.isArray((v as any).serviceHistory)
+      ? (v as any).serviceHistory
+      : [];
+    // Replace top entry if user is editing the current oil change date, or prepend if recording a new date
+    const nextHistory =
+      existingHistory.length > 0
+        ? [newHistoryItem, ...existingHistory.slice(1).filter((h) => h.date !== date)]
+        : [newHistoryItem];
 
-    const updated: VehicleItem = {
-      ...v,
-      status: v.status === 'IN_MAINTENANCE' ? 'ACTIVE' : v.status,
-      currentMileage: currMil,
-      lastChangeMileage: oilMil,
-      lastChangeDate: date,
-      tripsSinceChange: trips,
-      lastOilBrand: manualOilBrand,
-      oilFilterChanged: manualOilFilter,
-      airFilterChanged: manualAirFilter,
-      fuelFilterChanged: manualFuelFilter,
-      serviceNotes: manualNotes,
-      serviceHistory: [newHistoryItem, ...existingHistory],
-    };
+    const updated: VehicleItem = normalizeVehicleOilData(
+      {
+        ...v,
+        status: v.status === 'IN_MAINTENANCE' ? 'ACTIVE' : v.status,
+        currentMileage: currMil,
+        lastChangeMileage: oilMil,
+        lastChangeDate: date,
+        tripsSinceChange: trips,
+        lastOilBrand: manualOilBrand,
+        oilFilterChanged: manualOilFilter,
+        airFilterChanged: manualAirFilter,
+        fuelFilterChanged: manualFuelFilter,
+        serviceNotes: manualNotes,
+        serviceHistory: nextHistory,
+      },
+      date
+    );
 
     onUpdateVehicle(updated);
     setManualOilVehicle(null);
@@ -639,14 +660,14 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
     if (showToast) {
       showToast(
         hasMileage
-          ? `تعویض روغن خودرو کد ${toFaDigits(v.code)} روی کیلومتر ${toFaDigits(oilMil.toLocaleString())} ثبت شد.`
-          : `تعویض روغن خاور کد ${toFaDigits(v.code)} در تاریخ ${toFaDigits(date)} با موفقیت ثبت شد.`,
+          ? `تاریخ تعویض روغن (${toFaDigits(date)}) و کیلومتر خودرو کد ${toFaDigits(v.code)} ثبت شد.`
+          : `تاریخ تعویض روغن خاور کد ${toFaDigits(v.code)} (${toFaDigits(date)}) با موفقیت ذخیره شد.`,
         'success'
       );
     }
   };
 
-  // Save general mileage / trips usage update
+  // Save general mileage / trips usage update (without altering or creating a conflicting oil change date)
   const handleSaveUsage = (e: FormEvent) => {
     e.preventDefault();
     if (!manualOilVehicle) return;
@@ -654,7 +675,6 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
     const v = manualOilVehicle;
     const vRule = rules[v.vehicleType] || DEFAULT_SERVICE_RULES[v.vehicleType];
     const hasMileage = vRule ? vRule.hasMileage : true;
-    const date = usageDate || todayStr;
 
     const undoItem: OilUndoAction = {
       id: `undo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -671,18 +691,17 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
     };
     setUndoStack((prev) => [undoItem, ...prev.slice(0, 19)]);
 
-    const updated: VehicleItem = {
+    const updated: VehicleItem = normalizeVehicleOilData({
       ...v,
       currentMileage: hasMileage ? Number(usageMileage) : v.currentMileage,
       tripsSinceChange: Number(usageTrips),
-      lastStatusDate: date,
-    };
+    });
 
     onUpdateVehicle(updated);
     setManualOilVehicle(null);
     if (showToast) {
       showToast(
-        `کارکرد جاری خودرو کد ${toFaDigits(v.code)} در تاریخ ${toFaDigits(date)} به‌روزرسانی شد.`,
+        `کارکرد جاری خودرو کد ${toFaDigits(v.code)} با موفقیت به‌روزرسانی شد.`,
         'success'
       );
     }
@@ -2023,16 +2042,34 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
                     </div>
                   )}
 
-                  {/* Date & Trips Inputs */}
+                  {/* Date & Trips Inputs (Single Canonical Last Oil Change Date) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
+                    <div className="space-y-1.5">
                       <PersianDatePicker
-                        label="تاریخ انجام تعویض روغن (شمسی)"
+                        label="تاریخ آخرین تعویض روغن (مرجع یکتای خودرو)"
                         required
                         value={manualOilChangeDate}
                         onChange={(val) => setManualOilChangeDate(val)}
                         placeholder="انتخاب تاریخ تعویض روغن..."
                       />
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-slate-400">
+                          تاریخ ثبت‌شده فعلی: <strong className="text-sky-300 font-mono">{toFaDigits(evalStatus.lastChangeDate)}</strong>
+                        </span>
+                        {manualOilChangeDate !== todayStr && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setManualOilChangeDate(todayStr);
+                              if (hasMileage) setManualOilChangeMileage(manualCurrentMileage);
+                              setManualTripsSinceChange(0);
+                            }}
+                            className="text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer"
+                          >
+                            تنظیم به امروز ({toFaDigits(todayStr)})
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -2141,16 +2178,14 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
               {/* MODE 2: DAILY USAGE / ODOMETER & TRIPS UPDATE */}
               {serviceModalTab === 'USAGE' && (
                 <form onSubmit={handleSaveUsage} className="p-4 sm:p-5 space-y-4 text-xs overflow-y-auto flex-1">
-                  <div className="bg-[#0a101f] border border-[#1f2c45] rounded-xl p-3 text-slate-300 leading-relaxed">
-                    در این بخش فقط <strong>کارکرد جاری خودرو</strong> (بدون ثبت تعویض روغن جدید) به‌روزرسانی می‌شود.
+                  <div className="bg-[#0a101f] border border-[#1f2c45] rounded-xl p-3 flex items-center justify-between flex-wrap gap-2 text-slate-300 leading-relaxed">
+                    <span>
+                      در این بخش فقط <strong>کارکرد جاری خودرو</strong> (بدون تغییر تاریخ آخرین تعویض روغن) به‌روزرسانی می‌شود.
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-300 font-mono font-bold text-[11px]">
+                      آخرین تعویض روغن: {toFaDigits(evalStatus.lastChangeDate)}
+                    </span>
                   </div>
-
-                  <PersianDatePicker
-                    label="تاریخ ثبت کارکرد (شمسی)"
-                    required
-                    value={usageDate}
-                    onChange={(val) => setUsageDate(val)}
-                  />
 
                   {hasMileage && (
                     <div>
@@ -2220,26 +2255,40 @@ export const OilServiceManagementView: FC<OilServiceManagementViewProps> = ({
                       هنوز سابقه سرویسی در تاریخچه این خودرو ثبت نشده است.
                     </div>
                   ) : (
-                    ((manualOilVehicle as any).serviceHistory || []).map((h: ServiceHistoryEntry, idx: number) => (
-                      <div key={idx} className="p-3.5 bg-[#0a101f] rounded-xl border border-[#1f2c45] space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-emerald-400 font-mono text-sm">{toFaDigits(h.date)}</span>
-                          {hasMileage && h.mileage ? (
-                            <span className="text-sky-300 font-mono font-bold">
-                              کیلومتر: {toFaDigits(h.mileage.toLocaleString())} km
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 text-[11px]">سرویس دوره‌ای</span>
+                    ((manualOilVehicle as any).serviceHistory || []).map((h: ServiceHistoryEntry, idx: number) => {
+                      const displayDate = idx === 0 ? evalStatus.lastChangeDate : h.date;
+                      return (
+                        <div key={idx} className="p-3.5 bg-[#0a101f] rounded-xl border border-[#1f2c45] space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-emerald-400 font-mono text-sm">
+                                {toFaDigits(displayDate)}
+                              </span>
+                              {idx === 0 && (
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                                  آخرین تعویض روغن فعلی
+                                </span>
+                              )}
+                            </div>
+                            {hasMileage && h.mileage ? (
+                              <span className="text-sky-300 font-mono font-bold">
+                                کیلومتر: {toFaDigits(h.mileage.toLocaleString())} km
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-[11px]">سرویس دوره‌ای</span>
+                            )}
+                          </div>
+                          <div className="text-slate-300 text-[11px]">
+                            روغن: {h.oilBrand || 'بهران دیزل ۱۵W۴۰'}
+                            {h.oilFilterChanged ? ' • فیلتر روغن' : ''}
+                            {h.airFilterChanged ? ' • فیلتر هوا' : ''}
+                          </div>
+                          {h.notes && (
+                            <div className="text-slate-400 text-[11px] pt-1 border-t border-slate-800/80">{h.notes}</div>
                           )}
                         </div>
-                        <div className="text-slate-300 text-[11px]">
-                          روغن: {h.oilBrand || 'بهران دیزل ۱۵W۴۰'}
-                          {h.oilFilterChanged ? ' • فیلتر روغن' : ''}
-                          {h.airFilterChanged ? ' • فیلتر هوا' : ''}
-                        </div>
-                        {h.notes && <div className="text-slate-400 text-[11px] pt-1 border-t border-slate-800/80">{h.notes}</div>}
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               )}

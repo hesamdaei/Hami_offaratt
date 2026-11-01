@@ -12,7 +12,7 @@ import { getStoredPrintSettings, PrintWatermarkSettings } from '../utils/printSe
 import { LaserPrintWatermark } from './LaserPrintWatermark';
 import { LaserPrintControlToolbar } from './LaserPrintControlToolbar';
 import { IranianPlate } from './IranianPlate';
-import { getStoredServiceRules } from '../utils/maintenanceStandardsConfig';
+import { getStoredServiceRules, evaluateVehicleServiceStatus } from '../utils/maintenanceStandardsConfig';
 
 interface VehicleSpecPrintModalProps {
   vehicle: VehicleItem;
@@ -39,18 +39,11 @@ export const VehicleSpecPrintModal: FC<VehicleSpecPrintModalProps> = ({
   const insuranceAlert = checkVehicleInsurance(vehicle);
   const typeLabel = VEHICLE_TYPE_NAMES[vehicle.vehicleType] || vehicle.model;
 
-  // Safe mileage calculations with full fallback support based on configured fleet standards
-  const currentMileage = (vehicle as any).currentKm ?? vehicle.currentMileage ?? 0;
-  const lastServiceMileage =
-    (vehicle as any).lastServiceKm ??
-    (vehicle as any).lastOilChangeKm ??
-    vehicle.lastChangeMileage ??
-    Math.max(0, currentMileage - 4200);
-
   const storedRules = getStoredServiceRules();
-  const vRule = storedRules[vehicle.vehicleType] || storedRules.HYUNDAI || { maxMileage: 5000 };
-  const ceilingKm = vRule.maxMileage || 5000;
-  const nextServiceMileage = (vehicle as any).nextServiceKm ?? (lastServiceMileage + ceilingKm);
+  const evalService = evaluateVehicleServiceStatus(vehicle, storedRules);
+  const currentMileage = evalService.currentMileage;
+  const lastServiceMileage = evalService.lastChangeMileage;
+  const nextServiceMileage = evalService.nextTargetKm;
   const modelYear = vehicle.modelYear || (vehicle as any).year || 1398;
   const capacityText = vehicle.capacityTons
     ? `${toFaDigits(vehicle.capacityTons)} تن`
@@ -218,20 +211,26 @@ export const VehicleSpecPrintModal: FC<VehicleSpecPrintModalProps> = ({
                 </div>
                 <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-center">
                   <div className="border border-black">
-                    <div className="laser-dot-header py-1 font-bold">آخرین تعویض روغن</div>
-                    <div className="py-1.5 font-mono font-bold">{toFaDigits(lastServiceMileage.toLocaleString('fa-IR'))} km</div>
+                    <div className="laser-dot-header py-1 font-bold">تاریخ آخرین تعویض روغن</div>
+                    <div className="py-1.5 font-mono font-bold">{toFaDigits(evalService.lastChangeDate)}</div>
                   </div>
                   <div className="border border-black">
-                    <div className="laser-dot-header py-1 font-bold">سرویس دوره بعدی</div>
-                    <div className="py-1.5 font-mono font-bold">{toFaDigits(nextServiceMileage.toLocaleString('fa-IR'))} km</div>
+                    <div className="laser-dot-header py-1 font-bold">سررسید زمانی بعدی</div>
+                    <div className="py-1.5 font-mono font-bold">{toFaDigits(evalService.nextDueDateStr)}</div>
                   </div>
                   <div className="border border-black">
-                    <div className="laser-dot-header py-1 font-bold">کیلومتر کارکرد فعلی</div>
-                    <div className="py-1.5 font-mono font-bold">{toFaDigits(currentMileage.toLocaleString('fa-IR'))} km</div>
+                    <div className="laser-dot-header py-1 font-bold">
+                      {evalService.hasMileage ? 'کیلومتر کارکرد فعلی' : 'کارکرد سفر از تعویض'}
+                    </div>
+                    <div className="py-1.5 font-mono font-bold">
+                      {evalService.hasMileage
+                        ? `${toFaDigits(currentMileage.toLocaleString('fa-IR'))} km`
+                        : `${toFaDigits(evalService.tripsDriven)} از ${toFaDigits(evalService.maxTrips)} سفر`}
+                    </div>
                   </div>
                   <div className="border border-black font-bold">
                     <div className="laser-dot-header py-1">وضعیت سرویس</div>
-                    <div className="py-1.5">{currentMileage >= nextServiceMileage ? 'نیاز فوری به تعویض' : 'عادی و در محدوده'}</div>
+                    <div className="py-1.5">{toFaDigits(evalService.statusText)}</div>
                   </div>
                 </div>
               </div>

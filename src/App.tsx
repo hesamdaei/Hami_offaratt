@@ -78,6 +78,7 @@ import { UnifiedOrdersAndReservationHub } from './components/UnifiedOrdersAndRes
 import { CargoTrackingCustomerPortal } from './components/CargoTrackingCustomerPortal';
 import { ReservationGuideAndCalculatorView } from './components/ReservationGuideAndCalculatorView';
 import { INITIAL_ORDERS, OrderItem } from './utils/ordersData';
+import { normalizeVehicleOilData } from './utils/maintenanceStandardsConfig';
 
 const STORAGE_KEY_DRIVERS = 'hamibar_drivers_list_v1';
 const STORAGE_KEY_RECORDS = 'hamibar_attendance_records_v1';
@@ -230,25 +231,27 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
     return Object.keys(DECODED_BACKUP.records).length > 0 ? DECODED_BACKUP.records : getInitialAttendanceRecords();
   });
 
-  // Vehicles dataset state (for Oil Service tracking)
+  // Vehicles dataset state (for Oil Service tracking - normalized to a single canonical lastChangeDate)
   const [vehicles, setVehicles] = useState<VehicleItem[]>(() => {
     try {
       const isPdfSynced = localStorage.getItem(PDF_SYNC_KEY);
       if (isPdfSynced !== 'true') {
-        return DECODED_BACKUP.vehicles.length > 0 ? DECODED_BACKUP.vehicles : INITIAL_VEHICLES;
+        const list = DECODED_BACKUP.vehicles.length > 0 ? DECODED_BACKUP.vehicles : INITIAL_VEHICLES;
+        return list.map((v) => normalizeVehicleOilData(v));
       }
       const isApplied = localStorage.getItem(BACKUP_APPLIED_KEY);
       const saved = localStorage.getItem(STORAGE_KEY_VEHICLES);
       if (isApplied === 'true' && saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= 20) {
-          return parsed;
+          return parsed.map((v: VehicleItem) => normalizeVehicleOilData(v));
         }
       }
     } catch {
       // ignore
     }
-    return DECODED_BACKUP.vehicles.length > 0 ? DECODED_BACKUP.vehicles : INITIAL_VEHICLES;
+    const fallback = DECODED_BACKUP.vehicles.length > 0 ? DECODED_BACKUP.vehicles : INITIAL_VEHICLES;
+    return fallback.map((v) => normalizeVehicleOilData(v));
   });
 
   // Driver Directory (Dossier) dataset state
@@ -1674,8 +1677,9 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
     showToast(`پرونده راننده "${item.name}" ویرایش شد.`, 'success');
   };
 
-  // Vehicle Update (Oil service)
-  const handleUpdateVehicle = (updated: VehicleItem) => {
+  // Vehicle Update (Oil service - single canonical lastChangeDate)
+  const handleUpdateVehicle = (rawUpdated: VehicleItem) => {
+    const updated = normalizeVehicleOilData(rawUpdated, rawUpdated.lastChangeDate);
     const oldVehicle = vehicles.find((v) => v.id === updated.id);
     setVehicles((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
     if (currentUser) {
@@ -1683,12 +1687,12 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
         action: 'OIL_SERVICE_UPDATE',
         module: 'OIL_SERVICE',
         title: `سرویس و نگهداری خودرو ${updated.plateNumber || String(updated.code)}`,
-        description: `اطلاعات فنی و سرویس دوره‌ای خودرو «${updated.plateNumber || String(updated.code)}» توسط کاربر ثبت گردید.`,
+        description: `اطلاعات فنی و سرویس دوره‌ای خودرو «${updated.plateNumber || String(updated.code)}» (تاریخ تعویض روغن: ${toFaDigits(updated.lastChangeDate)}) ثبت گردید.`,
         targetId: updated.id,
         targetName: String(updated.plateNumber || updated.code),
         severity: 'SUCCESS',
-        previousValue: (oldVehicle as any)?.currentMileage ? `کیلومتر: ${toFaDigits((oldVehicle as any).currentMileage)}` : undefined,
-        newValue: (updated as any)?.currentMileage ? `کیلومتر: ${toFaDigits((updated as any).currentMileage)}` : undefined,
+        previousValue: oldVehicle?.lastChangeDate ? `تاریخ قبلی: ${toFaDigits(oldVehicle.lastChangeDate)}` : undefined,
+        newValue: updated.lastChangeDate ? `تاریخ جدید: ${toFaDigits(updated.lastChangeDate)}` : undefined,
       });
     }
     showToast(`اطلاعات خودروی "${updated.plateNumber || updated.code}" با موفقیت به‌روزرسانی شد.`, 'success');
@@ -2260,6 +2264,8 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             <div className="animate-in fade-in duration-150">
               <OperationsDashboardView
                 vehicles={vehicles}
+                drivers={drivers}
+                records={records}
                 onNavigateToTab={handleTabChange}
               />
             </div>

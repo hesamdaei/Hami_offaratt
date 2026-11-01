@@ -1,6 +1,7 @@
 import { Driver, AttendanceRecords, StaffMember } from '../types';
 import { VehicleItem, DriverDirectoryItem } from './fleetSeedData';
 import { ServiceRule } from '../components/OilServiceManagementView';
+import { normalizeVehicleOilData } from './maintenanceStandardsConfig';
 import latestBackup from '../data/latestBackup.json';
 
 export interface DecodedBackupResult {
@@ -16,20 +17,23 @@ export interface DecodedBackupResult {
 // Raw user backup payload reference for data integrity audit
 export const RAW_BACKUP_PAYLOAD = {
   ...latestBackup.data,
-  vehicles: (latestBackup.data.vehicles || []).map((v: any) => ({
-    id: v.id,
-    code: String(v.code || ''),
-    type: v.vehicleType || 'CAR',
-    plate: v.plateNumber || '',
-    insuranceExpiry: v.insuranceExpiry || '',
-    inspectionExpiry: v.inspectionExpiry || '',
-    bodyInsExpiry: v.bodyInsExpiry || '',
-    currentMileage: v.currentMileage || 0,
-    lastChangeMileage: v.lastChangeMileage || 0,
-    lastChangeDate: v.lastChangeDate || '',
-    tripsSinceChange: v.tripsSinceChange || 0,
-    serviceHistory: v.serviceHistory || [],
-  })),
+  vehicles: (latestBackup.data.vehicles || []).map((v: any) => {
+    const norm = normalizeVehicleOilData(v);
+    return {
+      id: norm.id,
+      code: String(norm.code || ''),
+      type: norm.vehicleType || 'CAR',
+      plate: norm.plateNumber || '',
+      insuranceExpiry: norm.insuranceExpiry || '',
+      inspectionExpiry: norm.inspectionExpiry || '',
+      bodyInsExpiry: norm.bodyInsExpiry || '',
+      currentMileage: norm.currentMileage || 0,
+      lastChangeMileage: norm.lastChangeMileage || 0,
+      lastChangeDate: norm.lastChangeDate || '',
+      tripsSinceChange: norm.tripsSinceChange || 0,
+      serviceHistory: norm.serviceHistory || [],
+    };
+  }),
 };
 
 /**
@@ -38,8 +42,9 @@ export const RAW_BACKUP_PAYLOAD = {
 export function decodeBackupData(payload: any = latestBackup): DecodedBackupResult {
   const src = payload?.data || payload;
   if (src && (Array.isArray(src.vehicles) || Array.isArray(src.drivers))) {
+    const rawVehicles = (Array.isArray(src.vehicles) ? src.vehicles : []) as VehicleItem[];
     return {
-      vehicles: (Array.isArray(src.vehicles) ? src.vehicles : []) as VehicleItem[],
+      vehicles: rawVehicles.map((v) => normalizeVehicleOilData(v)),
       drivers: (Array.isArray(src.drivers) ? src.drivers : []) as Driver[],
       driverDirectory: (Array.isArray(src.driverDirectory) ? src.driverDirectory : []) as DriverDirectoryItem[],
       records: (src.records || {}) as AttendanceRecords,
@@ -50,8 +55,9 @@ export function decodeBackupData(payload: any = latestBackup): DecodedBackupResu
   }
 
   // Fallback to latest backup
+  const fallbackVehicles = (latestBackup.data.vehicles as unknown as VehicleItem[]) || [];
   return {
-    vehicles: latestBackup.data.vehicles as unknown as VehicleItem[],
+    vehicles: fallbackVehicles.map((v) => normalizeVehicleOilData(v)),
     drivers: latestBackup.data.drivers as unknown as Driver[],
     driverDirectory: latestBackup.data.driverDirectory as unknown as DriverDirectoryItem[],
     records: latestBackup.data.records as unknown as AttendanceRecords,

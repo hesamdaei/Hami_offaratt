@@ -42,6 +42,8 @@ import {
   getStoredMaintenanceItems,
   calculateMileageStatus,
   evaluateVehicleServiceStatus,
+  normalizeVehicleOilData,
+  getCanonicalLastOilChangeDate,
   DEFAULT_SERVICE_RULES,
   MaintenanceItemStandard,
   ServiceRule,
@@ -76,7 +78,7 @@ export const VehicleSpecificationsModal: FC<VehicleSpecificationsModalProps> = (
 
   useEffect(() => {
     if (vehicle) {
-      setFormData({ ...vehicle });
+      setFormData(normalizeVehicleOilData({ ...vehicle }));
       setIsEditing(false);
     }
   }, [vehicle]);
@@ -91,23 +93,13 @@ export const VehicleSpecificationsModal: FC<VehicleSpecificationsModalProps> = (
 
   const handleSave = (e: FormEvent) => {
     e.preventDefault();
-    const updatedHistory = Array.isArray(formData.serviceHistory || vehicle.serviceHistory)
-      ? [...(formData.serviceHistory || vehicle.serviceHistory || [])]
-      : [];
-
-    if (formData.lastChangeDate && updatedHistory.length > 0 && updatedHistory[0]) {
-      updatedHistory[0] = {
-        ...updatedHistory[0],
-        date: formData.lastChangeDate,
-      };
-    }
-
-    const updated: VehicleItem = {
+    const mergedRaw = {
       ...vehicle,
       ...formData,
       code: Number(formData.code) || vehicle.code,
-      serviceHistory: updatedHistory,
     } as VehicleItem;
+
+    const updated: VehicleItem = normalizeVehicleOilData(mergedRaw, formData.lastChangeDate);
 
     if (formData.driverName !== vehicle.driverName) {
       if (onAssignDriverToVehicle) {
@@ -116,6 +108,7 @@ export const VehicleSpecificationsModal: FC<VehicleSpecificationsModalProps> = (
     }
 
     onUpdateVehicle(updated);
+    setFormData(updated);
     setIsEditing(false);
     if (showToast) {
       showToast(`مشخصات خودرو کد ${toFaDigits(updated.code)} با موفقیت ذخیره و به‌روزرسانی شد.`, 'success');
@@ -241,7 +234,9 @@ export const VehicleSpecificationsModal: FC<VehicleSpecificationsModalProps> = (
             {(formData.vehicleType || vehicle.vehicleType) === 'KHAAVAR' ? (
               <div className="flex items-center gap-1.5 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800">
                 <span className="text-slate-400">آخرین سرویس:</span>
-                <strong className="text-sky-300 font-bold">{toFaDigits(formData.lastChangeDate || '۱۴۰۵/۰۶/۰۱')}</strong>
+                <strong className="text-sky-300 font-bold">
+                  {toFaDigits(getCanonicalLastOilChangeDate({ ...vehicle, ...formData }))}
+                </strong>
               </div>
             ) : (
               <div className="flex items-center gap-1.5 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-800">
@@ -840,14 +835,17 @@ export const VehicleSpecificationsModal: FC<VehicleSpecificationsModalProps> = (
                   const handleQuickServiceInModal = () => {
                     const todayInfo = getTodayJalaali();
                     const todayStr = `${todayInfo.jy}/${String(todayInfo.jm).padStart(2, '0')}/${String(todayInfo.jd).padStart(2, '0')}`;
-                    const updatedVehicle: VehicleItem = {
-                      ...vehicle,
-                      ...formData,
-                      lastChangeDate: todayStr,
-                      lastChangeMileage: vRule.hasMileage ? curr : 0,
-                      currentMileage: vRule.hasMileage ? curr : 0,
-                      tripsSinceChange: 0,
-                    } as VehicleItem;
+                    const updatedVehicle: VehicleItem = normalizeVehicleOilData(
+                      {
+                        ...vehicle,
+                        ...formData,
+                        lastChangeDate: todayStr,
+                        lastChangeMileage: vRule.hasMileage ? curr : 0,
+                        currentMileage: vRule.hasMileage ? curr : 0,
+                        tripsSinceChange: 0,
+                      } as VehicleItem,
+                      todayStr
+                    );
                     setFormData(updatedVehicle);
                     onUpdateVehicle(updatedVehicle);
                     showToast?.(
