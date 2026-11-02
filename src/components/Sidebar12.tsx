@@ -150,6 +150,8 @@ export const Sidebar12: FC<Sidebar12Props> = ({
         return totalDrivers > 0 ? { text: toFaDigits(totalDrivers) } : null;
       case 'STAFF':
         return totalStaff > 0 ? { text: toFaDigits(totalStaff) } : null;
+      case 'PHONEBOOK':
+        return { text: 'پاپ‌آپ' };
       default:
         return null;
     }

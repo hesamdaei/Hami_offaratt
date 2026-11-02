@@ -1,4 +1,4 @@
-import { FC, useState, useEffect, useCallback } from 'react';
+import React, { FC, useState, useEffect, useCallback, useRef } from 'react';
 import {
   Phone,
   PhoneOff,
@@ -9,6 +9,10 @@ import {
   Settings,
   User,
   Zap,
+  GripHorizontal,
+  Minimize2,
+  Maximize2,
+  PhoneCall,
 } from 'lucide-react';
 import { VoipConfig } from '../types/voip';
 import {
@@ -51,11 +55,25 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [copied, setCopied] = useState<boolean>(false);
   const [isHangingUp, setIsHangingUp] = useState<boolean>(false);
+  const [isMinimized, setIsMinimized] = useState<boolean>(false);
+
+  // Draggable separate popup window state
+  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; origX: number; origY: number }>({
+    startX: 0,
+    startY: 0,
+    origX: 0,
+    origY: 0,
+  });
+
+  // Auto-dial defaults to true so clicking "Call" immediately starts the call in this separate popup
   const [autoDialEnabled, setAutoDialEnabled] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY_VOIP_AUTODIAL) === 'true';
+      const saved = localStorage.getItem(STORAGE_KEY_VOIP_AUTODIAL);
+      return saved === null ? true : saved === 'true';
     } catch {
-      return false;
+      return true;
     }
   });
 
@@ -124,7 +142,9 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
       setStatusMessage('آماده برقراری تماس');
       setElapsedSeconds(0);
       setIsHangingUp(false);
+      setIsMinimized(false);
       setCopied(false);
+      setPosition({ x: 0, y: 0 });
 
       if (autoDialEnabled && sanitizePhoneNumber(phoneNumber, '')) {
         const timer = setTimeout(() => {
@@ -134,6 +154,39 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
       }
     }
   }, [isOpen, phoneNumber, currentUser?.id]);
+
+  // Window Drag Handlers
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragStartRef.current.startX;
+      const dy = e.clientY - dragStartRef.current.startY;
+      setPosition({
+        x: dragStartRef.current.origX + dx,
+        y: dragStartRef.current.origY + dy,
+      });
+    };
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  const handleStartDrag = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    setIsDragging(true);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: position.x,
+      origY: position.y,
+    };
+  };
 
   // Call duration timer when connected
   useEffect(() => {
@@ -228,25 +281,123 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
       ? `وب‌هوک (داخلی ${toFaDigits(config.operatorExtension || '101')})`
       : `سافت‌فون (${(config.softphoneProtocol || 'tel').toUpperCase()})`;
 
+  // Minimized Floating Call Pill (separate from app environment at top-left/bottom-left)
+  if (isMinimized) {
+    return (
+      <div
+        dir="rtl"
+        style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}
+        className="fixed bottom-5 left-5 z-[165] w-80 bg-gradient-to-r from-[#0e192d] via-[#111f38] to-[#0a1222] border-2 border-emerald-500/50 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3 text-slate-100 flex items-center justify-between gap-2 ring-1 ring-white/15 animate-fadeIn"
+      >
+        <div
+          onMouseDown={handleStartDrag}
+          className="flex items-center gap-2.5 min-w-0 flex-1 cursor-move select-none"
+          title="پنجره شناور تماس (برای جابجایی بکشید)"
+        >
+          <div className="relative w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300 shrink-0">
+            <PhoneCall className="w-4 h-4 animate-pulse" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-black text-white truncate">{recipientName}</div>
+            <div className="flex items-center gap-1.5 text-[10px] text-emerald-300 font-mono">
+              <span>{toFaDigits(effectiveDialNumber)}</span>
+              {callState === 'CONNECTED' && (
+                <span className="px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-500/40">
+                  {toFaDigits(formatDuration(elapsedSeconds))}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsMinimized(false)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition cursor-pointer"
+            title="باز کردن کامل پنجره پاپ‌آپ تماس"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            disabled={isHangingUp}
+            onClick={handleHangupAndRemovePopup}
+            className="px-2.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-black flex items-center gap-1 shadow-md transition cursor-pointer"
+            title="قطع تماس و بستن پاپ‌آپ"
+          >
+            <PhoneOff className="w-3.5 h-3.5" />
+            <span>قطع</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-3 animate-fadeIn"
+      className="fixed inset-0 z-[165] pointer-events-none flex items-center justify-center p-3 animate-fadeIn"
       dir="rtl"
-      onClick={() => {
-        if (callState === 'CALLING' || callState === 'CONNECTED') {
-          handleHangupAndRemovePopup();
-        } else {
-          onClose();
-        }
-      }}
     >
       <div
-        className="relative bg-gradient-to-b from-[#131f38] via-[#0d1629] to-[#080e1c] border border-slate-700/80 rounded-3xl w-full max-w-[340px] shadow-[0_25px_70px_-12px_rgba(0,0,0,0.9)] overflow-hidden text-slate-100 p-5 space-y-3.5 ring-1 ring-white/10"
+        style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}
+        className="pointer-events-auto relative bg-gradient-to-b from-[#131f38] via-[#0d1629] to-[#080e1c] border-2 border-cyan-500/40 rounded-3xl w-full max-w-[355px] shadow-[0_30px_90px_rgba(0,0,0,0.92)] overflow-hidden text-slate-100 ring-1 ring-white/15"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Separate Floating Window Title Bar (Draggable) */}
+        <div
+          onMouseDown={handleStartDrag}
+          className="relative z-10 bg-[#070d19]/95 border-b border-slate-800 px-3.5 py-2.5 flex items-center justify-between cursor-move select-none"
+          title="پنجره پاپ‌آپ مستقل تماس — برای جابجایی پنجره روی صفحه بکشید"
+        >
+          <div className="flex items-center gap-2">
+            <GripHorizontal className="w-4 h-4 text-slate-500 shrink-0" />
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] font-black text-slate-200">
+              پنجره پاپ‌آپ تماس تلفنی
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-blue-600/30 text-slate-300 hover:text-white border border-slate-700/70 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                title="تنظیمات سانترال و داخلی تلفن شما"
+              >
+                <Settings className="w-3 h-3 text-cyan-400" />
+                <span>داخلی {toFaDigits(config.operatorExtension || '101')}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsMinimized(true)}
+              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/60 transition cursor-pointer"
+              title="کوچک‌سازی پنجره تماس در گوشه تصویر"
+            >
+              <Minimize2 className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (callState === 'CALLING' || callState === 'CONNECTED') {
+                  handleHangupAndRemovePopup();
+                } else {
+                  onClose();
+                }
+              }}
+              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-500/25 text-slate-400 hover:text-rose-300 border border-slate-700/60 hover:border-rose-500/40 transition cursor-pointer"
+              title="قطع تماس و حذف پنجره پاپ‌آپ (Esc)"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
         {/* Ambient Status Glow */}
         <div
-          className={`pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-32 rounded-full blur-2xl opacity-35 transition-colors duration-500 ${
+          className={`pointer-events-none absolute top-6 left-1/2 -translate-x-1/2 w-48 h-32 rounded-full blur-2xl opacity-35 transition-colors duration-500 ${
             callState === 'CONNECTED'
               ? 'bg-emerald-500'
               : callState === 'CALLING'
@@ -257,24 +408,25 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
           }`}
         />
 
-        {/* Top Bar: Settings, Auto-Dial toggle & Close Button */}
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            {onOpenSettings && (
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className="px-2 py-1 rounded-xl bg-slate-800/80 hover:bg-blue-600/30 text-slate-300 hover:text-white border border-slate-700/70 hover:border-blue-500/40 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
-                title="تنظیمات سانترال و داخلی تلفن شما"
-              >
-                <Settings className="w-3.5 h-3.5 text-cyan-400" />
-                <span>داخلی {toFaDigits(config.operatorExtension || '101')}</span>
-              </button>
-            )}
+        {/* Window Body */}
+        <div className="p-4 space-y-3.5 relative z-10">
+          {/* Active User PBX Profile + Auto-Dial Strip */}
+          <div className="flex items-center justify-between gap-1.5">
+            <div
+              onClick={onOpenSettings}
+              className="flex-1 flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-cyan-500/40 text-[10px] text-slate-300 cursor-pointer transition min-w-0"
+              title="برای تغییر حالت اتصال سانترال یا شماره داخلی کلیک کنید"
+            >
+              <span className="truncate font-semibold text-slate-400">
+                اپراتور: <strong className="text-slate-200">{currentUser?.fullName || 'کاربر جاری'}</strong>
+              </span>
+              <span className="font-mono font-bold text-cyan-300 shrink-0">{modeLabel}</span>
+            </div>
+
             <button
               type="button"
               onClick={handleToggleAutoDial}
-              className={`px-2 py-1 rounded-xl text-[10px] font-bold border flex items-center gap-1 transition cursor-pointer ${
+              className={`px-2 py-1.5 rounded-xl text-[10px] font-bold border flex items-center gap-1 transition cursor-pointer shrink-0 ${
                 autoDialEnabled
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                   : 'bg-slate-800/70 text-slate-400 border-slate-700/60 hover:text-slate-200'
@@ -286,187 +438,161 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (callState === 'CALLING' || callState === 'CONNECTED') {
-                handleHangupAndRemovePopup();
-              } else {
-                onClose();
-              }
-            }}
-            className="p-1.5 rounded-xl bg-slate-800/70 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700/60 hover:border-rose-500/40 transition cursor-pointer"
-            title="بستن پنجره تماس (Esc)"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Active User PBX Profile Strip */}
-        <div
-          onClick={onOpenSettings}
-          className="relative z-10 flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-cyan-500/40 text-[10px] text-slate-300 cursor-pointer transition"
-          title="برای تغییر حالت اتصال سانترال یا شماره داخلی کلیک کنید"
-        >
-          <span className="truncate font-semibold text-slate-400">
-            اپراتور: <strong className="text-slate-200">{currentUser?.fullName || 'کاربر جاری'}</strong>
-          </span>
-          <span className="font-mono font-bold text-cyan-300 shrink-0">{modeLabel}</span>
-        </div>
-
-        {/* 1. Avatar Ring + Driver/Contact Info + Phone Number */}
-        <div className="relative text-center pt-0.5 flex flex-col items-center">
-          <div className="relative mb-2.5">
-            {(callState === 'CALLING' || callState === 'CONNECTED') && (
-              <span
-                className={`absolute -inset-2 rounded-full animate-ping opacity-30 ${
-                  callState === 'CONNECTED' ? 'bg-emerald-400' : 'bg-sky-400'
+          {/* 1. Avatar Ring + Driver/Contact Info + Phone Number */}
+          <div className="relative text-center pt-0.5 flex flex-col items-center">
+            <div className="relative mb-2.5">
+              {(callState === 'CALLING' || callState === 'CONNECTED') && (
+                <span
+                  className={`absolute -inset-2 rounded-full animate-ping opacity-30 ${
+                    callState === 'CONNECTED' ? 'bg-emerald-400' : 'bg-sky-400'
+                  }`}
+                />
+              )}
+              <div
+                className={`relative w-14 h-14 rounded-2xl flex items-center justify-center border shadow-lg transition-all duration-300 ${
+                  callState === 'CONNECTED'
+                    ? 'bg-gradient-to-br from-emerald-500/30 to-teal-600/30 border-emerald-400/60 text-emerald-300 shadow-emerald-500/25'
+                    : callState === 'CALLING'
+                    ? 'bg-gradient-to-br from-sky-500/30 to-blue-600/30 border-sky-400/60 text-sky-300 shadow-sky-500/25'
+                    : callState === 'ERROR'
+                    ? 'bg-gradient-to-br from-rose-500/30 to-red-600/30 border-rose-400/60 text-rose-300'
+                    : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 text-emerald-400'
                 }`}
-              />
+              >
+                <Phone className={`w-6 h-6 ${callState === 'CALLING' ? 'animate-bounce' : ''}`} />
+              </div>
+            </div>
+
+            <h3 className="text-base font-black text-white truncate max-w-[280px] tracking-tight">
+              {recipientName || 'مخاطب بدون نام'}
+            </h3>
+
+            {recipientRole && (
+              <div className="mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/70 text-[11px] font-bold text-slate-300 max-w-[280px] truncate">
+                <User className="w-3 h-3 text-cyan-400 shrink-0" />
+                <span className="truncate">{recipientRole}</span>
+              </div>
             )}
-            <div
-              className={`relative w-14 h-14 rounded-2xl flex items-center justify-center border shadow-lg transition-all duration-300 ${
-                callState === 'CONNECTED'
-                  ? 'bg-gradient-to-br from-emerald-500/30 to-teal-600/30 border-emerald-400/60 text-emerald-300 shadow-emerald-500/25'
-                  : callState === 'CALLING'
-                  ? 'bg-gradient-to-br from-sky-500/30 to-blue-600/30 border-sky-400/60 text-sky-300 shadow-sky-500/25'
-                  : callState === 'ERROR'
-                  ? 'bg-gradient-to-br from-rose-500/30 to-red-600/30 border-rose-400/60 text-rose-300'
-                  : 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 text-emerald-400'
-              }`}
-            >
-              <Phone className={`w-6 h-6 ${callState === 'CALLING' ? 'animate-bounce' : ''}`} />
+
+            {/* Number Box + Copy */}
+            <div className="mt-2.5 flex items-center justify-center gap-1.5 w-full">
+              <div
+                className="px-4 py-1.5 rounded-2xl bg-[#060b16]/90 border border-slate-800/90 shadow-inner text-base font-black font-mono text-emerald-400 tracking-widest select-all"
+                dir="ltr"
+              >
+                {toFaDigits(effectiveDialNumber || '---')}
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyNumber}
+                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/70 text-slate-300 hover:text-white transition cursor-pointer"
+                title="کپی شماره تلفن"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
-          <h3 className="text-base font-black text-white truncate max-w-[260px] tracking-tight">
-            {recipientName || 'مخاطب بدون نام'}
-          </h3>
+          {/* 2. Call Status Pill */}
+          <div
+            className={`px-3.5 py-2 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 text-center transition-all duration-300 ${
+              callState === 'CALLING'
+                ? 'bg-sky-500/15 border-sky-500/35 text-sky-300 shadow-sm shadow-sky-500/10'
+                : callState === 'CONNECTED'
+                ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300 shadow-sm shadow-emerald-500/10'
+                : callState === 'ENDED'
+                ? 'bg-slate-800/80 border-slate-700 text-slate-300'
+                : callState === 'ERROR'
+                ? 'bg-rose-500/15 border-rose-500/35 text-rose-300'
+                : 'bg-slate-900/75 border-slate-800/90 text-slate-400'
+            }`}
+          >
+            {callState === 'CALLING' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-sky-400" />
+            ) : callState === 'CONNECTED' ? (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            ) : callState === 'ERROR' ? (
+              <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" />
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0" />
+            )}
+            <span className="truncate">{statusMessage}</span>
+            {callState === 'CONNECTED' && (
+              <span
+                className="font-mono text-emerald-300 bg-emerald-950/80 px-1.5 py-0.5 rounded-md border border-emerald-500/30 shrink-0"
+                dir="ltr"
+              >
+                {toFaDigits(formatDuration(elapsedSeconds))}
+              </span>
+            )}
+          </div>
 
-          {recipientRole && (
-            <div className="mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/70 text-[11px] font-bold text-slate-300 max-w-[260px] truncate">
-              <User className="w-3 h-3 text-cyan-400 shrink-0" />
-              <span className="truncate">{recipientRole}</span>
+          {/* 3. Prefix Selector (پیش‌کد خط شهری سانترال) */}
+          <div className="flex items-center justify-between gap-2 bg-[#070d19]/90 border border-slate-800/90 rounded-2xl px-3 py-2">
+            <span className="text-[11px] font-bold text-slate-400 shrink-0">پیش‌کد خط:</span>
+            <div className="flex items-center gap-1">
+              {[
+                { label: 'بدون کد', val: '' },
+                { label: '9', val: '9' },
+                { label: '0', val: '0' },
+              ].map((opt) => {
+                const active = dialPrefixInput.trim() === opt.val;
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setDialPrefixInput(opt.val)}
+                    className={`px-2 py-1 rounded-xl text-[10px] font-bold border transition cursor-pointer ${
+                      active
+                        ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white border-cyan-400/60 shadow-xs shadow-cyan-500/20'
+                        : 'bg-[#0e172a] text-slate-400 border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    {opt.label === 'بدون کد' ? 'بدون کد' : toFaDigits(opt.label)}
+                  </button>
+                );
+              })}
+              <input
+                type="text"
+                dir="ltr"
+                maxLength={4}
+                value={dialPrefixInput}
+                onChange={(e) => setDialPrefixInput(e.target.value.replace(/[^0-9*#]/g, ''))}
+                placeholder="کد"
+                className="w-10 bg-[#0e172a] border border-slate-700/80 focus:border-cyan-400 rounded-xl px-1.5 py-1 text-center font-mono text-xs font-bold text-cyan-300 focus:outline-none transition"
+              />
             </div>
-          )}
+          </div>
 
-          {/* Number Box + Copy */}
-          <div className="mt-2.5 flex items-center justify-center gap-1.5 w-full">
-            <div
-              className="px-4 py-1.5 rounded-2xl bg-[#060b16]/90 border border-slate-800/90 shadow-inner text-base font-black font-mono text-emerald-400 tracking-widest select-all"
-              dir="ltr"
-            >
-              {toFaDigits(effectiveDialNumber || '---')}
-            </div>
+          {/* 4. Call & Hangup Action Buttons */}
+          <div className="grid grid-cols-2 gap-2.5 pt-0.5">
             <button
               type="button"
-              onClick={handleCopyNumber}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700/70 text-slate-300 hover:text-white transition cursor-pointer"
-              title="کپی شماره تلفن"
+              disabled={callState === 'CALLING' || isHangingUp}
+              onClick={() => handlePlaceCall()}
+              className="min-h-[44px] py-2.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] disabled:opacity-50 text-white font-black text-xs shadow-lg shadow-emerald-600/25 border border-emerald-400/30 transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              <Phone className="w-4 h-4" />
+              <span>{callState === 'CONNECTED' ? 'شماره‌گیری مجدد' : 'برقراری تماس'}</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isHangingUp}
+              onClick={handleHangupAndRemovePopup}
+              className="min-h-[44px] py-2.5 px-3 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 active:scale-[0.98] disabled:opacity-60 text-white font-black text-xs shadow-lg shadow-rose-600/25 border border-rose-400/30 transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {isHangingUp ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <PhoneOff className="w-4 h-4" />
+              )}
+              <span>قطع تماس</span>
             </button>
           </div>
-        </div>
-
-        {/* 2. Call Status Pill */}
-        <div
-          className={`px-3.5 py-2 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 text-center transition-all duration-300 ${
-            callState === 'CALLING'
-              ? 'bg-sky-500/15 border-sky-500/35 text-sky-300 shadow-sm shadow-sky-500/10'
-              : callState === 'CONNECTED'
-              ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300 shadow-sm shadow-emerald-500/10'
-              : callState === 'ENDED'
-              ? 'bg-slate-800/80 border-slate-700 text-slate-300'
-              : callState === 'ERROR'
-              ? 'bg-rose-500/15 border-rose-500/35 text-rose-300'
-              : 'bg-slate-900/75 border-slate-800/90 text-slate-400'
-          }`}
-        >
-          {callState === 'CALLING' ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-sky-400" />
-          ) : callState === 'CONNECTED' ? (
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-          ) : callState === 'ERROR' ? (
-            <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" />
-          ) : (
-            <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0" />
-          )}
-          <span className="truncate">{statusMessage}</span>
-          {callState === 'CONNECTED' && (
-            <span
-              className="font-mono text-emerald-300 bg-emerald-950/80 px-1.5 py-0.5 rounded-md border border-emerald-500/30 shrink-0"
-              dir="ltr"
-            >
-              {toFaDigits(formatDuration(elapsedSeconds))}
-            </span>
-          )}
-        </div>
-
-        {/* 3. Prefix Selector (پیش‌کد خط شهری سانترال) */}
-        <div className="flex items-center justify-between gap-2 bg-[#070d19]/90 border border-slate-800/90 rounded-2xl px-3 py-2">
-          <span className="text-[11px] font-bold text-slate-400 shrink-0">پیش‌کد خط:</span>
-          <div className="flex items-center gap-1">
-            {[
-              { label: 'بدون کد', val: '' },
-              { label: '9', val: '9' },
-              { label: '0', val: '0' },
-            ].map((opt) => {
-              const active = dialPrefixInput.trim() === opt.val;
-              return (
-                <button
-                  key={opt.label}
-                  type="button"
-                  onClick={() => setDialPrefixInput(opt.val)}
-                  className={`px-2 py-1 rounded-xl text-[10px] font-bold border transition cursor-pointer ${
-                    active
-                      ? 'bg-gradient-to-r from-cyan-600 to-sky-600 text-white border-cyan-400/60 shadow-xs shadow-cyan-500/20'
-                      : 'bg-[#0e172a] text-slate-400 border-slate-800 hover:text-slate-200'
-                  }`}
-                >
-                  {opt.label === 'بدون کد' ? 'بدون کد' : toFaDigits(opt.label)}
-                </button>
-              );
-            })}
-            <input
-              type="text"
-              dir="ltr"
-              maxLength={4}
-              value={dialPrefixInput}
-              onChange={(e) => setDialPrefixInput(e.target.value.replace(/[^0-9*#]/g, ''))}
-              placeholder="کد"
-              className="w-10 bg-[#0e172a] border border-slate-700/80 focus:border-cyan-400 rounded-xl px-1.5 py-1 text-center font-mono text-xs font-bold text-cyan-300 focus:outline-none transition"
-            />
-          </div>
-        </div>
-
-        {/* 4. Call & Hangup Action Buttons */}
-        <div className="grid grid-cols-2 gap-2.5 pt-0.5">
-          <button
-            type="button"
-            disabled={callState === 'CALLING' || isHangingUp}
-            onClick={() => handlePlaceCall()}
-            className="min-h-[44px] py-2.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] disabled:opacity-50 text-white font-black text-xs shadow-lg shadow-emerald-600/25 border border-emerald-400/30 transition flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <Phone className="w-4 h-4" />
-            <span>{callState === 'CONNECTED' ? 'شماره‌گیری مجدد' : 'برقراری تماس'}</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={isHangingUp}
-            onClick={handleHangupAndRemovePopup}
-            className="min-h-[44px] py-2.5 px-3 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 active:scale-[0.98] disabled:opacity-60 text-white font-black text-xs shadow-lg shadow-rose-600/25 border border-rose-400/30 transition flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            {isHangingUp ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <PhoneOff className="w-4 h-4" />
-            )}
-            <span>قطع تماس</span>
-          </button>
         </div>
       </div>
     </div>
   );
 };
+
