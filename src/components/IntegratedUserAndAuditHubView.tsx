@@ -117,10 +117,12 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     };
     window.addEventListener('hamibar:users-updated', refreshLocalUsers);
 
-    fetchServerUsers().then((serverUsers) => {
+    fetchServerUsers().then(async (serverUsers) => {
       if (serverUsers && Array.isArray(serverUsers) && serverUsers.length > 0) {
-        const merged = syncAndMergeUsers(serverUsers);
-        setUsers(merged);
+        const merged = await syncAndMergeUsers(serverUsers);
+        if (Array.isArray(merged)) {
+          setUsers(merged);
+        }
       } else {
         const local = getStoredUsers();
         setUsers(local);
@@ -519,8 +521,10 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   // -------------------------------------------------------------
   // FILTERED DATA CALCULATIONS
   // -------------------------------------------------------------
+  const safeUsersList = Array.isArray(users) ? users : [];
+
   const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
+    return safeUsersList.filter((u) => {
       const q = userSearchQuery.trim().toLowerCase();
       const matchSearch =
         !q ||
