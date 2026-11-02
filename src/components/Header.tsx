@@ -43,7 +43,7 @@ import { PrintSettingsModal } from './PrintSettingsModal';
 import { VehicleItem, DriverDirectoryItem } from '../utils/fleetSeedData';
 import { FilterView } from '../types';
 import { AppUser } from '../types/auth';
-import { isMasterAdmin, canViewModule, canManageUsers, canManageSystemSettings } from '../utils/authService';
+import { isMasterAdmin, canViewModule, canManageUsers, canManageSystemSettings, canAccessTab } from '../utils/authService';
 import { getFleetInsuranceAlerts } from '../utils/insuranceAlerts';
 
 export type ActiveAppTab =
@@ -304,49 +304,8 @@ export const Header: FC<HeaderProps> = ({
     },
   ];
 
-  // Filter modules based on logged-in user permissions
-  const visibleNavModules = navModules.filter((item) => {
-    if (!currentUser) return false;
-    if (isMasterAdmin(currentUser)) return true;
-    switch (item.id) {
-      case 'DASHBOARD':
-        return true;
-      case 'ATTENDANCE':
-        return canViewModule(currentUser, 'attendance');
-      case 'VEHICLE_ASSIGNMENT':
-        return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
-      case 'DRIVERS':
-        return canViewModule(currentUser, 'drivers');
-      case 'STAFF':
-        return canViewModule(currentUser, 'staff');
-      case 'FLEET_MANAGEMENT':
-        return canViewModule(currentUser, 'oilService') || canViewModule(currentUser, 'drivers');
-      case 'OIL_SERVICE':
-        return canViewModule(currentUser, 'oilService');
-      case 'ORDERS':
-        return isMasterAdmin(currentUser) || canViewModule(currentUser, 'orders');
-      case 'OPERATIONS':
-        return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
-      case 'FINANCE':
-        return isMasterAdmin(currentUser) || canViewModule(currentUser, 'finance');
-      case 'CUSTOMERS':
-        return true;
-      case 'HANDOVER':
-        return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
-      case 'REGULATIONS':
-        return canViewModule(currentUser, 'regulations');
-      case 'REPORTS':
-        return isMasterAdmin(currentUser);
-      case 'USERS_LOGS':
-        return canManageUsers(currentUser) || isMasterAdmin(currentUser);
-      case 'PHONEBOOK':
-        return true;
-      case 'DEVELOPER_DOCS':
-        return true;
-      default:
-        return true;
-    }
-  });
+  // Filter modules based on logged-in user permissions via centralized RBAC matrix
+  const visibleNavModules = navModules.filter((item) => canAccessTab(currentUser, item.id));
 
   const handleTabClick = (tab: ActiveAppTab) => {
     if (typeof onTabChange === 'function') {

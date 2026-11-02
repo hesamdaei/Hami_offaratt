@@ -1,4 +1,4 @@
-import { FC, useState, useMemo, FormEvent, useRef } from 'react';
+import { FC, useState, useMemo, FormEvent, useRef, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -39,10 +39,23 @@ import {
   ArrowUpDown,
   List,
   LayoutGrid,
+  Lock,
 } from 'lucide-react';
 import { StaffMember, StaffContractType } from '../types';
 import { AppUser, UserPermissions } from '../types/auth';
-import { getStoredUsers, saveStoredUsers } from '../utils/authService';
+import {
+  getStoredUsers,
+  createSystemUser,
+  updateSystemUser,
+  findLinkedUserForDossier,
+  normalizeUserPermissions,
+  canEditModule,
+  canDeleteInModule,
+  canExportExcel,
+  canManageUsers,
+} from '../utils/authService';
+import { assertMasterAdminExcelPermission } from '../utils/excelExportSecurity';
+import { recordAuditLog } from '../utils/auditLogger';
 import { TableListA4PrintModal, TableListColumn } from './TableListA4PrintModal';
 
 export type StaffSortField =
@@ -106,6 +119,7 @@ const compressImageFile = (file: File, maxW = 360, maxH = 480, quality = 0.85): 
 
 interface StaffDirectoryViewProps {
   staffMembers: StaffMember[];
+  currentUser?: AppUser | null;
   onAddStaffMember: (staff: StaffMember) => void;
   onUpdateStaffMember: (staff: StaffMember) => void;
   onDeleteStaffMember: (id: string) => void;
@@ -116,6 +130,7 @@ interface StaffDirectoryViewProps {
 
 export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   staffMembers,
+  currentUser = null,
   onAddStaffMember,
   onUpdateStaffMember,
   onDeleteStaffMember,
@@ -123,6 +138,30 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   onCallPhone,
   onShowToast,
 }) => {
+  const canEditStaff = currentUser ? canEditModule(currentUser, 'staff') : true;
+  const canDeleteStaff = currentUser ? canDeleteInModule(currentUser, 'staff') : true;
+  const canManageAccounts = currentUser ? (canManageUsers(currentUser) || canEditModule(currentUser, 'staff')) : true;
+  const canExportStaffExcel = currentUser ? canExportExcel(currentUser) : false;
+
+  // Live synchronized system users state to link dossiers <-> accounts
+  const [systemUsers, setSystemUsers] = useState<AppUser[]>(() => getStoredUsers());
+  useEffect(() => {
+    const refreshUsers = () => setSystemUsers(getStoredUsers());
+    window.addEventListener('hamibar:users-updated', refreshUsers);
+    return () => window.removeEventListener('hamibar:users-updated', refreshUsers);
+  }, []);
+
+  const getLinkedAccount = (s: StaffMember): AppUser | undefined =>
+    findLinkedUserForDossier(
+      {
+        userId: s.userId,
+        username: s.username,
+        staffId: s.id,
+        personnelCode: s.code,
+        fullName: s.name,
+      },
+      systemUsers
+    );
   // Search & Filter State
   const [search, setSearch] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('ALL');
@@ -232,11 +271,13 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [activeTab, setActiveTab] = useState<'PERSONAL' | 'JOB' | 'CONTACT' | 'FINANCIAL' | 'ACCOUNT'>('PERSONAL');
 
-  // Quick User Account Creation Modal
+  // Quick User Account Creation / Management Modal
   const [accountModalStaff, setAccountModalStaff] = useState<StaffMember | null>(null);
+  const [accountModalExistingUser, setAccountModalExistingUser] = useState<AppUser | null>(null);
   const [accountUsername, setAccountUsername] = useState('');
   const [accountPassword, setAccountPassword] = useState('123456');
   const [accountRoleTitle, setAccountRoleTitle] = useState('');
+  const [accountIsActive, setAccountIsActive] = useState(true);
   const [accountPreset, setAccountPreset] = useState<'DISPATCH' | 'OPERATOR' | 'ADMIN' | 'FLEET' | 'VIEWER'>('OPERATOR');
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -374,8 +415,140 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
     return (total / staffMembers.length).toFixed(1);
   }, [staffMembers]);
 
+  const buildPermissionsFromPreset = (
+    preset: 'DISPATCH' | 'OPERATOR' | 'ADMIN' | 'FLEET' | 'VIEWER'
+  ): UserPermissions => {
+    if (preset === 'DISPATCH') {
+      return normalizeUserPermissions({
+        attendance: 'full',
+        vehicleAssignment: 'full',
+        drivers: 'full',
+        staff: 'view',
+        fleetManagement: 'view',
+        oilService: 'view',
+        orders: 'full',
+        operations: 'full',
+        handover: 'full',
+        customers: 'full',
+        finance: 'none',
+        regulations: 'full',
+        phonebook: 'full',
+        reports: 'none',
+        developerDocs: 'view',
+        canDeleteRecords: false,
+        canExportExcel: false,
+        backupRestore: false,
+        userManagement: false,
+        networkSettings: false,
+        voipSettings: false,
+      });
+    }
+    if (preset === 'ADMIN') {
+      return normalizeUserPermissions({
+        attendance: 'full',
+        vehicleAssignment: 'full',
+        drivers: 'full',
+        staff: 'full',
+        fleetManagement: 'full',
+        oilService: 'full',
+        orders: 'full',
+        operations: 'full',
+        handover: 'full',
+        customers: 'full',
+        finance: 'full',
+        regulations: 'full',
+        phonebook: 'full',
+        reports: 'none',
+        developerDocs: 'view',
+        canDeleteRecords: true,
+        canExportExcel: false,
+        backupRestore: true,
+        userManagement: true,
+        networkSettings: false,
+        voipSettings: false,
+      });
+    }
+    if (preset === 'FLEET') {
+      return normalizeUserPermissions({
+        attendance: 'view',
+        vehicleAssignment: 'full',
+        drivers: 'full',
+        staff: 'none',
+        fleetManagement: 'full',
+        oilService: 'full',
+        orders: 'none',
+        operations: 'view',
+        handover: 'full',
+        customers: 'view',
+        finance: 'none',
+        regulations: 'full',
+        phonebook: 'view',
+        reports: 'none',
+        developerDocs: 'view',
+        canDeleteRecords: false,
+        canExportExcel: false,
+        backupRestore: false,
+        userManagement: false,
+        networkSettings: false,
+        voipSettings: false,
+      });
+    }
+    if (preset === 'VIEWER') {
+      return normalizeUserPermissions({
+        attendance: 'view',
+        vehicleAssignment: 'view',
+        drivers: 'view',
+        staff: 'view',
+        fleetManagement: 'view',
+        oilService: 'view',
+        orders: 'view',
+        operations: 'view',
+        handover: 'view',
+        customers: 'view',
+        finance: 'none',
+        regulations: 'view',
+        phonebook: 'view',
+        reports: 'none',
+        developerDocs: 'view',
+        canDeleteRecords: false,
+        canExportExcel: false,
+        backupRestore: false,
+        userManagement: false,
+        networkSettings: false,
+        voipSettings: false,
+      });
+    }
+    return normalizeUserPermissions({
+      attendance: 'full',
+      vehicleAssignment: 'full',
+      drivers: 'view',
+      staff: 'view',
+      fleetManagement: 'view',
+      oilService: 'none',
+      orders: 'none',
+      operations: 'full',
+      handover: 'full',
+      customers: 'view',
+      finance: 'none',
+      regulations: 'view',
+      phonebook: 'full',
+      reports: 'none',
+      developerDocs: 'view',
+      canDeleteRecords: false,
+      canExportExcel: false,
+      backupRestore: false,
+      userManagement: false,
+      networkSettings: false,
+      voipSettings: false,
+    });
+  };
+
   // Open Add modal
   const handleOpenAdd = () => {
+    if (!canEditStaff) {
+      onShowToast?.('شما مجوز ثبت یا افتتاح پرونده جدید پرسنلی را ندارید.', 'error');
+      return;
+    }
     setEditingStaff(null);
     setFormData({
       photoUrl: '',
@@ -426,6 +599,11 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
 
   // Open Edit modal
   const handleOpenEdit = (s: StaffMember) => {
+    if (!canEditStaff) {
+      onShowToast?.('شما مجوز ویرایش پرونده پرسنل را ندارید.', 'error');
+      return;
+    }
+    const linkedAcc = getLinkedAccount(s);
     setEditingStaff(s);
     setFormData({
       photoUrl: s.photoUrl || s.documents?.avatarPhoto || '',
@@ -466,93 +644,177 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
       notes: s.notes || '',
       performanceNotes: s.performanceNotes || '',
       createAppUser: false,
-      appUsername: s.code ? `user_${s.code.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '',
-      appPassword: '123',
-      appUserRole: s.role || 'کاربر سیستم',
+      appUsername: linkedAcc
+        ? linkedAcc.username
+        : s.code
+        ? `user_${s.code.toLowerCase().replace(/[^a-z0-9]/g, '')}`
+        : `staff_${s.id.slice(-4)}`,
+      appPassword: '',
+      appUserRole: linkedAcc ? linkedAcc.roleTitle : s.role || 'کاربر سیستم',
     });
     setActiveTab('PERSONAL');
     setIsModalOpen(true);
   };
 
-  // Quick User Account Creation from Staff
+  // Quick User Account Creation / Management from Staff Dossier
   const handleOpenCreateUserAccount = (staff: StaffMember) => {
+    if (!canManageAccounts) {
+      onShowToast?.('شما مجوز ایجاد یا مدیریت حساب کاربری سیستمی را ندارید.', 'error');
+      return;
+    }
     setAccountModalStaff(staff);
-    const suggestedUsername = staff.code
-      ? `emp_${staff.code.toLowerCase().replace(/[^a-z0-9]/g, '')}`
-      : `staff_${staff.id.slice(-4)}`;
-    setAccountUsername(suggestedUsername);
-    setAccountPassword('123456');
-    setAccountRoleTitle(staff.role || 'کاربر سیستم');
-    if (staff.department.includes('دیسپچ')) setAccountPreset('DISPATCH');
-    else if (staff.department.includes('فنی')) setAccountPreset('FLEET');
-    else if (staff.department.includes('مدیریت') || staff.department.includes('اداری')) setAccountPreset('ADMIN');
-    else setAccountPreset('OPERATOR');
+    const existingAcc = getLinkedAccount(staff);
+    if (existingAcc) {
+      setAccountModalExistingUser(existingAcc);
+      setAccountUsername(existingAcc.username);
+      setAccountPassword('');
+      setAccountRoleTitle(existingAcc.roleTitle || staff.role || 'کاربر سیستم');
+      setAccountIsActive(existingAcc.isActive !== false);
+      if (existingAcc.permissions.userManagement) setAccountPreset('ADMIN');
+      else if (existingAcc.permissions.oilService === 'full') setAccountPreset('FLEET');
+      else if (existingAcc.permissions.drivers === 'full') setAccountPreset('DISPATCH');
+      else if (existingAcc.permissions.attendance === 'view') setAccountPreset('VIEWER');
+      else setAccountPreset('OPERATOR');
+    } else {
+      setAccountModalExistingUser(null);
+      const suggestedUsername = staff.code
+        ? `emp_${staff.code.toLowerCase().replace(/[^a-z0-9]/g, '')}`
+        : `staff_${staff.id.slice(-4)}`;
+      setAccountUsername(suggestedUsername);
+      setAccountPassword('123456');
+      setAccountRoleTitle(staff.role || 'کاربر سیستم');
+      setAccountIsActive(true);
+      if (staff.department.includes('دیسپچ')) setAccountPreset('DISPATCH');
+      else if (staff.department.includes('فنی')) setAccountPreset('FLEET');
+      else if (staff.department.includes('مدیریت') || staff.department.includes('اداری')) setAccountPreset('ADMIN');
+      else setAccountPreset('OPERATOR');
+    }
   };
 
   const handleConfirmCreateAccount = (e: FormEvent) => {
     e.preventDefault();
     if (!accountModalStaff) return;
-    const cleanUsername = accountUsername.trim().toLowerCase();
-    if (!cleanUsername) {
-      onShowToast?.('لطفاً نام کاربری را وارد نمایید.', 'error');
-      return;
-    }
-    if (!accountPassword.trim()) {
-      onShowToast?.('لطفاً رمز عبور را وارد نمایید.', 'error');
-      return;
-    }
-    const currentUsers = getStoredUsers();
-    if (currentUsers.some((u) => u.username.toLowerCase() === cleanUsername)) {
-      onShowToast?.('این نام کاربری قبلاً در سامانه ثبت شده است. لطفاً نام دیگری انتخاب کنید.', 'error');
+
+    const permissions = buildPermissionsFromPreset(accountPreset);
+
+    // If staff already has a linked system user, update existing account (immutable username preserved)
+    if (accountModalExistingUser) {
+      const updateRes = updateSystemUser(accountModalExistingUser.id, {
+        fullName: accountModalStaff.name,
+        roleTitle: accountRoleTitle.trim() || accountModalStaff.role || accountModalExistingUser.roleTitle,
+        phoneNumber: accountModalStaff.phone || accountModalExistingUser.phoneNumber,
+        password: accountPassword.trim() ? accountPassword.trim() : undefined,
+        isActive: accountIsActive,
+        permissions: accountModalExistingUser.isMasterAdmin ? accountModalExistingUser.permissions : permissions,
+        staffId: accountModalStaff.id,
+        personnelCode: accountModalStaff.code,
+        dossierType: 'STAFF',
+      });
+
+      if (!updateRes.ok || !updateRes.user) {
+        onShowToast?.(updateRes.error || 'خطا در به‌روزرسانی حساب کاربری متصل به پرونده.', 'error');
+        return;
+      }
+
+      if (accountModalStaff.userId !== updateRes.user.id || accountModalStaff.username !== updateRes.user.username) {
+        onUpdateStaffMember({
+          ...accountModalStaff,
+          userId: updateRes.user.id,
+          username: updateRes.user.username,
+        });
+      }
+
+      recordAuditLog(currentUser, {
+        action: 'USER_UPDATE',
+        module: 'USERS',
+        title: 'به‌روزرسانی حساب کاربری از بخش پرونده پرسنل',
+        description: `حساب کاربری متصل به پرونده «${accountModalStaff.name}» (نام کاربری ثابت: ${updateRes.user.username}) به‌روزرسانی شد.`,
+        targetId: updateRes.user.id,
+        targetName: updateRes.user.fullName,
+        severity: 'INFO',
+      });
+
+      setSystemUsers(getStoredUsers());
+      setAccountModalStaff(null);
+      setAccountModalExistingUser(null);
+      onShowToast?.(
+        `حساب کاربری «${updateRes.user.username}» متصل به پرونده ${accountModalStaff.name} با موفقیت به‌روزرسانی شد.`,
+        'success'
+      );
       return;
     }
 
-    let permissions: UserPermissions = {
-      attendance: 'full',
-      drivers: 'view',
-      staff: 'view',
-      oilService: 'none',
-      regulations: 'view',
-      backupRestore: false,
-      userManagement: false,
-      networkSettings: false,
-    };
-    if (accountPreset === 'DISPATCH') {
-      permissions = { attendance: 'full', drivers: 'full', staff: 'view', oilService: 'view', regulations: 'full', backupRestore: false, userManagement: false, networkSettings: false };
-    } else if (accountPreset === 'ADMIN') {
-      permissions = { attendance: 'full', drivers: 'full', staff: 'full', oilService: 'full', regulations: 'full', backupRestore: true, userManagement: true, networkSettings: false };
-    } else if (accountPreset === 'FLEET') {
-      permissions = { attendance: 'view', drivers: 'full', staff: 'none', oilService: 'full', regulations: 'full', backupRestore: false, userManagement: false, networkSettings: false };
-    } else if (accountPreset === 'VIEWER') {
-      permissions = { attendance: 'view', drivers: 'view', staff: 'view', oilService: 'view', regulations: 'view', backupRestore: false, userManagement: false, networkSettings: false };
-    }
-
-    const newUser: AppUser = {
-      id: `usr-${Date.now()}`,
-      username: cleanUsername,
-      password: accountPassword.trim(),
+    // Creating a new system user from Staff Dossier
+    const createRes = createSystemUser({
+      username: accountUsername,
+      password: accountPassword,
       fullName: accountModalStaff.name,
-      roleTitle: accountRoleTitle.trim() || accountModalStaff.role,
+      roleTitle: accountRoleTitle.trim() || accountModalStaff.role || 'کاربر سیستم',
       phoneNumber: accountModalStaff.phone,
-      isMasterAdmin: false,
-      isActive: true,
       permissions,
-      createdAt: new Date().toLocaleDateString('fa-IR'),
       avatarColor: accountModalStaff.avatarColor || 'from-blue-600 to-indigo-700',
-    };
+      staffId: accountModalStaff.id,
+      personnelCode: accountModalStaff.code,
+      dossierType: 'STAFF',
+      createdFrom: 'STAFF_DOSSIER',
+    });
 
-    saveStoredUsers([...currentUsers, newUser]);
+    if (!createRes.ok || !createRes.user) {
+      onShowToast?.(createRes.error || 'خطا در ایجاد حساب کاربری سیستمی.', 'error');
+      return;
+    }
+
+    // Link staff dossier to the created system user ID & immutable username
+    onUpdateStaffMember({
+      ...accountModalStaff,
+      userId: createRes.user.id,
+      username: createRes.user.username,
+    });
+
+    recordAuditLog(currentUser, {
+      action: 'USER_CREATE',
+      module: 'USERS',
+      title: 'ایجاد حساب کاربری سیستمی از بخش پرونده پرسنل',
+      description: `حساب کاربری جدید با نام کاربری «${createRes.user.username}» برای پرونده پرسنلی «${accountModalStaff.name}» (کد: ${accountModalStaff.code}) ایجاد و در مدیریت کاربران ثبت شد.`,
+      targetId: createRes.user.id,
+      targetName: createRes.user.fullName,
+      severity: 'SUCCESS',
+      newValue: JSON.stringify({
+        userId: createRes.user.id,
+        username: createRes.user.username,
+        staffId: accountModalStaff.id,
+        role: createRes.user.roleTitle,
+      }),
+    });
+
+    setSystemUsers(getStoredUsers());
     setAccountModalStaff(null);
-    onShowToast?.(`حساب کاربری ورود به برنامه با نام کاربری «${cleanUsername}» برای ${accountModalStaff.name} با موفقیت ایجاد شد.`, 'success');
+    setAccountModalExistingUser(null);
+    onShowToast?.(
+      `حساب کاربری سیستمی با نام کاربری «${createRes.user.username}» برای ${accountModalStaff.name} ایجاد شد و در «مدیریت کاربران» قابل مشاهده است.`,
+      'success'
+    );
   };
 
   // Submit Add / Edit Form
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (!canEditStaff) {
+      onShowToast?.('شما مجوز ثبت یا ویرایش پرونده پرسنل را ندارید.', 'error');
+      return;
+    }
     if (!formData.name.trim()) {
       onShowToast?.('لطفاً نام و نام خانوادگی کارمند را وارد کنید.', 'error');
       return;
     }
+
+    const defaultDeptPreset = formData.department.includes('دیسپچ')
+      ? 'DISPATCH'
+      : formData.department.includes('فنی')
+      ? 'FLEET'
+      : formData.department.includes('مدیریت') || formData.department.includes('اداری')
+      ? 'ADMIN'
+      : 'OPERATOR';
 
     if (editingStaff) {
       const updated: StaffMember = {
@@ -599,6 +861,64 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
           avatarPhoto: formData.photoUrl.trim() || editingStaff.documents?.avatarPhoto,
         },
       };
+
+      const existingLinkedAcc = getLinkedAccount(editingStaff);
+      if (existingLinkedAcc) {
+        // Keep linked system user's name/phone/role synchronized with dossier (username stays strictly immutable)
+        const syncRes = updateSystemUser(existingLinkedAcc.id, {
+          fullName: updated.name,
+          phoneNumber: updated.phone,
+          roleTitle: formData.createAppUser && formData.appUserRole.trim()
+            ? formData.appUserRole.trim()
+            : existingLinkedAcc.roleTitle,
+          password: formData.createAppUser && formData.appPassword.trim()
+            ? formData.appPassword.trim()
+            : undefined,
+          staffId: updated.id,
+          personnelCode: updated.code,
+          dossierType: 'STAFF',
+        });
+        if (syncRes.ok && syncRes.user) {
+          updated.userId = syncRes.user.id;
+          updated.username = syncRes.user.username;
+        }
+      } else if (formData.createAppUser && formData.appUsername.trim()) {
+        // Create system user during Edit Staff Dossier flow!
+        const createRes = createSystemUser({
+          username: formData.appUsername,
+          password: formData.appPassword.trim() || '123456',
+          fullName: updated.name,
+          roleTitle: formData.appUserRole.trim() || updated.role,
+          phoneNumber: updated.phone,
+          permissions: buildPermissionsFromPreset(defaultDeptPreset),
+          avatarColor: updated.avatarColor || 'from-blue-600 to-indigo-700',
+          staffId: updated.id,
+          personnelCode: updated.code,
+          dossierType: 'STAFF',
+          createdFrom: 'STAFF_DOSSIER',
+        });
+
+        if (!createRes.ok || !createRes.user) {
+          onShowToast?.(createRes.error || 'خطا در ایجاد حساب کاربری سیستمی.', 'error');
+          return;
+        }
+
+        updated.userId = createRes.user.id;
+        updated.username = createRes.user.username;
+
+        recordAuditLog(currentUser, {
+          action: 'USER_CREATE',
+          module: 'USERS',
+          title: 'ایجاد حساب کاربری هنگام ویرایش پرونده پرسنلی',
+          description: `حساب کاربری «${createRes.user.username}» برای پرونده «${updated.name}» ایجاد و در مدیریت کاربران ثبت گردید.`,
+          targetId: createRes.user.id,
+          targetName: createRes.user.fullName,
+          severity: 'SUCCESS',
+        });
+        onShowToast?.(`حساب کاربری «${createRes.user.username}» نیز برای ${updated.name} ایجاد شد.`, 'info');
+      }
+
+      setSystemUsers(getStoredUsers());
       onUpdateStaffMember(updated);
       onShowToast?.(`پرونده کارمند «${updated.name}» با موفقیت به‌روزرسانی شد.`, 'success');
       if (viewingDossier && viewingDossier.id === updated.id) {
@@ -652,34 +972,43 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
 
       // Also create app user if checked and valid username
       if (formData.createAppUser && formData.appUsername.trim()) {
-        const cleanUser = formData.appUsername.trim().toLowerCase();
-        const currentUsers = getStoredUsers();
-        if (!currentUsers.some((u) => u.username.toLowerCase() === cleanUser)) {
-          const newUser: AppUser = {
-            id: `usr-${Date.now()}`,
-            username: cleanUser,
-            password: formData.appPassword.trim() || '123',
-            fullName: newStaff.name,
-            roleTitle: formData.appUserRole.trim() || newStaff.role,
-            phoneNumber: newStaff.phone,
-            isMasterAdmin: false,
-            isActive: true,
-            permissions: {
-              attendance: 'full',
-              drivers: 'view',
-              staff: 'view',
-              oilService: 'none',
-              regulations: 'view',
-              backupRestore: false,
-              userManagement: false,
-              networkSettings: false,
-            },
-            createdAt: new Date().toLocaleDateString('fa-IR'),
-            avatarColor: 'from-blue-600 to-indigo-700',
-          };
-          saveStoredUsers([...currentUsers, newUser]);
-          onShowToast?.(`حساب ورود با نام کاربری «${cleanUser}» نیز همزمان ایجاد شد.`, 'info');
+        const createRes = createSystemUser({
+          username: formData.appUsername,
+          password: formData.appPassword.trim() || '123456',
+          fullName: newStaff.name,
+          roleTitle: formData.appUserRole.trim() || newStaff.role,
+          phoneNumber: newStaff.phone,
+          permissions: buildPermissionsFromPreset(defaultDeptPreset),
+          avatarColor: newStaff.avatarColor || 'from-blue-600 to-indigo-700',
+          staffId: newStaff.id,
+          personnelCode: newStaff.code,
+          dossierType: 'STAFF',
+          createdFrom: 'STAFF_DOSSIER',
+        });
+
+        if (!createRes.ok || !createRes.user) {
+          onShowToast?.(createRes.error || 'خطا در ایجاد حساب کاربری سیستمی.', 'error');
+          return;
         }
+
+        newStaff.userId = createRes.user.id;
+        newStaff.username = createRes.user.username;
+
+        recordAuditLog(currentUser, {
+          action: 'USER_CREATE',
+          module: 'USERS',
+          title: 'ایجاد حساب کاربری همزمان با افتتاح پرونده پرسنلی',
+          description: `حساب کاربری «${createRes.user.username}» همزمان با افتتاح پرونده «${newStaff.name}» ایجاد و در مدیریت کاربران ثبت شد.`,
+          targetId: createRes.user.id,
+          targetName: createRes.user.fullName,
+          severity: 'SUCCESS',
+        });
+
+        setSystemUsers(getStoredUsers());
+        onShowToast?.(
+          `حساب ورود با نام کاربری «${createRes.user.username}» نیز همزمان ایجاد و در مدیریت کاربران ثبت شد.`,
+          'info'
+        );
       }
 
       onAddStaffMember(newStaff);
@@ -688,11 +1017,22 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
     setIsModalOpen(false);
   };
 
-  // Export to Excel
+  // Export to Excel (Strictly Master Admin Only)
   const handleExportExcel = () => {
+    try {
+      assertMasterAdminExcelPermission(currentUser, 'فهرست پرونده پرسنل');
+    } catch (err: any) {
+      onShowToast?.(
+        err.message || 'دسترسی غیرمجاز: دریافت خروجی اکسل منحصراً در اختیار مدیر ارشد سامانه است.',
+        'error'
+      );
+      return;
+    }
+
     const data = filtered.map((s) => ({
       'کد پرسنلی': s.code,
       'نام و نام خانوادگی': s.name,
+      'نام کاربری سیستم': getLinkedAccount(s)?.username || s.username || 'بدون حساب کاربری',
       'واحد سازمانی': s.department,
       'سمت شغلی': s.role,
       'شیفت کاری':
@@ -922,14 +1262,17 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
             </button>
           </div>
 
-          {/* Excel Export */}
-          <button
-            onClick={handleExportExcel}
-            className="px-3 py-2 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>خروجی اکسل</span>
-          </button>
+          {/* Excel Export (Master Admin Only) */}
+          {canExportStaffExcel && (
+            <button
+              onClick={handleExportExcel}
+              className="px-3 py-2 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="استخراج فایل اکسل پرونده پرسنل (ویژه مدیر ارشد)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>خروجی اکسل</span>
+            </button>
+          )}
 
           {/* Print List Button (Standard A4 Table List without web headers) */}
           <button
@@ -943,13 +1286,15 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
           </button>
 
           {/* Add Staff Dossier */}
-          <button
-            onClick={handleOpenAdd}
-            className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-900/30"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>افتتاح پرونده کارمند جدید</span>
-          </button>
+          {canEditStaff && (
+            <button
+              onClick={handleOpenAdd}
+              className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-900/30 cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>افتتاح پرونده کارمند جدید</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1126,12 +1471,13 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                 <div className="flex items-center justify-between pt-2 border-t border-[#1a273f]">
                   {/* Status Toggle Button */}
                   <button
-                    onClick={() => onToggleStaffActive(s.id)}
+                    disabled={!canEditStaff}
+                    onClick={() => canEditStaff && onToggleStaffActive(s.id)}
                     className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
                       s.status !== 'inactive'
                         ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
                         : 'bg-rose-500/10 text-rose-300 border-rose-500/30 hover:bg-rose-500/20'
-                    }`}
+                    } ${!canEditStaff ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     {s.status !== 'inactive' ? (
                       <>
@@ -1146,21 +1492,37 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     )}
                   </button>
 
-                  <div className="flex items-center gap-1.5">
-                    {/* Create Login User Button */}
-                    <button
-                      onClick={() => handleOpenCreateUserAccount(s)}
-                      className="px-2 py-1 rounded-lg bg-emerald-600/15 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs flex items-center gap-1 transition-colors"
-                      title="ساخت کاربری ورود به برنامه (با نام کاربری قابل ویرایش)"
-                    >
-                      <KeyRound className="w-3 h-3 text-emerald-400" />
-                      <span>کاربری ورود</span>
-                    </button>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {/* Create / Manage Linked Login User Button */}
+                    {(() => {
+                      const linkedAcc = getLinkedAccount(s);
+                      if (!canManageAccounts && !linkedAcc) return null;
+                      return (
+                        <button
+                          onClick={() => handleOpenCreateUserAccount(s)}
+                          className={`px-2 py-1 rounded-lg border text-xs flex items-center gap-1 transition-colors cursor-pointer ${
+                            linkedAcc
+                              ? linkedAcc.isActive
+                                ? 'bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border-cyan-500/30 font-mono'
+                                : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/30 font-mono'
+                              : 'bg-emerald-600/15 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/30'
+                          }`}
+                          title={
+                            linkedAcc
+                              ? `حساب کاربری متصل: @${linkedAcc.username} (${linkedAcc.isActive ? 'فعال' : 'غیرفعال'}) — کلیک جهت مدیریت حساب`
+                              : 'ساخت حساب کاربری ورود به سامانه برای این پرونده'
+                          }
+                        >
+                          <KeyRound className="w-3 h-3 shrink-0" />
+                          <span>{linkedAcc ? `@${linkedAcc.username}` : 'کاربری ورود'}</span>
+                        </button>
+                      );
+                    })()}
 
                     {/* View Dossier Button */}
                     <button
                       onClick={() => setViewingDossier(s)}
-                      className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs flex items-center gap-1 transition-colors cursor-pointer"
                       title="مشاهده شناسنامه جامع کارمند"
                     >
                       <Eye className="w-3 h-3" />
@@ -1170,7 +1532,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     {/* Docs Button */}
                     <button
                       onClick={() => setViewingDocsStaff(s)}
-                      className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs flex items-center gap-1 transition-colors cursor-pointer"
                       title="مدارک، تصاویر، قرارداد و سلامت"
                     >
                       <Camera className="w-3 h-3" />
@@ -1178,27 +1540,31 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                     </button>
 
                     {/* Edit Button */}
-                    <button
-                      onClick={() => handleOpenEdit(s)}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1 transition-colors"
-                      title="ویرایش پرونده"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                      <span>ویرایش</span>
-                    </button>
+                    {canEditStaff && (
+                      <button
+                        onClick={() => handleOpenEdit(s)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                        title="ویرایش پرونده"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                        <span>ویرایش</span>
+                      </button>
+                    )}
 
                     {/* Delete Button */}
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`آیا از حذف کارمند «${s.name}» از لیست اطمینان دارید؟`)) {
-                          onDeleteStaffMember(s.id);
-                        }
-                      }}
-                      className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                      title="حذف کارمند"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canDeleteStaff && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`آیا از حذف کارمند «${s.name}» از لیست اطمینان دارید؟`)) {
+                            onDeleteStaffMember(s.id);
+                          }
+                        }}
+                        className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        title="حذف کارمند"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1438,29 +1804,47 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                       </td>
                       <td className="py-3 px-3">
                         <button
-                          onClick={() => onToggleStaffActive(s.id)}
+                          disabled={!canEditStaff}
+                          onClick={() => canEditStaff && onToggleStaffActive(s.id)}
                           className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
                             !isInactive
                               ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
                               : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
-                          }`}
+                          } ${!canEditStaff ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           {!isInactive ? 'فعال' : 'غیرفعال'}
                         </button>
                       </td>
                       <td className="py-3 px-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => handleOpenCreateUserAccount(s)}
-                            title="ساخت کاربری برای ورود به برنامه با نام کاربری دلخواه و قابل ویرایش"
-                            className="p-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg transition-colors"
-                          >
-                            <KeyRound className="w-3.5 h-3.5" />
-                          </button>
+                          {(() => {
+                            const linkedAcc = getLinkedAccount(s);
+                            if (!canManageAccounts && !linkedAcc) return null;
+                            return (
+                              <button
+                                onClick={() => handleOpenCreateUserAccount(s)}
+                                title={
+                                  linkedAcc
+                                    ? `حساب متصل: @${linkedAcc.username} (${linkedAcc.isActive ? 'فعال' : 'غیرفعال'}) — مدیریت حساب`
+                                    : 'ساخت کاربری ورود به برنامه برای این پرونده'
+                                }
+                                className={`px-2 py-1 border rounded-lg transition-colors flex items-center gap-1 text-[11px] cursor-pointer ${
+                                  linkedAcc
+                                    ? linkedAcc.isActive
+                                      ? 'bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border-cyan-500/30 font-mono'
+                                      : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/30 font-mono'
+                                    : 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/30'
+                                }`}
+                              >
+                                <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                                {linkedAcc && <span>@{linkedAcc.username}</span>}
+                              </button>
+                            );
+                          })()}
                           <button
                             onClick={() => setViewingDossier(s)}
                             title="مشاهده شناسنامه جامع"
-                            className="px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] flex items-center gap-1"
+                            className="px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer"
                           >
                             <Eye className="w-3 h-3" />
                             <span>شناسنامه</span>
@@ -1468,29 +1852,33 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                           <button
                             onClick={() => setViewingDocsStaff(s)}
                             title="مدارک و ضمائم"
-                            className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 rounded-lg text-[11px] flex items-center gap-1"
+                            className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 rounded-lg text-[11px] flex items-center gap-1 cursor-pointer"
                           >
                             <Camera className="w-3 h-3" />
                             <span>({toFaDigits(docsCount)})</span>
                           </button>
-                          <button
-                            onClick={() => handleOpenEdit(s)}
-                            title="ویرایش"
-                            className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`آیا از حذف کارمند «${s.name}» اطمینان دارید؟`)) {
-                                onDeleteStaffMember(s.id);
-                              }
-                            }}
-                            title="حذف"
-                            className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-lg"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canEditStaff && (
+                            <button
+                              onClick={() => handleOpenEdit(s)}
+                              title="ویرایش"
+                              className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {canDeleteStaff && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`آیا از حذف کارمند «${s.name}» اطمینان دارید؟`)) {
+                                  onDeleteStaffMember(s.id);
+                                }
+                              }}
+                              title="حذف"
+                              className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-lg cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2536,89 +2924,127 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
               {activeTab === 'ACCOUNT' && (
                 <div className="space-y-4 animate-in fade-in duration-100">
                   {/* App User Account Integration Box */}
-                  <div className="p-4 rounded-xl bg-[#0a101f] border border-indigo-500/30 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={formData.createAppUser}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setFormData((prev) => ({
-                              ...prev,
-                              createAppUser: checked,
-                              appUsername:
-                                prev.appUsername ||
-                                (prev.code ? prev.code.toLowerCase().replace(/[^a-z0-9]/g, '') : `user${Math.floor(100 + Math.random() * 900)}`),
-                            }));
-                          }}
-                          className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-[#111b2e]"
-                        />
-                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
-                          ایجاد حساب کاربری ورود به برنامه (حامی) برای این کارمند
-                        </span>
-                      </label>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                        نام کاربری قابل ویرایش
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-400">
-                      با فعال‌سازی این بخش، پرسنل می‌تواند با نام کاربری و رمز عبور اختصاصی وارد سامانه مدیریت تردد و ترابری حامی شود.
-                    </p>
-
-                    {formData.createAppUser && (
-                      <div className="p-3 rounded-lg bg-[#111b2e] border border-[#1f2c45] space-y-3 mt-2 animate-in fade-in duration-150">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="text-xs font-semibold text-slate-300">
-                                نام کاربری ورود <span className="text-indigo-400 font-normal">(کاملاً قابل ویرایش)</span>
-                              </label>
-                              <span className="text-[10px] text-emerald-400">حروف انگلیسی و ارقام</span>
-                            </div>
+                  {(() => {
+                    const existingLinkedAcc = editingStaff ? getLinkedAccount(editingStaff) : undefined;
+                    return (
+                      <div className="p-4 rounded-xl bg-[#0a101f] border border-indigo-500/30 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
                             <input
-                              type="text"
-                              required={formData.createAppUser}
-                              value={formData.appUsername}
-                              onChange={(e) => setFormData({ ...formData, appUsername: e.target.value.toLowerCase().replace(/\s+/g, '') })}
-                              placeholder="مثلاً: ahmadi یا hesam.d"
-                              className="w-full bg-[#0a101f] border border-indigo-500/40 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-400 font-mono text-left"
-                              dir="ltr"
+                              type="checkbox"
+                              checked={formData.createAppUser}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  createAppUser: checked,
+                                  appUsername: existingLinkedAcc
+                                    ? existingLinkedAcc.username
+                                    : prev.appUsername ||
+                                      (prev.code
+                                        ? prev.code.toLowerCase().replace(/[^a-z0-9]/g, '')
+                                        : `user${Math.floor(100 + Math.random() * 900)}`),
+                                }));
+                              }}
+                              className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-[#111b2e]"
                             />
-                            <p className="text-[10px] text-slate-500 mt-1">
-                              نام کاربری دلخواه خود را تایپ کنید؛ این شناسه برای ورود به برنامه استفاده خواهد شد.
-                            </p>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-300 mb-1">رمز عبور ورود</label>
-                            <input
-                              type="text"
-                              required={formData.createAppUser}
-                              value={formData.appPassword}
-                              onChange={(e) => setFormData({ ...formData, appPassword: e.target.value })}
-                              placeholder="رمز عبور مثلاً 123456"
-                              className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono text-left"
-                              dir="ltr"
-                            />
-                          </div>
-
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-semibold text-slate-300 mb-1">عنوان نقش کاربری در سامانه</label>
-                            <input
-                              type="text"
-                              value={formData.appUserRole}
-                              onChange={(e) => setFormData({ ...formData, appUserRole: e.target.value })}
-                              placeholder="اپراتور دیسپچ / کارشناس ثبت تردد / مدیر سیستم..."
-                              className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-                            />
-                          </div>
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                              {existingLinkedAcc
+                                ? `به‌روزرسانی حساب کاربری متصل (@${existingLinkedAcc.username})`
+                                : 'ایجاد حساب کاربری ورود به برنامه (حامی) برای این کارمند'}
+                            </span>
+                          </label>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                            {existingLinkedAcc ? `شناسه حساب: ${existingLinkedAcc.id}` : 'ثبت یکپارچه در مدیریت کاربران'}
+                          </span>
                         </div>
+
+                        <p className="text-[11px] text-slate-400">
+                          {existingLinkedAcc
+                            ? `این پرونده دارای حساب کاربری سیستمی با نام کاربری غیرقابل‌تغییر «${existingLinkedAcc.username}» (${existingLinkedAcc.isActive ? 'فعال' : 'غیرفعال'}) است. در صورت نیاز می‌توانید نقش یا رمز عبور آن را تغییر دهید.`
+                            : 'با فعال‌سازی این بخش، حساب کاربری سیستمی برای پرسنل ایجاد شده و بلافاصله در بخش «مدیریت کاربران» قابل مشاهده و مدیریت خواهد بود.'}
+                        </p>
+
+                        {formData.createAppUser && (
+                          <div className="p-3 rounded-lg bg-[#111b2e] border border-[#1f2c45] space-y-3 mt-2 animate-in fade-in duration-150">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                                    {existingLinkedAcc && <Lock className="w-3 h-3 text-amber-400" />}
+                                    <span>
+                                      نام کاربری ورود{' '}
+                                      {existingLinkedAcc ? (
+                                        <span className="text-amber-400 font-normal">(ثابت و غیرقابل تغییر)</span>
+                                      ) : (
+                                        <span className="text-indigo-400 font-normal">(قابل تعریف در زمان ایجاد)</span>
+                                      )}
+                                    </span>
+                                  </label>
+                                  <span className="text-[10px] text-emerald-400">حروف انگلیسی و ارقام</span>
+                                </div>
+                                <input
+                                  type="text"
+                                  required={formData.createAppUser && !existingLinkedAcc}
+                                  readOnly={!!existingLinkedAcc}
+                                  disabled={!!existingLinkedAcc}
+                                  value={existingLinkedAcc ? existingLinkedAcc.username : formData.appUsername}
+                                  onChange={(e) =>
+                                    !existingLinkedAcc &&
+                                    setFormData({
+                                      ...formData,
+                                      appUsername: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''),
+                                    })
+                                  }
+                                  placeholder="مثلاً: ahmadi یا hesam.d"
+                                  className={`w-full bg-[#0a101f] border rounded-xl px-3.5 py-2 text-sm font-mono text-left ${
+                                    existingLinkedAcc
+                                      ? 'border-slate-800 text-slate-400 cursor-not-allowed opacity-80'
+                                      : 'border-indigo-500/40 text-white focus:outline-none focus:border-indigo-400'
+                                  }`}
+                                  dir="ltr"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">
+                                  {existingLinkedAcc
+                                    ? 'نام کاربری پس از ایجاد اولیه در سامانه غیرقابل تغییر است.'
+                                    : 'نام کاربری پس از ایجاد در سامانه ثابت خواهد بود.'}
+                                </p>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                                  {existingLinkedAcc ? 'رمز عبور جدید (اختیاری)' : 'رمز عبور ورود'}
+                                </label>
+                                <input
+                                  type="text"
+                                  required={formData.createAppUser && !existingLinkedAcc}
+                                  value={formData.appPassword}
+                                  onChange={(e) => setFormData({ ...formData, appPassword: e.target.value })}
+                                  placeholder={existingLinkedAcc ? 'در صورت خالی بودن تغییر نمی‌کند' : 'رمز عبور مثلاً 123456'}
+                                  className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono text-left"
+                                  dir="ltr"
+                                />
+                              </div>
+
+                              <div className="md:col-span-2">
+                                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                                  عنوان نقش کاربری در سامانه
+                                </label>
+                                <input
+                                  type="text"
+                                  value={formData.appUserRole}
+                                  onChange={(e) => setFormData({ ...formData, appUserRole: e.target.value })}
+                                  placeholder="اپراتور دیسپچ / کارشناس ثبت تردد / مدیر سیستم..."
+                                  className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
 
                   {/* Evaluation & Supervisor Notes */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2669,13 +3095,13 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
                   >
                     انصراف
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-900/30 transition-colors"
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-900/30 transition-colors cursor-pointer"
                   >
                     {editingStaff ? 'ذخیره تغییرات پرونده' : 'تأیید و ثبت پرونده پرسنلی'}
                   </button>
@@ -2687,7 +3113,7 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* 7.5 QUICK USER LOGIN ACCOUNT CREATION MODAL */}
+      {/* 7.5 QUICK USER LOGIN ACCOUNT CREATION / MANAGEMENT MODAL */}
       {/* ======================================================== */}
       {accountModalStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
@@ -2699,53 +3125,102 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                   <KeyRound className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-sm">ساخت حساب کاربری ورود به سامانه</h3>
+                  <h3 className="font-bold text-white text-sm">
+                    {accountModalExistingUser
+                      ? `مدیریت حساب کاربری متصل به پرونده (@${accountModalExistingUser.username})`
+                      : 'ساخت حساب کاربری ورود به سامانه'}
+                  </h3>
                   <p className="text-[11px] text-slate-400">
-                    برای پرسنل: {accountModalStaff.name} ({accountModalStaff.department})
+                    پرونده پرسنل: {accountModalStaff.name} (کد: {toFaDigits(accountModalStaff.code)} • {accountModalStaff.department})
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setAccountModalStaff(null)}
-                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                onClick={() => {
+                  setAccountModalStaff(null);
+                  setAccountModalExistingUser(null);
+                }}
+                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Account Creation Form */}
+            {/* Account Creation / Update Form */}
             <form onSubmit={handleConfirmCreateAccount} className="p-6 space-y-4">
+              {accountModalExistingUser && (
+                <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-cyan-200 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-bold">این پرونده دارای حساب کاربری سیستمی فعال در «مدیریت کاربران» است</div>
+                    <div className="text-[11px] text-cyan-300/80 font-mono mt-0.5">
+                      شناسه یکتا: {accountModalExistingUser.id} • تاریخ ایجاد: {accountModalExistingUser.createdAt}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={accountModalExistingUser.isMasterAdmin}
+                    onClick={() => setAccountIsActive((prev) => !prev)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                      accountIsActive
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    }`}
+                  >
+                    {accountIsActive ? 'وضعیت: فعال' : 'وضعیت: غیرفعال'}
+                  </button>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-slate-200">
-                    نام کاربری ورود (Username) <span className="text-emerald-400 font-normal">*(کاملاً قابل ویرایش)*</span>
+                  <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                    {accountModalExistingUser && <Lock className="w-3.5 h-3.5 text-amber-400" />}
+                    <span>نام کاربری ورود (Username)</span>
+                    {accountModalExistingUser ? (
+                      <span className="text-amber-400 font-normal text-[11px]">(ثابت و غیرقابل تغییر)</span>
+                    ) : (
+                      <span className="text-emerald-400 font-normal text-[11px]">*(قابل تعریف هنگام ایجاد)*</span>
+                    )}
                   </label>
                   <span className="text-[10px] text-slate-400">حروف انگلیسی و ارقام</span>
                 </div>
                 <input
                   type="text"
                   required
-                  value={accountUsername}
-                  onChange={(e) => setAccountUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                  readOnly={!!accountModalExistingUser}
+                  disabled={!!accountModalExistingUser}
+                  value={accountModalExistingUser ? accountModalExistingUser.username : accountUsername}
+                  onChange={(e) =>
+                    !accountModalExistingUser &&
+                    setAccountUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))
+                  }
                   placeholder="مثلاً: ahmadi یا hesam.d"
-                  className="w-full bg-[#0a101f] border border-emerald-500/40 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400 font-mono text-left tracking-wide"
+                  className={`w-full bg-[#0a101f] border rounded-xl px-3.5 py-2.5 text-sm font-mono text-left tracking-wide ${
+                    accountModalExistingUser
+                      ? 'border-slate-800 text-slate-400 cursor-not-allowed opacity-80'
+                      : 'border-emerald-500/40 text-white focus:outline-none focus:border-emerald-400'
+                  }`}
                   dir="ltr"
-                  autoFocus
+                  autoFocus={!accountModalExistingUser}
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  نام کاربری برای ورود به برنامه کاملاً قابل ویرایش است. کاربر با این نام کاربری وارد سامانه حامی خواهد شد.
+                  {accountModalExistingUser
+                    ? 'نام کاربری پس از ایجاد اولیه جهت حفظ یکپارچگی لاگ‌ها و سوابق غیرقابل تغییر است.'
+                    : 'نام کاربری ورود به سامانه را وارد کنید؛ پس از ایجاد، این نام کاربری ثابت خواهد ماند.'}
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1.5">رمز عبور اختصاصی</label>
+                <label className="block text-xs font-semibold text-slate-200 mb-1.5">
+                  {accountModalExistingUser ? 'رمز عبور جدید (در صورت تمایل به تغییر)' : 'رمز عبور اختصاصی'}
+                </label>
                 <input
                   type="text"
-                  required
+                  required={!accountModalExistingUser}
                   value={accountPassword}
                   onChange={(e) => setAccountPassword(e.target.value)}
-                  placeholder="رمز عبور..."
+                  placeholder={accountModalExistingUser ? 'در صورت خالی بودن رمز قبلی حفظ می‌شود' : 'رمز عبور...'}
                   className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono text-left"
                   dir="ltr"
                 />
@@ -2768,15 +3243,15 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {[
                     { id: 'OPERATOR', label: 'اپراتور استاندارد', desc: 'حضور و غیاب + مشاهده رانندگان' },
-                    { id: 'DISPATCH', label: 'دیسپچ و ترابری', desc: 'دسترسی کامل رانندگان و تردد' },
-                    { id: 'FLEET', label: 'فنی و سرویس روغن', desc: 'مدیریت ناوگان و سرویس‌ها' },
-                    { id: 'ADMIN', label: 'مدیر اداری / کادر', desc: 'دسترسی کامل اداری و پرسنل' },
+                    { id: 'DISPATCH', label: 'دیسپچ و ترابری', desc: 'دسترسی کامل رانندگان، سفارش و تردد' },
+                    { id: 'FLEET', label: 'فنی و سرویس روغن', desc: 'مدیریت ناوگان، تحویل و سرویس‌ها' },
+                    { id: 'ADMIN', label: 'مدیر اداری / کادر', desc: 'دسترسی کامل اداری، مالی و کاربران' },
                   ].map((preset) => (
                     <button
                       key={preset.id}
                       type="button"
                       onClick={() => setAccountPreset(preset.id as any)}
-                      className={`p-2.5 rounded-xl border text-right transition-all ${
+                      className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer ${
                         accountPreset === preset.id
                           ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-sm'
                           : 'bg-[#0a101f] border-[#1f2c45] text-slate-400 hover:border-slate-600'
@@ -2793,17 +3268,20 @@ export const StaffDirectoryView: FC<StaffDirectoryViewProps> = ({
               <div className="flex items-center justify-between pt-4 border-t border-[#1f2c45]">
                 <button
                   type="button"
-                  onClick={() => setAccountModalStaff(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                  onClick={() => {
+                    setAccountModalStaff(null);
+                    setAccountModalExistingUser(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-900/30 transition-colors flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-900/30 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
-                  <span>تأیید و ساخت کاربری</span>
+                  <span>{accountModalExistingUser ? 'ذخیره تغییرات حساب' : 'تأیید و ساخت کاربری'}</span>
                 </button>
               </div>
             </form>

@@ -623,6 +623,8 @@ export interface DriverDirectoryItem {
   avatarUrl?: string;
   joinedDate?: string;
   personnelCode?: string;
+  userId?: string;
+  username?: string;
 }
 
 export const INITIAL_VEHICLES: VehicleItem[] = DECODED_BACKUP.vehicles.length > 0 ? DECODED_BACKUP.vehicles : LEGACY_SEED_VEHICLES;

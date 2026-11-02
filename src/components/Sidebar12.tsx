@@ -27,7 +27,7 @@ import {
 import { ActiveAppTab } from './Header';
 import { toFaDigits } from '../utils/jalaali';
 import { AppUser } from '../types/auth';
-import { isMasterAdmin, canViewModule, canManageUsers } from '../utils/authService';
+import { isMasterAdmin, canAccessTab } from '../utils/authService';
 import { VehicleItem } from '../utils/fleetSeedData';
 import { getFleetInsuranceAlerts } from '../utils/insuranceAlerts';
 
@@ -235,52 +235,11 @@ export const Sidebar12: FC<Sidebar12Props> = ({
     },
   ];
 
-  // Filter groups and items based on user permissions
+  // Filter groups and items based on user permissions via centralized RBAC matrix
   const visibleGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => {
-        if (!currentUser) return false;
-        if (isMasterAdmin(currentUser)) return true;
-        switch (item.id) {
-          case 'DASHBOARD':
-            return true;
-          case 'ATTENDANCE':
-            return canViewModule(currentUser, 'attendance');
-          case 'VEHICLE_ASSIGNMENT':
-            return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
-          case 'ORDERS':
-            return isMasterAdmin(currentUser) || canViewModule(currentUser, 'orders');
-          case 'OPERATIONS':
-            return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
-          case 'HANDOVER':
-            return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
-          case 'CUSTOMERS':
-            return true;
-          case 'DRIVERS':
-            return canViewModule(currentUser, 'drivers');
-          case 'STAFF':
-            return canViewModule(currentUser, 'staff');
-          case 'FLEET_MANAGEMENT':
-            return canViewModule(currentUser, 'oilService') || canViewModule(currentUser, 'drivers');
-          case 'OIL_SERVICE':
-            return canViewModule(currentUser, 'oilService');
-          case 'PHONEBOOK':
-            return true;
-          case 'FINANCE':
-            return isMasterAdmin(currentUser) || canViewModule(currentUser, 'finance');
-          case 'REGULATIONS':
-            return canViewModule(currentUser, 'regulations');
-          case 'REPORTS':
-            return isMasterAdmin(currentUser);
-          case 'USERS_LOGS':
-            return canManageUsers(currentUser) || isMasterAdmin(currentUser);
-          case 'DEVELOPER_DOCS':
-            return true;
-          default:
-            return true;
-        }
-      }),
+      items: group.items.filter((item) => canAccessTab(currentUser, item.id)),
     }))
     .filter((group) => group.items.length > 0);
 

@@ -9,6 +9,8 @@ export interface Driver {
   notes?: string;
   status?: 'active' | 'inactive';
   createdAt?: string;
+  userId?: string; // شناسه حساب کاربری متصل
+  username?: string; // نام کاربری حساب متصل
 }
 
 export type AttendanceStatus = 'none' | 'leave' | 'workshop' | 'absent' | 'mission' | 'not_joined' | 'م' | 'ت';
@@ -83,6 +85,8 @@ export interface StaffMember {
   documents?: StaffDocuments; // مدارک و ضمائم پرونده
   performanceNotes?: string; // یادداشت ارزیابی و سوابق تشویق/توبیخ
   bloodType?: string; // گروه خونی
+  userId?: string; // شناسه داخلی حساب کاربری سیستمی متصل
+  username?: string; // نام کاربری حساب سیستمی متصل
 }
 
 export type AttendanceRecords = Record<string, Record<string, AttendanceStatus>>;

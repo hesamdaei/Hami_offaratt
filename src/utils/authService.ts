@@ -1,4 +1,12 @@
-import { AppUser, SafeAppUser, DEFAULT_MASTER_USER, INITIAL_USERS, UserPermissions } from '../types/auth';
+import {
+  AppUser,
+  SafeAppUser,
+  DEFAULT_MASTER_USER,
+  INITIAL_USERS,
+  UserPermissions,
+  PermissionModuleKey,
+  ModulePermission,
+} from '../types/auth';
 import { verifyBaleLoginOtp } from './baleService';
 import {
   hashPassword,
@@ -8,6 +16,8 @@ import {
   createSessionToken,
   SESSION_DURATION_HOURS,
 } from './securityCrypto';
+import { fetchServerUsers, saveServerUsers } from './lanSyncService';
+export { saveServerUsers };
 
 export const STORAGE_KEY_USERS = 'hamibar_system_users_v2';
 export const STORAGE_KEY_SESSION = 'hamibar_session_user_v2';
@@ -17,8 +27,101 @@ export const STORAGE_KEY_REVOKED_TOKENS = 'hamibar_revoked_session_tokens';
 const UNIFORM_AUTH_ERROR = 'نام کاربری یا رمز عبور اشتباه است.';
 
 /**
+ * نرمال‌سازی و تطبیق مجوزهای کاربر با ساختار واقعی منوها و عملیات سامانه
+ * بدون اهدای ناخواسته مجوزهای حساس جدید (حذف رکورد، اکسل، مالی، سفارش‌ها) به کاربران عادی
+ */
+export function normalizeUserPermissions(
+  perms?: Partial<UserPermissions> | null,
+  isMaster: boolean = false
+): UserPermissions {
+  if (isMaster) {
+    return {
+      attendance: 'full',
+      vehicleAssignment: 'full',
+      drivers: 'full',
+      staff: 'full',
+      fleetManagement: 'full',
+      oilService: 'full',
+      orders: 'full',
+      operations: 'full',
+      handover: 'full',
+      customers: 'full',
+      finance: 'full',
+      regulations: 'full',
+      phonebook: 'full',
+      reports: 'full',
+      developerDocs: 'full',
+      canDeleteRecords: true,
+      canExportExcel: true,
+      backupRestore: true,
+      userManagement: true,
+      networkSettings: true,
+      voipSettings: true,
+    };
+  }
+
+  const attendance: ModulePermission = perms?.attendance || 'none';
+  const drivers: ModulePermission = perms?.drivers || 'none';
+  const staff: ModulePermission = perms?.staff || 'none';
+  const oilService: ModulePermission = perms?.oilService || 'none';
+  const regulations: ModulePermission = perms?.regulations || 'view';
+
+  // سازگاری با کاربران قبلی برای تفکیک مدیریت ناوگان، تخصیص خودرو، اعزام و تحویل خودرو
+  const fleetManagement: ModulePermission =
+    perms?.fleetManagement ??
+    (oilService !== 'none' ? oilService : drivers === 'full' ? 'view' : 'none');
+
+  const vehicleAssignment: ModulePermission =
+    perms?.vehicleAssignment ??
+    (drivers === 'full' || oilService === 'full'
+      ? 'full'
+      : drivers === 'view' || oilService === 'view'
+      ? 'view'
+      : 'none');
+
+  const operations: ModulePermission =
+    perms?.operations ??
+    (drivers === 'full' || oilService === 'full'
+      ? 'full'
+      : drivers === 'view' || oilService === 'view'
+      ? 'view'
+      : 'none');
+
+  const handover: ModulePermission =
+    perms?.handover ??
+    (drivers === 'full' || regulations === 'full'
+      ? 'full'
+      : drivers === 'view' || regulations === 'view'
+      ? 'view'
+      : 'none');
+
+  return {
+    attendance,
+    vehicleAssignment,
+    drivers,
+    staff,
+    fleetManagement,
+    oilService,
+    orders: perms?.orders || 'none',
+    operations,
+    handover,
+    customers: perms?.customers ?? 'view',
+    finance: perms?.finance || 'none',
+    regulations,
+    phonebook: perms?.phonebook ?? 'view',
+    reports: 'none', // گزارش‌های اکسل منحصراً در اختیار مدیر ارشد است
+    developerDocs: perms?.developerDocs ?? 'view',
+    canDeleteRecords: Boolean(perms?.canDeleteRecords),
+    canExportExcel: false, // خروجی اکسل منحصراً برای مدیر ارشد مجاز است
+    backupRestore: Boolean(perms?.backupRestore),
+    userManagement: Boolean(perms?.userManagement),
+    networkSettings: false,
+    voipSettings: Boolean(perms?.voipSettings),
+  };
+}
+
+/**
  * Fetch all users from localStorage. Guarantees master user 'admin' always exists with master privileges.
- * Automatically migrates legacy plaintext passwords to PBKDF2-SHA256 hashes.
  */
 export function getStoredUsers(): AppUser[] {
   try {
@@ -43,33 +146,14 @@ export function getStoredUsers(): AppUser[] {
             roleTitle: 'مدیریت ارشد سیستم',
             isMasterAdmin: true,
             isActive: true,
-            permissions: {
-              ...parsed[adminIndex].permissions,
-              attendance: 'full',
-              drivers: 'full',
-              staff: 'full',
-              oilService: 'full',
-              regulations: 'full',
-              orders: 'full',
-              finance: 'full',
-              backupRestore: true,
-              userManagement: true,
-              networkSettings: true,
-            },
+            permissions: normalizeUserPermissions(parsed[adminIndex].permissions, true),
           };
         }
-        return parsed.map((u) =>
-          u.isMasterAdmin
-            ? u
-            : {
-                ...u,
-                permissions: {
-                  ...u.permissions,
-                  orders: u.permissions?.orders || 'none',
-                  finance: u.permissions?.finance || 'none',
-                },
-              }
-        );
+        return parsed.map((u) => ({
+          ...u,
+          isActive: u.isMasterAdmin ? true : u.isActive !== false,
+          permissions: normalizeUserPermissions(u.permissions, Boolean(u.isMasterAdmin)),
+        }));
       }
     }
   } catch (err) {
@@ -82,11 +166,19 @@ export function getStoredUsers(): AppUser[] {
 }
 
 /**
- * Save users to localStorage
+ * Save users to localStorage and notify active views
  */
 export function saveStoredUsers(users: AppUser[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    const normalized = users.map((u) => ({
+      ...u,
+      isActive: u.isMasterAdmin ? true : u.isActive !== false,
+      permissions: normalizeUserPermissions(u.permissions, Boolean(u.isMasterAdmin)),
+    }));
+    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(normalized));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hamibar:users-updated', { detail: { users: normalized } }));
+    }
   } catch (err) {
     console.error('Error saving users to storage:', err);
   }
@@ -510,35 +602,53 @@ export function isMasterAdmin(user: AppUser | SafeAppUser | null | undefined): b
 export const isDaei = isMasterAdmin;
 
 /**
- * Permissions checks
+ * بررسی دسترسی مشاهده هر یک از ماژول‌های واقعی سامانه
  */
 export function canViewModule(
   user: AppUser | SafeAppUser | null | undefined,
-  module: 'attendance' | 'drivers' | 'staff' | 'oilService' | 'regulations' | 'orders' | 'finance'
+  module: PermissionModuleKey
 ): boolean {
-  if (!user) return false;
+  if (!user || !user.isActive) return false;
   if (isMasterAdmin(user)) return true;
-  const perm = user.permissions?.[module];
+  const normalized = normalizeUserPermissions(user.permissions, false);
+  const perm = normalized[module];
   return perm === 'full' || perm === 'view';
 }
 
+/**
+ * بررسی دسترسی ایجاد و ویرایش در هر ماژول (داشتن مجوز مشاهده به‌تنهایی مجوز ویرایش ایجاد نمی‌کند)
+ */
 export function canEditModule(
   user: AppUser | SafeAppUser | null | undefined,
-  module: 'attendance' | 'drivers' | 'staff' | 'oilService' | 'regulations' | 'orders' | 'finance'
+  module: PermissionModuleKey
 ): boolean {
-  if (!user) return false;
+  if (!user || !user.isActive) return false;
   if (isMasterAdmin(user)) return true;
-  return user.permissions?.[module] === 'full';
+  const normalized = normalizeUserPermissions(user.permissions, false);
+  return normalized[module] === 'full';
+}
+
+/**
+ * بررسی دسترسی حذف رکورد در ماژول (مستقل از مجوز مشاهده و نیازمند مجوز صریح حذف رکوردها یا مدیر ارشد)
+ */
+export function canDeleteInModule(
+  user: AppUser | SafeAppUser | null | undefined,
+  module: PermissionModuleKey
+): boolean {
+  if (!user || !user.isActive) return false;
+  if (isMasterAdmin(user)) return true;
+  const normalized = normalizeUserPermissions(user.permissions, false);
+  return normalized[module] === 'full' && Boolean(normalized.canDeleteRecords);
 }
 
 export function canManageUsers(user: AppUser | SafeAppUser | null | undefined): boolean {
-  if (!user) return false;
+  if (!user || !user.isActive) return false;
   if (isMasterAdmin(user)) return true;
   return Boolean(user.permissions?.userManagement);
 }
 
 export function canAccessBackup(user: AppUser | SafeAppUser | null | undefined): boolean {
-  if (!user) return false;
+  if (!user || !user.isActive) return false;
   if (isMasterAdmin(user)) return true;
   return Boolean(user.permissions?.backupRestore);
 }
@@ -548,6 +658,501 @@ export function canAccessNetworkSettings(user: AppUser | SafeAppUser | null | un
 }
 
 export function canManageSystemSettings(user: AppUser | SafeAppUser | null | undefined): boolean {
-  if (!user) return false;
+  if (!user || !user.isActive) return false;
   return isMasterAdmin(user) || Boolean(user.permissions?.networkSettings);
 }
+
+export function canExportExcel(user: AppUser | SafeAppUser | null | undefined): boolean {
+  if (!user || !user.isActive) return false;
+  return isMasterAdmin(user);
+}
+
+/**
+ * بررسی یکپارچه مجوز دسترسی به هر تب/منوی اصلی برنامه (در هدر، سایدبار، ناوبری موبایل و URL مستقیم)
+ */
+export function canAccessTab(
+  user: AppUser | SafeAppUser | null | undefined,
+  tab: string
+): boolean {
+  if (!user || !user.isActive) return false;
+  if (isMasterAdmin(user)) return true;
+
+  switch (tab) {
+    case 'DASHBOARD':
+      return true;
+    case 'ATTENDANCE':
+      return canViewModule(user, 'attendance');
+    case 'VEHICLE_ASSIGNMENT':
+      return (
+        canViewModule(user, 'vehicleAssignment') ||
+        canViewModule(user, 'drivers') ||
+        canViewModule(user, 'fleetManagement') ||
+        canViewModule(user, 'oilService')
+      );
+    case 'DRIVERS':
+      return canViewModule(user, 'drivers');
+    case 'STAFF':
+      return canViewModule(user, 'staff');
+    case 'FLEET_MANAGEMENT':
+      return canViewModule(user, 'fleetManagement') || canViewModule(user, 'oilService');
+    case 'OIL_SERVICE':
+      return canViewModule(user, 'oilService');
+    case 'ORDERS':
+      return canViewModule(user, 'orders');
+    case 'OPERATIONS':
+      return (
+        canViewModule(user, 'operations') ||
+        canViewModule(user, 'drivers') ||
+        canViewModule(user, 'oilService')
+      );
+    case 'FINANCE':
+      return canViewModule(user, 'finance');
+    case 'CUSTOMERS':
+      return canViewModule(user, 'customers');
+    case 'HANDOVER':
+      return (
+        canViewModule(user, 'handover') ||
+        canViewModule(user, 'drivers') ||
+        canViewModule(user, 'regulations')
+      );
+    case 'REGULATIONS':
+      return canViewModule(user, 'regulations');
+    case 'REPORTS':
+      // بخش گزارش‌های مدیریتی و دریافت خروجی اکسل منحصراً ویژه نقش «مدیر ارشد» است
+      return isMasterAdmin(user);
+    case 'USERS_LOGS':
+      return canManageUsers(user) || isMasterAdmin(user);
+    case 'PHONEBOOK':
+      return canViewModule(user, 'phonebook');
+    case 'DEVELOPER_DOCS':
+      return canViewModule(user, 'developerDocs');
+    default:
+      return false;
+  }
+}
+
+/**
+ * نرمال‌سازی نام فارسی برای تطبیق دقیق پرونده و حساب کاربری
+ */
+function normalizePersianName(str?: string): string {
+  if (!str) return '';
+  return str
+    .replace(/ي/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * جستجوی حساب کاربری سیستمی متصل به یک پرونده (پرسنل یا راننده)
+ * جهت نمایش وضعیت حساب در پرونده و جلوگیری از ایجاد حساب تکراری برای یک شخص
+ */
+export function findLinkedUserForDossier(
+  params: {
+    userId?: string;
+    username?: string;
+    staffId?: string;
+    driverId?: string;
+    personnelCode?: string;
+    fullName?: string;
+  },
+  usersList?: AppUser[]
+): AppUser | undefined {
+  const users = usersList || getStoredUsers();
+
+  // ۱. تطبیق با شناسه داخلی کاربر یا شناسه صریح پرونده
+  if (params.userId) {
+    const byId = users.find((u) => u.id === params.userId);
+    if (byId) return byId;
+  }
+  if (params.staffId) {
+    const byStaffId = users.find((u) => u.staffId && u.staffId === params.staffId);
+    if (byStaffId) return byStaffId;
+  }
+  if (params.driverId) {
+    const byDriverId = users.find((u) => u.driverId && u.driverId === params.driverId);
+    if (byDriverId) return byDriverId;
+  }
+
+  // ۲. تطبیق با نام کاربری ذخیره شده در پرونده
+  if (params.username) {
+    const cleanU = params.username.trim().toLowerCase();
+    const byUsername = users.find((u) => u.username.toLowerCase() === cleanU);
+    if (byUsername) return byUsername;
+  }
+
+  // ۳. تطبیق با کد پرسنلی صریح (برای حساب‌های غیر مدیر ارشد)
+  if (params.personnelCode) {
+    const cleanCode = params.personnelCode.trim().toLowerCase();
+    const byCode = users.find(
+      (u) =>
+        !u.isMasterAdmin &&
+        ((u.personnelCode && u.personnelCode.trim().toLowerCase() === cleanCode) ||
+          u.username.toLowerCase() === cleanCode)
+    );
+    if (byCode) return byCode;
+  }
+
+  // ۴. تطبیق با نام و نام خانوادگی دقیق (برای حساب‌های غیر پیش‌فرض که قبلاً از پرونده ساخته شده‌اند)
+  if (params.fullName) {
+    const normTarget = normalizePersianName(params.fullName);
+    if (normTarget.length > 2) {
+      const byName = users.find(
+        (u) =>
+          !u.isMasterAdmin &&
+          u.username !== 'operator' &&
+          u.username !== 'fleet_admin' &&
+          normalizePersianName(u.fullName) === normTarget
+      );
+      if (byName) return byName;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * همگام‌سازی و ادغام ایمن کاربران محلی (localStorage) و کاربران سرور (serverUsers)
+ * بدون حذف یا بازنویسی کاربرانی که از بخش «پرونده» یا در حالت آفلاین ایجاد شده‌اند.
+ */
+export async function syncAndMergeUsers(serverUsers?: AppUser[] | null): Promise<AppUser[]> {
+  const localUsers = getStoredUsers();
+  let remoteList = serverUsers;
+  if (!remoteList) {
+    try {
+      remoteList = await fetchServerUsers();
+    } catch {
+      remoteList = null;
+    }
+  }
+  if (!remoteList || !Array.isArray(remoteList) || remoteList.length === 0) {
+    return localUsers;
+  }
+  const resolvedServerUsers = remoteList;
+
+  const mergedMap = new Map<string, AppUser>();
+  const usernameToIdMap = new Map<string, string>();
+  let needsServerPush = false;
+
+  // ابتدا کاربران سرور را با حفظ لینک‌های پرونده محلی بارگذاری می‌کنیم
+  for (const srvUser of resolvedServerUsers) {
+    if (!srvUser || !srvUser.username) continue;
+    const cleanUsername = srvUser.username.trim().toLowerCase();
+    const matchingLocal = localUsers.find(
+      (lu) => lu.id === srvUser.id || lu.username.trim().toLowerCase() === cleanUsername
+    );
+
+    // حفظ نام کاربری اولیه، شناسه داخلی و ارتباط پرونده
+    const mergedUser: AppUser = {
+      ...matchingLocal,
+      ...srvUser,
+      id: matchingLocal?.id || srvUser.id || `usr-${Date.now()}`,
+      username: matchingLocal?.username || cleanUsername, // نام کاربری تغییرناپذیر است
+      isMasterAdmin: Boolean(srvUser.isMasterAdmin || matchingLocal?.isMasterAdmin || cleanUsername === 'admin'),
+      isActive:
+        srvUser.isMasterAdmin || matchingLocal?.isMasterAdmin || cleanUsername === 'admin'
+          ? true
+          : srvUser.isActive !== undefined
+          ? srvUser.isActive
+          : matchingLocal?.isActive !== false,
+      staffId: srvUser.staffId || matchingLocal?.staffId,
+      driverId: srvUser.driverId || matchingLocal?.driverId,
+      personnelCode: srvUser.personnelCode || matchingLocal?.personnelCode,
+      dossierType: srvUser.dossierType || matchingLocal?.dossierType,
+      createdFrom: srvUser.createdFrom || matchingLocal?.createdFrom,
+      permissions: normalizeUserPermissions(
+        srvUser.permissions || matchingLocal?.permissions,
+        Boolean(srvUser.isMasterAdmin || matchingLocal?.isMasterAdmin || cleanUsername === 'admin')
+      ),
+    };
+
+    mergedMap.set(mergedUser.id, mergedUser);
+    usernameToIdMap.set(mergedUser.username.toLowerCase(), mergedUser.id);
+  }
+
+  // سپس هر کاربر معتبری که در localStorage وجود دارد (مثلاً ایجادشده از «پرونده») اما هنوز در سرور نیست را حفظ می‌کنیم
+  for (const locUser of localUsers) {
+    if (!locUser || !locUser.username) continue;
+    const cleanU = locUser.username.trim().toLowerCase();
+    if (!mergedMap.has(locUser.id) && !usernameToIdMap.has(cleanU)) {
+      const normalizedLoc: AppUser = {
+        ...locUser,
+        permissions: normalizeUserPermissions(locUser.permissions, Boolean(locUser.isMasterAdmin)),
+      };
+      mergedMap.set(normalizedLoc.id, normalizedLoc);
+      usernameToIdMap.set(cleanU, normalizedLoc.id);
+      needsServerPush = true;
+    }
+  }
+
+  const finalUsers = Array.from(mergedMap.values());
+  saveStoredUsers(finalUsers);
+
+  if (needsServerPush) {
+    saveServerUsers(finalUsers).catch(() => {});
+  }
+
+  return finalUsers;
+}
+
+/**
+ * همگام‌سازی دوطرفه اطلاعات حساب کاربری با پرونده پرسنل یا راننده در localStorage
+ */
+function syncDossierLinkInStorage(user: AppUser): void {
+  try {
+    if (user.staffId) {
+      const rawStaff = localStorage.getItem('hamibar_staff_members_v1');
+      if (rawStaff) {
+        const list = JSON.parse(rawStaff);
+        if (Array.isArray(list)) {
+          let changed = false;
+          const next = list.map((s: any) => {
+            if (s.id === user.staffId && (s.userId !== user.id || s.username !== user.username)) {
+              changed = true;
+              return { ...s, userId: user.id, username: user.username };
+            }
+            return s;
+          });
+          if (changed) {
+            localStorage.setItem('hamibar_staff_members_v1', JSON.stringify(next));
+          }
+        }
+      }
+    }
+    if (user.driverId) {
+      const rawDrivers = localStorage.getItem('hamibar_driver_directory_v1');
+      if (rawDrivers) {
+        const list = JSON.parse(rawDrivers);
+        if (Array.isArray(list)) {
+          let changed = false;
+          const next = list.map((d: any) => {
+            if (d.id === user.driverId && (d.userId !== user.id || d.username !== user.username)) {
+              changed = true;
+              return { ...d, userId: user.id, username: user.username };
+            }
+            return d;
+          });
+          if (changed) {
+            localStorage.setItem('hamibar_driver_directory_v1', JSON.stringify(next));
+          }
+        }
+      }
+    }
+  } catch {}
+}
+
+export interface CreateSystemUserInput {
+  username: string;
+  password: string;
+  fullName: string;
+  roleTitle?: string;
+  phoneNumber?: string;
+  baleId?: string;
+  email?: string;
+  avatarColor?: string;
+  permissions?: Partial<UserPermissions>;
+  staffId?: string;
+  driverId?: string;
+  personnelCode?: string;
+  dossierType?: 'STAFF' | 'DRIVER' | 'SYSTEM' | 'NONE' | 'SYSTEM_ONLY';
+  createdFrom?: 'USER_MANAGEMENT' | 'STAFF_DOSSIER' | 'DRIVER_DOSSIER';
+}
+
+/**
+ * سرویس متمرکز و واحد ایجاد کاربر سیستمی (مشترک بین «مدیریت کاربران» و «پرونده»)
+ * - جلوگیری از نام کاربری تکراری
+ * - جلوگیری از ایجاد حساب تکراری برای یک پرونده (پرسنل یا راننده)
+ * - ذخیره‌سازی همزمان در حافظه محلی و سرور متمرکز (/api/users)
+ */
+export function createSystemUser(input: CreateSystemUserInput): {
+  ok: boolean;
+  user?: AppUser;
+  existingUser?: AppUser;
+  error?: string;
+} {
+  const cleanUsername = (input.username || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]/g, '');
+
+  if (!cleanUsername || cleanUsername.length < 2) {
+    return {
+      ok: false,
+      error: 'نام کاربری معتبر (حداقل ۲ کاراکتر انگلیسی یا عدد) الزامی است.',
+    };
+  }
+
+  const cleanPassword = (input.password || '').trim();
+  if (!cleanPassword || cleanPassword.length < 3) {
+    return {
+      ok: false,
+      error: 'رمز عبور باید حداقل دارای ۳ کاراکتر باشد.',
+    };
+  }
+
+  const cleanFullName = (input.fullName || '').trim();
+  if (!cleanFullName) {
+    return {
+      ok: false,
+      error: 'نام و نام خانوادگی کاربر الزامی است.',
+    };
+  }
+
+  const currentUsers = getStoredUsers();
+
+  // ۱. بررسی عدم وجود حساب کاربری قبلی برای همین پرونده (جلوگیری از حساب تکراری برای یک شخص)
+  if (input.staffId || input.driverId) {
+    const existingForDossier = findLinkedUserForDossier(
+      {
+        staffId: input.staffId,
+        driverId: input.driverId,
+        personnelCode: input.personnelCode,
+        fullName: cleanFullName,
+      },
+      currentUsers
+    );
+    if (existingForDossier) {
+      return {
+        ok: false,
+        existingUser: existingForDossier,
+        error: `برای «${cleanFullName}» قبلاً حساب کاربری سیستمی با نام کاربری «@${existingForDossier.username}» ایجاد شده است. از ایجاد حساب تکراری جلوگیری شد.`,
+      };
+    }
+  }
+
+  // ۲. بررسی یکتا بودن نام کاربری در کل سامانه
+  const duplicateUsernameUser = currentUsers.find(
+    (u) => u.username.trim().toLowerCase() === cleanUsername
+  );
+  if (duplicateUsernameUser) {
+    return {
+      ok: false,
+      existingUser: duplicateUsernameUser,
+      error: `نام کاربری «${cleanUsername}» قبلاً برای «${duplicateUsernameUser.fullName}» ثبت شده است. لطفاً نام کاربری دیگری انتخاب نمایید.`,
+    };
+  }
+
+  const newUser: AppUser = {
+    id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    username: cleanUsername,
+    password: cleanPassword,
+    fullName: cleanFullName,
+    roleTitle: (input.roleTitle || '').trim() || 'اپراتور سیستم',
+    phoneNumber: (input.phoneNumber || '').trim() || undefined,
+    baleId: (input.baleId || '').trim() || undefined,
+    email: (input.email || '').trim() || undefined,
+    isMasterAdmin: false,
+    isActive: true,
+    permissions: normalizeUserPermissions(input.permissions, false),
+    createdAt: new Date().toLocaleDateString('fa-IR'),
+    updatedAt: new Date().toISOString(),
+    avatarColor: input.avatarColor || 'from-blue-600 to-indigo-700',
+    staffId: input.staffId,
+    driverId: input.driverId,
+    personnelCode: input.personnelCode,
+    dossierType:
+      input.dossierType === 'STAFF' || input.dossierType === 'DRIVER'
+        ? input.dossierType
+        : input.staffId
+        ? 'STAFF'
+        : input.driverId
+        ? 'DRIVER'
+        : 'SYSTEM',
+    createdFrom: input.createdFrom || (input.staffId ? 'STAFF_DOSSIER' : input.driverId ? 'DRIVER_DOSSIER' : 'USER_MANAGEMENT'),
+  };
+
+  const updatedUsers = [...currentUsers, newUser];
+  saveStoredUsers(updatedUsers);
+  saveServerUsers(updatedUsers).catch(() => {});
+  syncDossierLinkInStorage(newUser);
+
+  return { ok: true, user: newUser };
+}
+
+export interface UpdateSystemUserInput {
+  fullName?: string;
+  roleTitle?: string;
+  phoneNumber?: string;
+  baleId?: string;
+  email?: string;
+  avatarColor?: string;
+  password?: string;
+  newPassword?: string;
+  isActive?: boolean;
+  permissions?: Partial<UserPermissions>;
+  staffId?: string;
+  driverId?: string;
+  personnelCode?: string;
+  dossierType?: 'STAFF' | 'DRIVER' | 'SYSTEM' | 'NONE' | 'SYSTEM_ONLY';
+}
+
+/**
+ * سرویس متمرکز ویرایش کاربر سیستمی
+ * - تضمین تغییرناپذیری نام کاربری (username) و شناسه داخلی (id) پس از ایجاد
+ * - حفظ رمز عبور فعلی مگر در صورت ارسال صریح رمز جدید
+ * - اعمال فوری تغییر وضعیت فعال/غیرفعال و مجوزها در نشست جاری و سرور
+ */
+export function updateSystemUser(
+  userId: string,
+  updates: UpdateSystemUserInput
+): { ok: boolean; user?: AppUser; error?: string } {
+  const currentUsers = getStoredUsers();
+  const target = currentUsers.find((u) => u.id === userId);
+  if (!target) {
+    return { ok: false, error: 'حساب کاربری مورد نظر یافت نشد.' };
+  }
+
+  const nextActive = target.isMasterAdmin
+    ? true
+    : updates.isActive !== undefined
+    ? Boolean(updates.isActive)
+    : target.isActive;
+
+  const updatedUser: AppUser = {
+    ...target,
+    id: target.id, // شناسه داخلی کاملاً ثابت
+    username: target.username, // نام کاربری پس از ایجاد مطلقاً غیرقابل تغییر است
+    fullName: updates.fullName !== undefined ? updates.fullName.trim() || target.fullName : target.fullName,
+    roleTitle: updates.roleTitle !== undefined ? updates.roleTitle.trim() || target.roleTitle : target.roleTitle,
+    phoneNumber: updates.phoneNumber !== undefined ? updates.phoneNumber.trim() : target.phoneNumber,
+    baleId: updates.baleId !== undefined ? updates.baleId.trim() : target.baleId,
+    email: updates.email !== undefined ? updates.email.trim() : target.email,
+    avatarColor: updates.avatarColor || target.avatarColor,
+    password:
+      (updates.newPassword && updates.newPassword.trim().length > 0
+        ? updates.newPassword.trim()
+        : updates.password && updates.password.trim().length > 0
+        ? updates.password.trim()
+        : target.password),
+    isActive: nextActive,
+    permissions: updates.permissions
+      ? normalizeUserPermissions({ ...target.permissions, ...updates.permissions }, target.isMasterAdmin)
+      : normalizeUserPermissions(target.permissions, target.isMasterAdmin),
+    staffId: updates.staffId !== undefined ? updates.staffId : target.staffId,
+    driverId: updates.driverId !== undefined ? updates.driverId : target.driverId,
+    personnelCode: updates.personnelCode !== undefined ? updates.personnelCode : target.personnelCode,
+    dossierType:
+      updates.dossierType === 'STAFF' || updates.dossierType === 'DRIVER'
+        ? updates.dossierType
+        : target.dossierType,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const updatedUsers = currentUsers.map((u) => (u.id === target.id ? updatedUser : u));
+  saveStoredUsers(updatedUsers);
+  saveServerUsers(updatedUsers).catch(() => {});
+  syncDossierLinkInStorage(updatedUser);
+
+  // اگر کاربر ویرایش‌شده، کاربر لاگین‌شده فعلی باشد، نشست او را بلافاصله همگام یا در صورت تعلیق، ابطال کن
+  const activeSession = getStoredSession();
+  if (activeSession && activeSession.id === updatedUser.id) {
+    if (!updatedUser.isActive) {
+      revokeSession();
+    } else {
+      saveStoredSession(updatedUser);
+    }
+  }
+
+  return { ok: true, user: updatedUser };
+}
+

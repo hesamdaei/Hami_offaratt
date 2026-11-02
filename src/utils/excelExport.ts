@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
 import { Driver, AttendanceRecords } from '../types';
 import { AppUser } from '../types/auth';
-import { assertMasterAdminExcelPermission } from './excelExportSecurity';
+import { assertMasterAdminExcelPermission, canExportExcel } from './excelExportSecurity';
+export { assertMasterAdminExcelPermission, canExportExcel };
 import {
   getMonthDaysCount,
   getPersianWeekday,

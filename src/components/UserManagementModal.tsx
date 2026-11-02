@@ -1,4 +1,4 @@
-import { FC, useState, FormEvent } from 'react';
+import { FC, useState, useEffect, FormEvent } from 'react';
 import {
   X,
   Users,
@@ -23,7 +23,16 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { AppUser, UserPermissions, ModulePermission } from '../types/auth';
-import { getStoredUsers, saveStoredUsers, isMasterAdmin } from '../utils/authService';
+import {
+  getStoredUsers,
+  saveStoredUsers,
+  saveServerUsers,
+  syncAndMergeUsers,
+  createSystemUser,
+  updateSystemUser,
+  normalizeUserPermissions,
+  isMasterAdmin,
+} from '../utils/authService';
 import { toFaDigits } from '../utils/jalaali';
 
 interface UserManagementModalProps {
@@ -51,18 +60,31 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRoleTitle, setNewRoleTitle] = useState('اپراتور سیستم');
-  const [newPermissions, setNewPermissions] = useState<UserPermissions>({
-    attendance: 'full',
-    drivers: 'view',
-    staff: 'view',
-    oilService: 'none',
-    regulations: 'view',
-    orders: 'none',
-    finance: 'none',
-    backupRestore: false,
-    userManagement: false,
-    networkSettings: false,
-  });
+  const [newPermissions, setNewPermissions] = useState<UserPermissions>(() =>
+    normalizeUserPermissions({
+      attendance: 'full',
+      vehicleAssignment: 'view',
+      drivers: 'view',
+      staff: 'view',
+      fleetManagement: 'view',
+      oilService: 'none',
+      regulations: 'view',
+      orders: 'none',
+      operations: 'view',
+      handover: 'view',
+      customers: 'view',
+      finance: 'none',
+      phonebook: 'view',
+      reports: 'none',
+      developerDocs: 'none',
+      canDeleteRecords: false,
+      canExportExcel: false,
+      backupRestore: false,
+      userManagement: false,
+      networkSettings: false,
+      voipSettings: false,
+    })
+  );
 
   // Edit User State
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -70,78 +92,79 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
   const [editUsername, setEditUsername] = useState('');
   const [editRoleTitle, setEditRoleTitle] = useState('');
   const [editPassword, setEditPassword] = useState('');
-  const [editPermissions, setEditPermissions] = useState<UserPermissions>({
-    attendance: 'view',
-    drivers: 'view',
-    staff: 'view',
-    oilService: 'view',
-    regulations: 'view',
-    orders: 'none',
-    finance: 'none',
-    backupRestore: false,
-    userManagement: false,
-    networkSettings: false,
-  });
+  const [editPermissions, setEditPermissions] = useState<UserPermissions>(() =>
+    normalizeUserPermissions({})
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    setUsers(getStoredUsers());
+    syncAndMergeUsers().then((merged) => {
+      if (isMounted) setUsers(merged);
+    });
+    const handleUsersUpdated = () => {
+      if (isMounted) setUsers(getStoredUsers());
+    };
+    window.addEventListener('hamibar:users-updated', handleUsersUpdated);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('hamibar:users-updated', handleUsersUpdated);
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const refreshUsersList = () => {
-    const list = getStoredUsers();
-    setUsers(list);
-  };
-
-  const handleCreateUser = (e: FormEvent) => {
+  const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
-    const cleanUsername = newUsername.trim().toLowerCase();
-    const cleanPassword = newPassword.trim();
-    const cleanFullName = newFullName.trim();
-
-    if (!cleanFullName || !cleanUsername || !cleanPassword) {
-      onShowToast('لطفاً تمامی فیلدهای الزامی را تکمیل نمایید.', 'error');
-      return;
-    }
-
-    if (users.some((u) => u.username.toLowerCase() === cleanUsername)) {
-      onShowToast('این نام کاربری قبلاً در سامانه ثبت شده است.', 'error');
-      return;
-    }
-
-    const newUser: AppUser = {
-      id: `usr-${Date.now()}`,
-      username: cleanUsername,
-      password: cleanPassword,
-      fullName: cleanFullName,
+    const res = await createSystemUser({
+      username: newUsername,
+      password: newPassword,
+      fullName: newFullName,
       roleTitle: newRoleTitle.trim() || 'کاربر سیستم',
-      isMasterAdmin: false,
-      isActive: true,
-      permissions: {
-        ...newPermissions,
-        networkSettings: false,
-      },
-      createdAt: new Date().toLocaleDateString('fa-IR'),
-      avatarColor: 'from-blue-600 to-indigo-700',
-    };
+      permissions: newPermissions,
+      createdFrom: 'USER_MANAGEMENT',
+      dossierType: 'SYSTEM_ONLY',
+    });
 
-    const updated = [...users, newUser];
-    setUsers(updated);
-    saveStoredUsers(updated);
-    onShowToast(`کاربر جدید «${cleanFullName}» با نام کاربری «${cleanUsername}» با موفقیت افزوده شد.`, 'success');
+    if (!res.ok || !res.user) {
+      onShowToast(res.error || 'خطا در ایجاد کاربر جدید.', 'error');
+      return;
+    }
+
+    setUsers(getStoredUsers());
+    onShowToast(`کاربر جدید «${res.user.fullName}» با نام کاربری «${res.user.username}» با موفقیت افزوده شد.`, 'success');
 
     // Reset Form
     setNewFullName('');
     setNewUsername('');
     setNewPassword('');
     setNewRoleTitle('اپراتور سیستم');
-    setNewPermissions({
-      attendance: 'full',
-      drivers: 'view',
-      staff: 'view',
-      oilService: 'none',
-      regulations: 'view',
-      backupRestore: false,
-      userManagement: false,
-      networkSettings: false,
-    });
+    setNewPermissions(
+      normalizeUserPermissions({
+        attendance: 'full',
+        vehicleAssignment: 'view',
+        drivers: 'view',
+        staff: 'view',
+        fleetManagement: 'view',
+        oilService: 'none',
+        regulations: 'view',
+        orders: 'none',
+        operations: 'view',
+        handover: 'view',
+        customers: 'view',
+        finance: 'none',
+        phonebook: 'view',
+        reports: 'none',
+        developerDocs: 'none',
+        canDeleteRecords: false,
+        canExportExcel: false,
+        backupRestore: false,
+        userManagement: false,
+        networkSettings: false,
+        voipSettings: false,
+      })
+    );
     setActiveTab('LIST');
   };
 
@@ -150,62 +173,49 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
     setEditFullName(user.fullName);
     setEditUsername(user.username);
     setEditRoleTitle(user.roleTitle);
-    setEditPassword(user.password || '');
-    setEditPermissions({ ...user.permissions, networkSettings: isMasterAdmin(user) });
+    setEditPassword('');
+    setEditPermissions(normalizeUserPermissions(user.permissions, isMasterAdmin(user)));
   };
 
-  const handleSaveEdit = (userId: string) => {
+  const handleSaveEdit = async (userId: string) => {
     const targetUser = users.find((u) => u.id === userId);
     if (!targetUser) return;
 
-    // Username is strictly immutable after creation (Architecture & Security Requirement 6.4)
-    const immutableUsername = targetUser.username;
-    const isTargetMaster = isMasterAdmin(targetUser);
-
-    const updatedUsers = users.map((u) => {
-      if (u.id === userId) {
-        const updated: AppUser = {
-          ...u,
-          username: immutableUsername,
-          fullName: editFullName.trim() || u.fullName,
-          roleTitle: editRoleTitle.trim() || u.roleTitle,
-          password: editPassword.trim() || u.password,
-          passwordHash: editPassword.trim() ? undefined : u.passwordHash,
-          permissions: {
-            ...editPermissions,
-            // Master Admin always keeps network & admin permissions
-            networkSettings: isTargetMaster ? true : false,
-            userManagement: isTargetMaster ? true : editPermissions.userManagement,
-          },
-        };
-
-        if (currentUser && currentUser.id === u.id) {
-          onUpdateCurrentUserSession(updated);
-        }
-        return updated;
-      }
-      return u;
+    const res = await updateSystemUser(userId, {
+      fullName: editFullName.trim() || targetUser.fullName,
+      roleTitle: editRoleTitle.trim() || targetUser.roleTitle,
+      password: editPassword.trim() || undefined,
+      permissions: editPermissions,
     });
 
-    setUsers(updatedUsers);
-    saveStoredUsers(updatedUsers);
+    if (!res.ok || !res.user) {
+      onShowToast(res.error || 'خطا در ویرایش کاربر.', 'error');
+      return;
+    }
+
+    if (currentUser && currentUser.id === res.user.id) {
+      onUpdateCurrentUserSession(res.user);
+    }
+
+    setUsers(getStoredUsers());
     setEditingUserId(null);
-    onShowToast(`تغییرات کاربر «${editFullName}» با موفقیت ذخیره شد.`, 'success');
+    onShowToast(`تغییرات کاربر «${res.user.fullName}» با موفقیت ذخیره شد.`, 'success');
   };
 
-  const handleToggleActive = (user: AppUser) => {
+  const handleToggleActive = async (user: AppUser) => {
     if (isMasterAdmin(user)) {
       onShowToast('حساب کاربری مدیریت غیرقابل غیرفعال‌سازی است.', 'error');
       return;
     }
 
-    const updated = users.map((u) => (u.id === user.id ? { ...u, isActive: !u.isActive } : u));
-    setUsers(updated);
-    saveStoredUsers(updated);
-    onShowToast(`وضعیت کاربر «${user.fullName}» تغییر یافت.`, 'info');
+    const res = await updateSystemUser(user.id, { isActive: !user.isActive });
+    if (res.ok) {
+      setUsers(getStoredUsers());
+      onShowToast(`وضعیت کاربر «${user.fullName}» تغییر یافت.`, 'info');
+    }
   };
 
-  const handleDeleteUser = (user: AppUser) => {
+  const handleDeleteUser = async (user: AppUser) => {
     if (isMasterAdmin(user)) {
       onShowToast('حذف حساب کاربری مدیریت مجاز نمی‌باشد.', 'error');
       return;
@@ -215,6 +225,7 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
       const updated = users.filter((u) => u.id !== user.id);
       setUsers(updated);
       saveStoredUsers(updated);
+      await saveServerUsers(updated);
       onShowToast(`کاربر «${user.fullName}» حذف گردید.`, 'success');
     }
   };
@@ -411,138 +422,59 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                               </div>
                             ) : (
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                                {/* Attendance */}
-                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                                  <span className="text-xs text-slate-300">حضور و غیاب:</span>
-                                  <select
-                                    value={editPermissions.attendance}
-                                    onChange={(e) =>
-                                      setEditPermissions({
-                                        ...editPermissions,
-                                        attendance: e.target.value as ModulePermission,
-                                      })
-                                    }
-                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
+                                {([
+                                  { key: 'attendance', label: 'حضور و غیاب' },
+                                  { key: 'vehicleAssignment', label: 'تخصیص خودرو و راننده' },
+                                  { key: 'drivers', label: 'پرونده رانندگان' },
+                                  { key: 'staff', label: 'پرونده پرسنل' },
+                                  { key: 'fleetManagement', label: 'مدیریت ناوگان و خودروها' },
+                                  { key: 'oilService', label: 'تعویض روغن و کارکرد' },
+                                  { key: 'orders', label: 'سفارش‌ها و رزرو بار' },
+                                  { key: 'operations', label: 'اعزام و دیسپچ ناوگان' },
+                                  { key: 'handover', label: 'برگه تحویل خودرو' },
+                                  { key: 'customers', label: 'مشتریان و رهگیری بار' },
+                                  { key: 'finance', label: 'امور مالی و تعرفه‌ها' },
+                                  { key: 'regulations', label: 'آیین‌نامه انضباطی' },
+                                  { key: 'phonebook', label: 'دفترچه تلفن هوشمند' },
+                                  { key: 'developerDocs', label: 'مستندات فنی سیستم' },
+                                ] as const).map((mod) => (
+                                  <div
+                                    key={mod.key}
+                                    className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between"
                                   >
-                                    <option value="full">ثبت و ویرایش کامل</option>
-                                    <option value="view">فقط مشاهده</option>
-                                    <option value="none">بدون دسترسی</option>
-                                  </select>
-                                </div>
+                                    <span className="text-xs text-slate-300">{mod.label}:</span>
+                                    <select
+                                      value={(editPermissions as any)[mod.key] || 'none'}
+                                      onChange={(e) =>
+                                        setEditPermissions({
+                                          ...editPermissions,
+                                          [mod.key]: e.target.value as ModulePermission,
+                                        })
+                                      }
+                                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
+                                    >
+                                      <option value="full">ثبت و ویرایش کامل</option>
+                                      <option value="view">فقط مشاهده</option>
+                                      <option value="none">بدون دسترسی</option>
+                                    </select>
+                                  </div>
+                                ))}
 
-                                {/* Drivers */}
-                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                                  <span className="text-xs text-slate-300">پرونده رانندگان:</span>
-                                  <select
-                                    value={editPermissions.drivers}
+                                {/* Independent Delete Permission */}
+                                <label className="p-2.5 rounded-xl bg-slate-900 border border-rose-500/30 flex items-center justify-between cursor-pointer">
+                                  <span className="text-xs text-rose-300 font-bold">مجوز حذف رکوردها:</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(editPermissions.canDeleteRecords)}
                                     onChange={(e) =>
                                       setEditPermissions({
                                         ...editPermissions,
-                                        drivers: e.target.value as ModulePermission,
+                                        canDeleteRecords: e.target.checked,
                                       })
                                     }
-                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
-                                  >
-                                    <option value="full">ثبت و ویرایش کامل</option>
-                                    <option value="view">فقط مشاهده</option>
-                                    <option value="none">بدون دسترسی</option>
-                                  </select>
-                                </div>
-
-                                {/* Staff */}
-                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                                  <span className="text-xs text-slate-300">پرونده پرسنل:</span>
-                                  <select
-                                    value={editPermissions.staff}
-                                    onChange={(e) =>
-                                      setEditPermissions({
-                                        ...editPermissions,
-                                        staff: e.target.value as ModulePermission,
-                                      })
-                                    }
-                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
-                                  >
-                                    <option value="full">ثبت و ویرایش کامل</option>
-                                    <option value="view">فقط مشاهده</option>
-                                    <option value="none">بدون دسترسی</option>
-                                  </select>
-                                </div>
-
-                                {/* Oil Service */}
-                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                                  <span className="text-xs text-slate-300">تعویض روغن و خودروها:</span>
-                                  <select
-                                    value={editPermissions.oilService}
-                                    onChange={(e) =>
-                                      setEditPermissions({
-                                        ...editPermissions,
-                                        oilService: e.target.value as ModulePermission,
-                                      })
-                                    }
-                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
-                                  >
-                                    <option value="full">ثبت و ویرایش کامل</option>
-                                    <option value="view">فقط مشاهده</option>
-                                    <option value="none">بدون دسترسی</option>
-                                  </select>
-                                </div>
-
-                                {/* Regulations */}
-                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                                  <span className="text-xs text-slate-300">آیین‌نامه انضباطی:</span>
-                                  <select
-                                    value={editPermissions.regulations}
-                                    onChange={(e) =>
-                                      setEditPermissions({
-                                        ...editPermissions,
-                                        regulations: e.target.value as ModulePermission,
-                                      })
-                                    }
-                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
-                                  >
-                                    <option value="full">ثبت و ویرایش کامل</option>
-                                    <option value="view">فقط مشاهده</option>
-                                    <option value="none">بدون دسترسی</option>
-                                  </select>
-                                </div>
-
-                                {/* Orders & Cargo Reservation */}
-                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                                  <span className="text-xs text-slate-300">سفارش‌ها و رزرو بار:</span>
-                                  <select
-                                    value={editPermissions.orders || 'none'}
-                                    onChange={(e) =>
-                                      setEditPermissions({
-                                        ...editPermissions,
-                                        orders: e.target.value as ModulePermission,
-                                      })
-                                    }
-                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
-                                  >
-                                    <option value="full">ثبت و ویرایش کامل</option>
-                                    <option value="view">فقط مشاهده</option>
-                                    <option value="none">بدون دسترسی</option>
-                                  </select>
-                                </div>
-
-                                {/* Finance & Tariffs */}
-                                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                                  <span className="text-xs text-slate-300">امور مالی و تعرفه‌ها:</span>
-                                  <select
-                                    value={editPermissions.finance || 'none'}
-                                    onChange={(e) =>
-                                      setEditPermissions({
-                                        ...editPermissions,
-                                        finance: e.target.value as ModulePermission,
-                                      })
-                                    }
-                                    className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2 py-1"
-                                  >
-                                    <option value="full">ثبت و ویرایش کامل</option>
-                                    <option value="view">فقط مشاهده</option>
-                                    <option value="none">بدون دسترسی</option>
-                                  </select>
-                                </div>
+                                    className="rounded text-rose-500 focus:ring-0 w-4 h-4"
+                                  />
+                                </label>
 
                                 {/* Backup */}
                                 <label className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between cursor-pointer">
@@ -576,11 +508,11 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                                   />
                                 </label>
 
-                                {/* Network Settings Note */}
+                                {/* Network & Excel Note */}
                                 <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 flex items-center justify-between opacity-60">
-                                  <span className="text-xs text-slate-400">تنظیمات شبکه (LAN):</span>
+                                  <span className="text-xs text-slate-400">خروجی اکسل و شبکه (LAN):</span>
                                   <span className="text-[10px] text-amber-400/80 font-bold">
-                                    مختص مدیریت سیستم
+                                    مختص مدیر ارشد
                                   </span>
                                 </div>
                               </div>
@@ -636,6 +568,12 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                                     غیرفعال
                                   </span>
                                 )}
+                                {(user.staffId || user.driverId || user.personnelCode) && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                    متصل به پرونده {user.dossierType === 'DRIVER' ? 'راننده' : 'پرسنل'}
+                                    {user.personnelCode ? ` (کد ${toFaDigits(user.personnelCode)})` : ''}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
                                 <span>
@@ -643,7 +581,7 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                                 </span>
                                 <span>•</span>
                                 <span>
-                                  رمز عبور: <strong className="text-slate-400 font-mono tracking-widest">••••••••</strong>
+                                  شناسه: <strong className="text-slate-400 font-mono text-[11px]">{user.id}</strong>
                                 </span>
                               </div>
 
@@ -841,159 +779,65 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {/* Attendance */}
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-200 block">تابلوی حضور و غیاب</span>
-                      <span className="text-[10px] text-slate-400">ثبت حضور، مرخصی و مأموریت</span>
-                    </div>
-                    <select
-                      value={newPermissions.attendance}
-                      onChange={(e) =>
-                        setNewPermissions({
-                          ...newPermissions,
-                          attendance: e.target.value as ModulePermission,
-                        })
-                      }
-                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
+                  {([
+                    { key: 'attendance', label: 'تابلوی حضور و غیاب', sub: 'ثبت حضور، مرخصی و مأموریت' },
+                    { key: 'vehicleAssignment', label: 'تخصیص خودرو و راننده', sub: 'واگذاری و انتساب ناوگان' },
+                    { key: 'drivers', label: 'پرونده رانندگان', sub: 'مدارک، گواهینامه و سوابق' },
+                    { key: 'staff', label: 'پرونده پرسنل', sub: 'کارگزینی و احکام سازمانی' },
+                    { key: 'fleetManagement', label: 'مدیریت ناوگان و خودروها', sub: 'شناسنامه، بیمه و معاینه فنی' },
+                    { key: 'oilService', label: 'تعویض روغن و کارکرد', sub: 'ثبت کیلومتر، سفر و سرویس روغن' },
+                    { key: 'orders', label: 'سفارش‌ها و رزرو بار', sub: 'ثبت و مدیریت بارنامه‌ها' },
+                    { key: 'operations', label: 'اعزام و دیسپچ ناوگان', sub: 'کنترل میدانی و مأموریت‌ها' },
+                    { key: 'handover', label: 'برگه تحویل خودرو', sub: 'صورت‌جلسه ۶۶ قلمی و بدنه' },
+                    { key: 'customers', label: 'مشتریان و رهگیری بار', sub: 'استعلام لحظه‌ای مرسولات' },
+                    { key: 'finance', label: 'امور مالی و تعرفه‌ها', sub: 'کرایه و جدول نرخ‌ها' },
+                    { key: 'regulations', label: 'آیین‌نامه انضباطی', sub: 'قوانین و چاپ فرم A4' },
+                    { key: 'phonebook', label: 'دفترچه تلفن هوشمند', sub: 'مخاطبین، سانترال و امداد' },
+                    { key: 'developerDocs', label: 'مستندات فنی سیستم', sub: 'معماری، API و راهنمای توسعه' },
+                  ] as const).map((mod) => (
+                    <div
+                      key={mod.key}
+                      className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between"
                     >
-                      <option value="full">ثبت و ویرایش</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">بدون دسترسی</option>
-                    </select>
-                  </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-200 block">{mod.label}</span>
+                        <span className="text-[10px] text-slate-400">{mod.sub}</span>
+                      </div>
+                      <select
+                        value={(newPermissions as any)[mod.key] || 'none'}
+                        onChange={(e) =>
+                          setNewPermissions({
+                            ...newPermissions,
+                            [mod.key]: e.target.value as ModulePermission,
+                          })
+                        }
+                        className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
+                      >
+                        <option value="full">ثبت و ویرایش</option>
+                        <option value="view">فقط مشاهده</option>
+                        <option value="none">بدون دسترسی</option>
+                      </select>
+                    </div>
+                  ))}
 
-                  {/* Drivers */}
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  {/* Independent Delete Permission */}
+                  <label className="p-3 rounded-xl bg-slate-950 border border-rose-500/30 flex items-center justify-between cursor-pointer">
                     <div>
-                      <span className="text-xs font-bold text-slate-200 block">پرونده رانندگان</span>
-                      <span className="text-[10px] text-slate-400">مدارک، گواهینامه و سوابق</span>
+                      <span className="text-xs font-bold text-rose-300 block">مجوز حذف رکوردها</span>
+                      <span className="text-[10px] text-slate-400">حذف راننده، پرسنل، سفارش یا مخاطب</span>
                     </div>
-                    <select
-                      value={newPermissions.drivers}
+                    <input
+                      type="checkbox"
+                      checked={Boolean(newPermissions.canDeleteRecords)}
                       onChange={(e) =>
                         setNewPermissions({
                           ...newPermissions,
-                          drivers: e.target.value as ModulePermission,
+                          canDeleteRecords: e.target.checked,
                         })
                       }
-                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
-                    >
-                      <option value="full">ثبت و ویرایش</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">بدون دسترسی</option>
-                    </select>
-                  </div>
-
-                  {/* Staff */}
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-200 block">پرونده پرسنل</span>
-                      <span className="text-[10px] text-slate-400">کارگزینی و احکام سازمانی</span>
-                    </div>
-                    <select
-                      value={newPermissions.staff}
-                      onChange={(e) =>
-                        setNewPermissions({
-                          ...newPermissions,
-                          staff: e.target.value as ModulePermission,
-                        })
-                      }
-                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
-                    >
-                      <option value="full">ثبت و ویرایش</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">بدون دسترسی</option>
-                    </select>
-                  </div>
-
-                  {/* Oil Service */}
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-200 block">سرویس روغن و خودرو</span>
-                      <span className="text-[10px] text-slate-400">فنی، کیلومتر و تعویض‌ها</span>
-                    </div>
-                    <select
-                      value={newPermissions.oilService}
-                      onChange={(e) =>
-                        setNewPermissions({
-                          ...newPermissions,
-                          oilService: e.target.value as ModulePermission,
-                        })
-                      }
-                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
-                    >
-                      <option value="full">ثبت و ویرایش</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">بدون دسترسی</option>
-                    </select>
-                  </div>
-
-                  {/* Regulations */}
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-200 block">آیین‌نامه انضباطی</span>
-                      <span className="text-[10px] text-slate-400">قوانین و چاپ فرم A4</span>
-                    </div>
-                    <select
-                      value={newPermissions.regulations}
-                      onChange={(e) =>
-                        setNewPermissions({
-                          ...newPermissions,
-                          regulations: e.target.value as ModulePermission,
-                        })
-                      }
-                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
-                    >
-                      <option value="full">ثبت و ویرایش</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">بدون دسترسی</option>
-                    </select>
-                  </div>
-
-                  {/* Orders & Cargo Reservation */}
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-200 block">سفارش‌ها و رزرو بار</span>
-                      <span className="text-[10px] text-slate-400">ثبت و مدیریت بارها</span>
-                    </div>
-                    <select
-                      value={newPermissions.orders || 'none'}
-                      onChange={(e) =>
-                        setNewPermissions({
-                          ...newPermissions,
-                          orders: e.target.value as ModulePermission,
-                        })
-                      }
-                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
-                    >
-                      <option value="full">ثبت و ویرایش</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">بدون دسترسی</option>
-                    </select>
-                  </div>
-
-                  {/* Finance & Tariffs */}
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-200 block">امور مالی و تعرفه‌ها</span>
-                      <span className="text-[10px] text-slate-400">کرایه و جدول نرخ‌ها</span>
-                    </div>
-                    <select
-                      value={newPermissions.finance || 'none'}
-                      onChange={(e) =>
-                        setNewPermissions({
-                          ...newPermissions,
-                          finance: e.target.value as ModulePermission,
-                        })
-                      }
-                      className="bg-slate-800 text-xs text-amber-400 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold"
-                    >
-                      <option value="full">ثبت و ویرایش</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">بدون دسترسی</option>
-                    </select>
-                  </div>
+                      className="rounded text-rose-500 focus:ring-0 w-4 h-4 cursor-pointer"
+                    />
+                  </label>
 
                   {/* Backup */}
                   <label className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between cursor-pointer">
@@ -1033,15 +877,15 @@ export const UserManagementModal: FC<UserManagementModalProps> = ({
                     />
                   </label>
 
-                  {/* Network Settings (Locked to Master Admin) */}
+                  {/* Network Settings & Excel Export (Locked to Master Admin) */}
                   <div className="p-3 rounded-xl bg-[#080d17] border border-amber-500/20 flex items-center justify-between opacity-80">
                     <div>
                       <span className="text-xs font-bold text-amber-300 block flex items-center gap-1">
                         <Lock className="w-3.5 h-3.5 text-amber-400" />
-                        <span>تنظیمات شبکه (LAN)</span>
+                        <span>خروجی اکسل و شبکه (LAN)</span>
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        منحصر به حساب مدیریت
+                        منحصر به نقش مدیر ارشد
                       </span>
                     </div>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">

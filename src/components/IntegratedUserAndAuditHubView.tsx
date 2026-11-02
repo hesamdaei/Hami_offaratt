@@ -59,6 +59,10 @@ import {
 import {
   getStoredUsers,
   saveStoredUsers,
+  syncAndMergeUsers,
+  createSystemUser,
+  updateSystemUser,
+  normalizeUserPermissions,
   isMasterAdmin,
   canManageUsers,
 } from '../utils/authService';
@@ -98,7 +102,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   // Users State
   const [users, setUsers] = useState<AppUser[]>(() => getStoredUsers());
   const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'MASTER' | 'OPERATOR' | 'FLEET'>('ALL');
+  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'MASTER' | 'OPERATOR' | 'FLEET' | 'DOSSIER'>('ALL');
   const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [userPage, setUserPage] = useState<number>(1);
   const [userPageSize, setUserPageSize] = useState<number>(12);
@@ -106,14 +110,27 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   // SQL Architecture Modal State
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
 
-  // Synchronize users with central network server on component mount
+  // Synchronize users with central network server on component mount without overwriting dossier-created users
   useEffect(() => {
+    const refreshLocalUsers = () => {
+      setUsers(getStoredUsers());
+    };
+    window.addEventListener('hamibar:users-updated', refreshLocalUsers);
+
     fetchServerUsers().then((serverUsers) => {
       if (serverUsers && Array.isArray(serverUsers) && serverUsers.length > 0) {
-        setUsers(serverUsers);
-        saveStoredUsers(serverUsers);
+        const merged = syncAndMergeUsers(serverUsers);
+        setUsers(merged);
+      } else {
+        const local = getStoredUsers();
+        setUsers(local);
+        saveServerUsers(local);
       }
     });
+
+    return () => {
+      window.removeEventListener('hamibar:users-updated', refreshLocalUsers);
+    };
   }, []);
 
   // Logs State
@@ -137,18 +154,31 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const [newBaleId, setNewBaleId] = useState('');
   const [newAvatarColor, setNewAvatarColor] = useState(AVATAR_COLORS[1]);
-  const [newPermissions, setNewPermissions] = useState<UserPermissions>({
-    attendance: 'full',
-    drivers: 'view',
-    staff: 'view',
-    oilService: 'none',
-    regulations: 'view',
-    orders: 'none',
-    finance: 'none',
-    backupRestore: false,
-    userManagement: false,
-    networkSettings: false,
-  });
+  const [newPermissions, setNewPermissions] = useState<UserPermissions>(() =>
+    normalizeUserPermissions({
+      attendance: 'full',
+      vehicleAssignment: 'full',
+      drivers: 'view',
+      staff: 'view',
+      fleetManagement: 'view',
+      oilService: 'none',
+      orders: 'none',
+      operations: 'full',
+      handover: 'full',
+      customers: 'view',
+      finance: 'none',
+      regulations: 'view',
+      phonebook: 'full',
+      reports: 'none',
+      developerDocs: 'view',
+      canDeleteRecords: false,
+      canExportExcel: false,
+      backupRestore: false,
+      userManagement: false,
+      networkSettings: false,
+      voipSettings: false,
+    })
+  );
 
   // Edit User Modal
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
@@ -159,18 +189,9 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [editBaleId, setEditBaleId] = useState('');
   const [editAvatarColor, setEditAvatarColor] = useState('');
-  const [editPermissions, setEditPermissions] = useState<UserPermissions>({
-    attendance: 'view',
-    drivers: 'view',
-    staff: 'view',
-    oilService: 'view',
-    regulations: 'view',
-    orders: 'none',
-    finance: 'none',
-    backupRestore: false,
-    userManagement: false,
-    networkSettings: false,
-  });
+  const [editPermissions, setEditPermissions] = useState<UserPermissions>(() =>
+    normalizeUserPermissions({})
+  );
 
   // Quick Password Reset Modal
   const [passwordResetUser, setPasswordResetUser] = useState<AppUser | null>(null);
@@ -184,6 +205,10 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   // USER MANAGEMENT HANDLERS
   // -------------------------------------------------------------
   const handleOpenCreateUser = () => {
+    if (!hasUserManagementPermission) {
+      onShowToast('شما مجوز ایجاد کاربر جدید را ندارید.', 'error');
+      return;
+    }
     setNewFullName('');
     setNewUsername('');
     setNewPassword('');
@@ -191,62 +216,68 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     setNewPhoneNumber('');
     setNewBaleId('');
     setNewAvatarColor(AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]);
-    setNewPermissions({
-      attendance: 'full',
-      drivers: 'view',
-      staff: 'view',
-      oilService: 'none',
-      regulations: 'view',
-      orders: 'none',
-      finance: 'none',
-      backupRestore: false,
-      userManagement: false,
-      networkSettings: false,
-    });
+    setNewPermissions(
+      normalizeUserPermissions({
+        attendance: 'full',
+        vehicleAssignment: 'full',
+        drivers: 'view',
+        staff: 'view',
+        fleetManagement: 'view',
+        oilService: 'none',
+        orders: 'none',
+        operations: 'full',
+        handover: 'full',
+        customers: 'view',
+        finance: 'none',
+        regulations: 'view',
+        phonebook: 'full',
+        reports: 'none',
+        developerDocs: 'view',
+        canDeleteRecords: false,
+        canExportExcel: false,
+        backupRestore: false,
+        userManagement: false,
+        networkSettings: false,
+        voipSettings: false,
+      })
+    );
     setIsCreateUserOpen(true);
   };
 
   const handleCreateUser = (e: FormEvent) => {
     e.preventDefault();
-    const cleanUsername = newUsername.trim().toLowerCase();
-    const cleanFullName = newFullName.trim();
-
-    if (!cleanUsername || !cleanFullName || !newPassword) {
-      onShowToast('لطفاً تمامی فیلدهای الزامی را تکمیل کنید.', 'error');
+    if (!hasUserManagementPermission) {
+      onShowToast('شما مجوز ایجاد کاربر جدید را ندارید.', 'error');
       return;
     }
 
-    if (users.some((u) => u.username.toLowerCase() === cleanUsername)) {
-      onShowToast('این نام کاربری قبلاً در سامانه ثبت شده است.', 'error');
-      return;
-    }
-
-    const newUser: AppUser = {
-      id: `usr-${Date.now()}`,
-      username: cleanUsername,
+    const createRes = createSystemUser({
+      username: newUsername,
       password: newPassword,
-      fullName: cleanFullName,
+      fullName: newFullName,
       roleTitle: newRoleTitle.trim() || 'اپراتور سیستم',
       phoneNumber: newPhoneNumber.trim() || undefined,
       baleId: newBaleId.trim() || undefined,
-      isMasterAdmin: false,
-      isActive: true,
       permissions: newPermissions,
-      createdAt: new Date().toLocaleDateString('fa-IR'),
       avatarColor: newAvatarColor,
-    };
+      dossierType: 'NONE',
+      createdFrom: 'USER_MANAGEMENT',
+    });
 
-    const updated = [...users, newUser];
-    setUsers(updated);
-    saveStoredUsers(updated);
-    saveServerUsers(updated);
+    if (!createRes.ok || !createRes.user) {
+      onShowToast(createRes.error || 'خطا در ایجاد کاربر جدید.', 'error');
+      return;
+    }
+
+    const newUser = createRes.user;
+    setUsers(getStoredUsers());
 
     // Record Audit Log
     recordAuditLog(currentUser, {
       action: 'USER_CREATE',
       module: 'USERS',
       title: 'ایجاد کاربر جدید',
-      description: `کاربر جدید «${cleanFullName}» با نام کاربری «${cleanUsername}» و سمت «${newUser.roleTitle}» در سامانه ایجاد شد.`,
+      description: `کاربر جدید «${newUser.fullName}» با نام کاربری «${newUser.username}» و سمت «${newUser.roleTitle}» در سامانه ایجاد شد.`,
       targetId: newUser.id,
       targetName: newUser.fullName,
       severity: 'SUCCESS',
@@ -255,10 +286,14 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
 
     setAuditLogs(getAuditLogs());
     setIsCreateUserOpen(false);
-    onShowToast(`کاربر جدید «${cleanFullName}» با نام کاربری «${cleanUsername}» با موفقیت افزوده شد.`, 'success');
+    onShowToast(`کاربر جدید «${newUser.fullName}» با نام کاربری «${newUser.username}» با موفقیت افزوده شد.`, 'success');
   };
 
   const handleOpenEditUser = (user: AppUser) => {
+    if (!hasUserManagementPermission) {
+      onShowToast('شما مجوز ویرایش کاربران را ندارید.', 'error');
+      return;
+    }
     setEditingUser(user);
     setEditFullName(user.fullName);
     setEditUsername(user.username);
@@ -267,12 +302,12 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     setEditPhoneNumber(user.phoneNumber || '');
     setEditBaleId(user.baleId || '');
     setEditAvatarColor(user.avatarColor || AVATAR_COLORS[0]);
-    setEditPermissions({ ...user.permissions });
+    setEditPermissions(normalizeUserPermissions(user.permissions, user.isMasterAdmin));
   };
 
   const handleSaveEditUser = (e: FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || !hasUserManagementPermission) return;
 
     const cleanFullName = editFullName.trim();
     if (!cleanFullName) {
@@ -280,7 +315,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       return;
     }
 
-    // Username is strictly immutable after creation (Architecture & Security Requirement 6.4)
+    // Username is strictly immutable after creation
     const immutableUsername = editingUser.username;
 
     const oldValues = {
@@ -290,33 +325,27 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       isActive: editingUser.isActive,
     };
 
-    const updatedUsers = users.map((u) => {
-      if (u.id === editingUser.id) {
-        return {
-          ...u,
-          fullName: cleanFullName,
-          username: immutableUsername,
-          roleTitle: editRoleTitle.trim() || u.roleTitle,
-          password: editPassword.trim() ? editPassword.trim() : u.password,
-          passwordHash: editPassword.trim() ? undefined : u.passwordHash,
-          phoneNumber: editPhoneNumber.trim() || undefined,
-          baleId: editBaleId.trim() || undefined,
-          avatarColor: editAvatarColor || u.avatarColor,
-          // Master admin permissions remain complete
-          permissions: u.isMasterAdmin ? u.permissions : editPermissions,
-        };
-      }
-      return u;
+    const updateRes = updateSystemUser(editingUser.id, {
+      fullName: cleanFullName,
+      roleTitle: editRoleTitle.trim() || editingUser.roleTitle,
+      password: editPassword.trim() ? editPassword.trim() : undefined,
+      phoneNumber: editPhoneNumber.trim() || undefined,
+      baleId: editBaleId.trim() || undefined,
+      avatarColor: editAvatarColor || editingUser.avatarColor,
+      permissions: editingUser.isMasterAdmin ? editingUser.permissions : editPermissions,
     });
 
-    setUsers(updatedUsers);
-    saveStoredUsers(updatedUsers);
-    saveServerUsers(updatedUsers);
+    if (!updateRes.ok || !updateRes.user) {
+      onShowToast(updateRes.error || 'خطا در ذخیره تغییرات کاربر.', 'error');
+      return;
+    }
 
-    // If edited current user, update session
+    const updatedUsers = getStoredUsers();
+    setUsers(updatedUsers);
+
+    // If edited current user, update session immediately
     if (currentUser && currentUser.id === editingUser.id && onUpdateCurrentUserSession) {
-      const freshCurrent = updatedUsers.find((u) => u.id === currentUser.id);
-      if (freshCurrent) onUpdateCurrentUserSession(freshCurrent);
+      onUpdateCurrentUserSession(updateRes.user);
     }
 
     // Record Audit Log
@@ -324,7 +353,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       action: 'USER_UPDATE',
       module: 'USERS',
       title: 'ویرایش مشخصات و دسترسی‌های کاربر',
-      description: `مشخصات کاربر «${cleanFullName}» (نام کاربری: ${immutableUsername}) توسط «${currentUser?.fullName || 'مدیر'}» به‌روزرسانی شد.`,
+      description: `مشخصات کاربر «${cleanFullName}» (نام کاربری ثابت: ${immutableUsername}) توسط «${currentUser?.fullName || 'مدیر'}» به‌روزرسانی شد.`,
       targetId: editingUser.id,
       targetName: cleanFullName,
       severity: 'WARNING',
@@ -338,16 +367,23 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   };
 
   const handleToggleUserActive = (user: AppUser) => {
+    if (!hasUserManagementPermission) {
+      onShowToast('شما مجوز تغییر وضعیت حساب کاربران را ندارید.', 'error');
+      return;
+    }
     if (user.isMasterAdmin) {
       onShowToast('حساب کاربری مدیر ارشد سیستم غیرقابل تعلیق است.', 'error');
       return;
     }
 
     const nextStatus = !user.isActive;
-    const updatedUsers = users.map((u) => (u.id === user.id ? { ...u, isActive: nextStatus } : u));
-    setUsers(updatedUsers);
-    saveStoredUsers(updatedUsers);
-    saveServerUsers(updatedUsers);
+    const updateRes = updateSystemUser(user.id, { isActive: nextStatus });
+    if (!updateRes.ok) {
+      onShowToast(updateRes.error || 'خطا در تغییر وضعیت حساب کاربری.', 'error');
+      return;
+    }
+
+    setUsers(getStoredUsers());
 
     // Record Audit Log
     recordAuditLog(currentUser, {
@@ -370,14 +406,14 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   };
 
   const handleConfirmDeleteUser = () => {
-    if (!userToDelete) return;
+    if (!userToDelete || !hasUserManagementPermission) return;
     if (userToDelete.isMasterAdmin) {
       onShowToast('کاربر مدیر ارشد سیستم غیرقابل حذف است.', 'error');
       setUserToDelete(null);
       return;
     }
 
-    // Protect historical records and audit trail integrity (Requirement Phase 7 & 9)
+    // Protect historical records and audit trail integrity
     const hasHistoricalLogs = auditLogs.some(
       (l) => l.userId === userToDelete.id || l.userName.toLowerCase() === userToDelete.username.toLowerCase()
     );
@@ -413,15 +449,17 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
 
   const handleResetPassword = (e: FormEvent) => {
     e.preventDefault();
-    if (!passwordResetUser || !newPasswordValue.trim()) return;
+    if (!passwordResetUser || !newPasswordValue.trim() || !hasUserManagementPermission) return;
 
-    const updatedUsers = users.map((u) =>
-      u.id === passwordResetUser.id
-        ? { ...u, password: newPasswordValue.trim(), passwordHash: undefined }
-        : u
-    );
-    setUsers(updatedUsers);
-    saveStoredUsers(updatedUsers);
+    const updateRes = updateSystemUser(passwordResetUser.id, {
+      password: newPasswordValue.trim(),
+    });
+    if (!updateRes.ok) {
+      onShowToast(updateRes.error || 'خطا در تغییر رمز عبور.', 'error');
+      return;
+    }
+
+    setUsers(getStoredUsers());
 
     // Record Audit Log
     recordAuditLog(currentUser, {
@@ -488,13 +526,33 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
         !q ||
         u.fullName.toLowerCase().includes(q) ||
         u.username.toLowerCase().includes(q) ||
-        u.roleTitle.toLowerCase().includes(q);
+        u.roleTitle.toLowerCase().includes(q) ||
+        (u.personnelCode && u.personnelCode.toLowerCase().includes(q)) ||
+        (u.id && u.id.toLowerCase().includes(q));
 
       if (!matchSearch) return false;
 
       if (userRoleFilter === 'MASTER' && !u.isMasterAdmin) return false;
-      if (userRoleFilter === 'OPERATOR' && u.roleTitle.toLowerCase().includes('مدیر')) return false;
-      if (userRoleFilter === 'FLEET' && !u.roleTitle.toLowerCase().includes('فنی') && !u.roleTitle.toLowerCase().includes('ناوگان')) return false;
+      if (userRoleFilter === 'OPERATOR' && u.isMasterAdmin) return false;
+      if (
+        userRoleFilter === 'FLEET' &&
+        !u.roleTitle.toLowerCase().includes('فنی') &&
+        !u.roleTitle.toLowerCase().includes('ناوگان') &&
+        !u.roleTitle.toLowerCase().includes('راننده') &&
+        u.permissions.oilService !== 'full' &&
+        u.permissions.fleetManagement !== 'full'
+      ) {
+        return false;
+      }
+      if (
+        userRoleFilter === 'DOSSIER' &&
+        !u.staffId &&
+        !u.driverId &&
+        u.createdFrom !== 'STAFF_DOSSIER' &&
+        u.createdFrom !== 'DRIVER_DOSSIER'
+      ) {
+        return false;
+      }
 
       if (userStatusFilter === 'ACTIVE' && !u.isActive) return false;
       if (userStatusFilter === 'INACTIVE' && u.isActive) return false;
@@ -770,8 +828,9 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                 >
                   <option value="ALL" className="bg-[#0f192e]">همه نقش‌ها</option>
                   <option value="MASTER" className="bg-[#0f192e]">مدیر ارشد</option>
-                  <option value="OPERATOR" className="bg-[#0f192e]">اپراتور شیفت</option>
-                  <option value="FLEET" className="bg-[#0f192e]">مدیر فنی / ترابری</option>
+                  <option value="OPERATOR" className="bg-[#0f192e]">اپراتور و کارشناسان</option>
+                  <option value="FLEET" className="bg-[#0f192e]">فنی، ناوگان و رانندگان</option>
+                  <option value="DOSSIER" className="bg-[#0f192e]">متصل به پرونده پرسنل/راننده</option>
                 </select>
               </div>
 
@@ -795,6 +854,8 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {paginatedUsers.map((user) => {
               const isUserSelf = currentUser?.id === user.id;
+              const isFromStaffDossier = user.dossierType === 'STAFF' || user.createdFrom === 'STAFF_DOSSIER' || Boolean(user.staffId);
+              const isFromDriverDossier = user.dossierType === 'DRIVER' || user.createdFrom === 'DRIVER_DOSSIER' || Boolean(user.driverId);
 
               return (
                 <div
@@ -809,7 +870,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                 >
                   <div>
                     {/* User Header */}
-                    <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-start justify-between gap-2 mb-2.5">
                       <div className="flex items-center gap-3 min-w-0">
                         {/* Avatar */}
                         <div
@@ -855,84 +916,98 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                       </span>
                     </div>
 
+                    {/* Dossier Link & Account Origin Banner */}
+                    <div className="flex items-center justify-between gap-2 mb-2.5 px-2.5 py-1.5 rounded-lg bg-[#0a1222]/90 border border-[#172642] text-[10px]">
+                      <div className="flex items-center gap-1.5 truncate">
+                        {isFromStaffDossier ? (
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold">
+                            متصل به پرونده پرسنل {user.personnelCode ? `(${toFaDigits(user.personnelCode)})` : ''}
+                          </span>
+                        ) : isFromDriverDossier ? (
+                          <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 font-bold">
+                            متصل به پرونده رانندگان {user.personnelCode ? `(${toFaDigits(user.personnelCode)})` : ''}
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                            حساب سیستمی مستقل
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-slate-500 font-mono shrink-0" title="شناسه یکتای داخلی کاربر">
+                        ID: {user.id}
+                      </span>
+                    </div>
+
                     {/* Permissions Badges Matrix */}
                     <div className="bg-[#0a1222] p-2.5 rounded-xl border border-[#1b2b48] mb-3 space-y-1.5">
                       <div className="text-[11px] font-bold text-slate-400 flex items-center justify-between">
-                        <span>مجوزهای ماژولار:</span>
+                        <span>پوشش دسترسی ماژول‌ها:</span>
                         <span className="text-[10px] text-slate-500">
-                          {user.isMasterAdmin ? 'دسترسی کامل نامحدود' : 'بر اساس نقش'}
+                          {user.isMasterAdmin ? 'دسترسی کامل نامحدود (مدیر ارشد)' : 'مبتنی بر نقش و مجوز'}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-1 flex-wrap text-[10px]">
+                        {[
+                          { label: 'حضور', val: user.permissions.attendance },
+                          { label: 'تخصیص خودرو', val: user.permissions.vehicleAssignment },
+                          { label: 'رانندگان', val: user.permissions.drivers },
+                          { label: 'پرسنل', val: user.permissions.staff },
+                          { label: 'ناوگان', val: user.permissions.fleetManagement },
+                          { label: 'روغن', val: user.permissions.oilService },
+                          { label: 'سفارش‌ها', val: user.permissions.orders },
+                          { label: 'عملیات', val: user.permissions.operations },
+                          { label: 'تحویل', val: user.permissions.handover },
+                          { label: 'مشتریان', val: user.permissions.customers },
+                          { label: 'مالی', val: user.permissions.finance },
+                          { label: 'آیین‌نامه', val: user.permissions.regulations },
+                          { label: 'تلفن', val: user.permissions.phonebook },
+                        ].map((item) => {
+                          const effectiveVal = user.isMasterAdmin ? 'full' : item.val || 'none';
+                          return (
+                            <span
+                              key={item.label}
+                              className={`px-1.5 py-0.5 rounded border ${
+                                effectiveVal === 'full'
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                  : effectiveVal === 'view'
+                                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                                  : 'bg-slate-800/80 text-slate-500 border-slate-700/70'
+                              }`}
+                            >
+                              {item.label}: {effectiveVal === 'full' ? 'کامل' : effectiveVal === 'view' ? 'مشاهده' : 'ندارد'}
+                            </span>
+                          );
+                        })}
+
                         <span
                           className={`px-1.5 py-0.5 rounded border ${
-                            user.permissions.attendance === 'full'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                              : user.permissions.attendance === 'view'
-                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                              : 'bg-slate-800 text-slate-500 border-slate-700'
+                            user.isMasterAdmin || user.permissions.canDeleteRecords
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                              : 'bg-slate-800/80 text-slate-500 border-slate-700/70'
                           }`}
                         >
-                          حضور: {user.permissions.attendance === 'full' ? 'کامل' : user.permissions.attendance === 'view' ? 'مشاهده' : 'ندارد'}
+                          حذف رکورد: {user.isMasterAdmin || user.permissions.canDeleteRecords ? 'مجاز' : 'مسدود'}
                         </span>
 
                         <span
                           className={`px-1.5 py-0.5 rounded border ${
-                            user.permissions.drivers === 'full'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                              : user.permissions.drivers === 'view'
-                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                              : 'bg-slate-800 text-slate-500 border-slate-700'
+                            user.isMasterAdmin
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              : 'bg-slate-800/80 text-slate-500 border-slate-700/70'
                           }`}
                         >
-                          رانندگان: {user.permissions.drivers === 'full' ? 'کامل' : user.permissions.drivers === 'view' ? 'مشاهده' : 'ندارد'}
+                          گزارش Excel: {user.isMasterAdmin ? 'مجاز (مدیر ارشد)' : 'فقط مدیر ارشد'}
                         </span>
 
                         <span
                           className={`px-1.5 py-0.5 rounded border ${
-                            user.permissions.oilService === 'full'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                              : user.permissions.oilService === 'view'
-                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                              : 'bg-slate-800 text-slate-500 border-slate-700'
-                          }`}
-                        >
-                          روغن: {user.permissions.oilService === 'full' ? 'کامل' : user.permissions.oilService === 'view' ? 'مشاهده' : 'ندارد'}
-                        </span>
-
-                        <span
-                          className={`px-1.5 py-0.5 rounded border ${
-                            user.isMasterAdmin || user.permissions.orders === 'full'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                              : user.permissions.orders === 'view'
-                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                              : 'bg-slate-800 text-slate-500 border-slate-700'
-                          }`}
-                        >
-                          سفارش‌ها: {user.isMasterAdmin || user.permissions.orders === 'full' ? 'کامل' : user.permissions.orders === 'view' ? 'مشاهده' : 'ندارد'}
-                        </span>
-
-                        <span
-                          className={`px-1.5 py-0.5 rounded border ${
-                            user.isMasterAdmin || user.permissions.finance === 'full'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                              : user.permissions.finance === 'view'
-                              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-                              : 'bg-slate-800 text-slate-500 border-slate-700'
-                          }`}
-                        >
-                          مالی و تعرفه: {user.isMasterAdmin || user.permissions.finance === 'full' ? 'کامل' : user.permissions.finance === 'view' ? 'مشاهده' : 'ندارد'}
-                        </span>
-
-                        <span
-                          className={`px-1.5 py-0.5 rounded border ${
-                            user.permissions.userManagement
+                            user.isMasterAdmin || user.permissions.userManagement
                               ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
-                              : 'bg-slate-800 text-slate-500 border-slate-700'
+                              : 'bg-slate-800/80 text-slate-500 border-slate-700/70'
                           }`}
                         >
-                          مدیریت کاربران: {user.permissions.userManagement ? 'دارد' : 'ندارد'}
+                          مدیریت کاربران: {user.isMasterAdmin || user.permissions.userManagement ? 'دارد' : 'ندارد'}
                         </span>
                       </div>
                     </div>
@@ -1587,105 +1662,65 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
               {/* Module Permissions Matrix */}
               <div className="bg-[#0a1222] border border-[#1b2b48] rounded-xl p-3.5 space-y-3">
                 <div className="font-bold text-white text-xs border-b border-[#1b2b48] pb-1.5 flex items-center justify-between">
-                  <span>تعیین دسترسی به ماژول‌های سامانه:</span>
-                  <span className="text-[10px] text-slate-400">کامل / فقط خواندن / عدم دسترسی</span>
+                  <span>تعیین سطح دسترسی به منوها و قابلیت‌های واقعی سامانه:</span>
+                  <span className="text-[10px] text-slate-400">ثبت/ویرایش کامل • فقط مشاهده • عدم دسترسی</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                    <span className="text-slate-300">حضور و غیاب:</span>
-                    <select
-                      value={newPermissions.attendance}
-                      onChange={(e) =>
-                        setNewPermissions((prev) => ({ ...prev, attendance: e.target.value as ModulePermission }))
-                      }
-                      className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none"
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { key: 'attendance', label: '۱. تابلوی حضور و غیاب' },
+                    { key: 'vehicleAssignment', label: '۲. تخصیص خودرو به راننده' },
+                    { key: 'drivers', label: '۳. پرونده و دایرکتوری رانندگان' },
+                    { key: 'staff', label: '۴. پرونده پرسنل ستادی و عملیاتی' },
+                    { key: 'fleetManagement', label: '۵. مدیریت ناوگان و پلاک‌ها' },
+                    { key: 'oilService', label: '۶. سرویس دوره‌ای و تعویض روغن' },
+                    { key: 'orders', label: '۷. سفارش‌ها و رزرو بار' },
+                    { key: 'operations', label: '۸. عملیات و اعزام بار' },
+                    { key: 'handover', label: '۹. صورتجلسه تحویل خودرو' },
+                    { key: 'customers', label: '۱۰. باشگاه مشتریان و صاحبین بار' },
+                    { key: 'finance', label: '۱۱. امور مالی و جدول تعرفه‌ها' },
+                    { key: 'regulations', label: '۱۲. آیین‌نامه انضباطی' },
+                    { key: 'phonebook', label: '۱۳. دفترچه تلفن و تماس سریع' },
+                    { key: 'developerDocs', label: '۱۴. مستندات فنی سامانه' },
+                  ].map((mod) => (
+                    <div
+                      key={mod.key}
+                      className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]"
                     >
-                      <option value="full">دسترسی کامل (تغییر وضعیت)</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">عدم دسترسی</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                    <span className="text-slate-300">پرونده رانندگان:</span>
-                    <select
-                      value={newPermissions.drivers}
-                      onChange={(e) =>
-                        setNewPermissions((prev) => ({ ...prev, drivers: e.target.value as ModulePermission }))
-                      }
-                      className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none"
-                    >
-                      <option value="full">دسترسی کامل (ثبت و ویرایش)</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">عدم دسترسی</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                    <span className="text-slate-300">پرونده پرسنل:</span>
-                    <select
-                      value={newPermissions.staff}
-                      onChange={(e) =>
-                        setNewPermissions((prev) => ({ ...prev, staff: e.target.value as ModulePermission }))
-                      }
-                      className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none"
-                    >
-                      <option value="full">دسترسی کامل</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">عدم دسترسی</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                    <span className="text-slate-300">سرویس روغن و ناوگان:</span>
-                    <select
-                      value={newPermissions.oilService}
-                      onChange={(e) =>
-                        setNewPermissions((prev) => ({ ...prev, oilService: e.target.value as ModulePermission }))
-                      }
-                      className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none"
-                    >
-                      <option value="full">دسترسی کامل</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">عدم دسترسی</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                    <span className="text-slate-300">سفارش‌ها و رزرو بار:</span>
-                    <select
-                      value={newPermissions.orders || 'none'}
-                      onChange={(e) =>
-                        setNewPermissions((prev) => ({ ...prev, orders: e.target.value as ModulePermission }))
-                      }
-                      className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none"
-                    >
-                      <option value="full">دسترسی کامل</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">عدم دسترسی</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                    <span className="text-slate-300">امور مالی و تعرفه‌ها:</span>
-                    <select
-                      value={newPermissions.finance || 'none'}
-                      onChange={(e) =>
-                        setNewPermissions((prev) => ({ ...prev, finance: e.target.value as ModulePermission }))
-                      }
-                      className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none"
-                    >
-                      <option value="full">دسترسی کامل</option>
-                      <option value="view">فقط مشاهده</option>
-                      <option value="none">عدم دسترسی</option>
-                    </select>
-                  </div>
+                      <span className="text-slate-300 text-[11px]">{mod.label}:</span>
+                      <select
+                        value={(newPermissions as any)[mod.key] || 'none'}
+                        onChange={(e) =>
+                          setNewPermissions((prev) => ({
+                            ...prev,
+                            [mod.key]: e.target.value as ModulePermission,
+                          }))
+                        }
+                        className="bg-[#0a1222] text-white text-[11px] px-2 py-1 rounded border border-slate-700 focus:outline-none"
+                      >
+                        <option value="full">ثبت و ویرایش کامل</option>
+                        <option value="view">فقط مشاهده</option>
+                        <option value="none">عدم دسترسی</option>
+                      </select>
+                    </div>
+                  ))}
                 </div>
 
-                {/* Administrative toggles */}
-                <div className="pt-2 border-t border-[#1b2b48] flex items-center gap-4 flex-wrap">
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                {/* Granular Action & Administrative Toggles */}
+                <div className="pt-2.5 border-t border-[#1b2b48] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-300 bg-[#0f192e] p-2 rounded-lg border border-rose-500/25">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(newPermissions.canDeleteRecords)}
+                      onChange={(e) =>
+                        setNewPermissions((prev) => ({ ...prev, canDeleteRecords: e.target.checked }))
+                      }
+                      className="rounded accent-rose-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span>مجوز حذف رکوردها (مستقل از مجوز ویرایش)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-300 bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
                     <input
                       type="checkbox"
                       checked={newPermissions.userManagement}
@@ -1694,10 +1729,10 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                       }
                       className="rounded accent-emerald-500 w-4 h-4 cursor-pointer"
                     />
-                    <span>مجوز دسترسی به مدیریت کاربران و لاگ</span>
+                    <span>مجوز مدیریت کاربران و مشاهده لاگ</span>
                   </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-300 bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
                     <input
                       type="checkbox"
                       checked={newPermissions.backupRestore}
@@ -1708,6 +1743,27 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                     />
                     <span>مجوز پشتیبان‌گیری و بازیابی داده</span>
                   </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-300 bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(newPermissions.voipSettings)}
+                      onChange={(e) =>
+                        setNewPermissions((prev) => ({ ...prev, voipSettings: e.target.checked }))
+                      }
+                      className="rounded accent-emerald-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span>مجوز تنظیمات تلفن سانترال (VoIP)</span>
+                  </label>
+                </div>
+
+                {/* Master Admin Exclusive Locks */}
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>دریافت خروجی گزارش‌های Excel و تنظیمات شبکه LAN منحصراً در اختیار نقش «مدیر ارشد» است.</span>
+                  </span>
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20">قفل امنیتی</span>
                 </div>
               </div>
 
@@ -1715,13 +1771,13 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                 <button
                   type="button"
                   onClick={() => setIsCreateUserOpen(false)}
-                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white"
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg cursor-pointer"
                 >
                   ثبت کاربر جدید
                 </button>
@@ -1736,7 +1792,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       {/* ========================================================= */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl p-5 space-y-4">
+          <div className="bg-[#0f192e] border border-[#1e2f52] rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-[#1e2f52] pb-3">
               <div className="flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-blue-400" />
@@ -1747,7 +1803,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
               <button
                 type="button"
                 onClick={() => setEditingUser(null)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1783,7 +1839,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                     className="w-full bg-[#070d18] border border-slate-800 rounded-xl px-3 py-2 text-slate-400 cursor-not-allowed font-mono opacity-80"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
-                    نام کاربری پس از ایجاد اولیه ثابت بوده و جهت حفظ یکپارچگی سوابق و ردپای ممیزی غیرقابل تغییر است.
+                    نام کاربری پس از ایجاد اولیه ثابت بوده و در کلاینت و سرور غیرقابل تغییر است.
                   </p>
                 </div>
 
@@ -1825,104 +1881,64 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
               {!editingUser.isMasterAdmin && (
                 <div className="bg-[#0a1222] border border-[#1b2b48] rounded-xl p-3.5 space-y-3">
                   <div className="font-bold text-white text-xs border-b border-[#1b2b48] pb-1.5 flex items-center justify-between">
-                    <span>تنظیم دسترسی‌های این کاربر:</span>
-                    <span className="text-[10px] text-slate-400">سطح دسترسی ماژول‌ها</span>
+                    <span>تنظیم دسترسی‌های ماژولار و عملیاتی کاربر:</span>
+                    <span className="text-[10px] text-slate-400">منطبق با منوهای واقعی سامانه</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                      <span className="text-slate-300">حضور و غیاب:</span>
-                      <select
-                        value={editPermissions.attendance}
-                        onChange={(e) =>
-                          setEditPermissions((prev) => ({ ...prev, attendance: e.target.value as ModulePermission }))
-                        }
-                        className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {[
+                      { key: 'attendance', label: '۱. تابلوی حضور و غیاب' },
+                      { key: 'vehicleAssignment', label: '۲. تخصیص خودرو به راننده' },
+                      { key: 'drivers', label: '۳. پرونده و دایرکتوری رانندگان' },
+                      { key: 'staff', label: '۴. پرونده پرسنل ستادی و عملیاتی' },
+                      { key: 'fleetManagement', label: '۵. مدیریت ناوگان و پلاک‌ها' },
+                      { key: 'oilService', label: '۶. سرویس دوره‌ای و تعویض روغن' },
+                      { key: 'orders', label: '۷. سفارش‌ها و رزرو بار' },
+                      { key: 'operations', label: '۸. عملیات و اعزام بار' },
+                      { key: 'handover', label: '۹. صورتجلسه تحویل خودرو' },
+                      { key: 'customers', label: '۱۰. باشگاه مشتریان و صاحبین بار' },
+                      { key: 'finance', label: '۱۱. امور مالی و جدول تعرفه‌ها' },
+                      { key: 'regulations', label: '۱۲. آیین‌نامه انضباطی' },
+                      { key: 'phonebook', label: '۱۳. دفترچه تلفن و تماس سریع' },
+                      { key: 'developerDocs', label: '۱۴. مستندات فنی سامانه' },
+                    ].map((mod) => (
+                      <div
+                        key={mod.key}
+                        className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]"
                       >
-                        <option value="full">دسترسی کامل</option>
-                        <option value="view">فقط مشاهده</option>
-                        <option value="none">عدم دسترسی</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                      <span className="text-slate-300">رانندگان:</span>
-                      <select
-                        value={editPermissions.drivers}
-                        onChange={(e) =>
-                          setEditPermissions((prev) => ({ ...prev, drivers: e.target.value as ModulePermission }))
-                        }
-                        className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
-                      >
-                        <option value="full">دسترسی کامل</option>
-                        <option value="view">فقط مشاهده</option>
-                        <option value="none">عدم دسترسی</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                      <span className="text-slate-300">پرسنل ستادی:</span>
-                      <select
-                        value={editPermissions.staff}
-                        onChange={(e) =>
-                          setEditPermissions((prev) => ({ ...prev, staff: e.target.value as ModulePermission }))
-                        }
-                        className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
-                      >
-                        <option value="full">دسترسی کامل</option>
-                        <option value="view">فقط مشاهده</option>
-                        <option value="none">عدم دسترسی</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                      <span className="text-slate-300">سرویس روغن:</span>
-                      <select
-                        value={editPermissions.oilService}
-                        onChange={(e) =>
-                          setEditPermissions((prev) => ({ ...prev, oilService: e.target.value as ModulePermission }))
-                        }
-                        className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
-                      >
-                        <option value="full">دسترسی کامل</option>
-                        <option value="view">فقط مشاهده</option>
-                        <option value="none">عدم دسترسی</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                      <span className="text-slate-300">سفارش‌ها و رزرو بار:</span>
-                      <select
-                        value={editPermissions.orders || 'none'}
-                        onChange={(e) =>
-                          setEditPermissions((prev) => ({ ...prev, orders: e.target.value as ModulePermission }))
-                        }
-                        className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
-                      >
-                        <option value="full">دسترسی کامل</option>
-                        <option value="view">فقط مشاهده</option>
-                        <option value="none">عدم دسترسی</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center justify-between bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
-                      <span className="text-slate-300">امور مالی و تعرفه‌ها:</span>
-                      <select
-                        value={editPermissions.finance || 'none'}
-                        onChange={(e) =>
-                          setEditPermissions((prev) => ({ ...prev, finance: e.target.value as ModulePermission }))
-                        }
-                        className="bg-[#0a1222] text-white text-xs px-2 py-1 rounded border border-slate-700"
-                      >
-                        <option value="full">دسترسی کامل</option>
-                        <option value="view">فقط مشاهده</option>
-                        <option value="none">عدم دسترسی</option>
-                      </select>
-                    </div>
+                        <span className="text-slate-300 text-[11px]">{mod.label}:</span>
+                        <select
+                          value={(editPermissions as any)[mod.key] || 'none'}
+                          onChange={(e) =>
+                            setEditPermissions((prev) => ({
+                              ...prev,
+                              [mod.key]: e.target.value as ModulePermission,
+                            }))
+                          }
+                          className="bg-[#0a1222] text-white text-[11px] px-2 py-1 rounded border border-slate-700"
+                        >
+                          <option value="full">ثبت و ویرایش کامل</option>
+                          <option value="view">فقط مشاهده</option>
+                          <option value="none">عدم دسترسی</option>
+                        </select>
+                      </div>
+                    ))}
                   </div>
 
-                  <div className="pt-2 border-t border-[#1b2b48] flex items-center gap-4 flex-wrap">
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <div className="pt-2.5 border-t border-[#1b2b48] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-300 bg-[#0f192e] p-2 rounded-lg border border-rose-500/25">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editPermissions.canDeleteRecords)}
+                        onChange={(e) =>
+                          setEditPermissions((prev) => ({ ...prev, canDeleteRecords: e.target.checked }))
+                        }
+                        className="rounded accent-rose-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span>مجوز حذف رکوردها (مستقل از ویرایش)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-300 bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
                       <input
                         type="checkbox"
                         checked={editPermissions.userManagement}
@@ -1934,7 +1950,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                       <span>دسترسی به مدیریت کاربران و لاگ</span>
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-300 bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
                       <input
                         type="checkbox"
                         checked={editPermissions.backupRestore}
@@ -1943,8 +1959,28 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                         }
                         className="rounded accent-blue-500 w-4 h-4 cursor-pointer"
                       />
-                      <span>دسترسی به پشتیبان‌گیری</span>
+                      <span>دسترسی به پشتیبان‌گیری و بازیابی</span>
                     </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-300 bg-[#0f192e] p-2 rounded-lg border border-[#1e2f52]">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editPermissions.voipSettings)}
+                        onChange={(e) =>
+                          setEditPermissions((prev) => ({ ...prev, voipSettings: e.target.checked }))
+                        }
+                        className="rounded accent-blue-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span>دسترسی به تنظیمات تلفن سانترال (VoIP)</span>
+                    </label>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>دریافت خروجی گزارش‌های Excel منحصراً در اختیار نقش «مدیر ارشد» است.</span>
+                    </span>
+                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20">فقط مدیر ارشد</span>
                   </div>
                 </div>
               )}
@@ -1953,13 +1989,13 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                 <button
                   type="button"
                   onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white"
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white cursor-pointer"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg cursor-pointer"
                 >
                   ذخیره تغییرات
                 </button>

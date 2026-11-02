@@ -54,13 +54,16 @@ import {
   isDateBeforeStart,
 } from '../utils/jalaali';
 import { IranianPlate } from './IranianPlate';
-import { exportToExcel, exportStaffToExcel } from '../utils/excelExport';
+import { exportToExcel, exportStaffToExcel, assertMasterAdminExcelPermission } from '../utils/excelExport';
 import { STAFF_DEPARTMENTS, StaffDepartment } from '../utils/staffSeedData';
 import { VehicleItem, VEHICLE_TYPE_NAMES, DriverDirectoryItem } from '../utils/fleetSeedData';
 import { AttendanceSheetPrintModal, AttendancePrintItem } from './AttendanceSheetPrintModal';
 import { LeaveCalendarPrintModal, LeaveCalendarBoardMode } from './LeaveCalendarPrintModal';
+import { AppUser } from '../types/auth';
+import { canEditModule, canExportExcel } from '../utils/authService';
 
 interface AttendanceManagementHubViewProps {
+  currentUser?: AppUser | null;
   drivers: Driver[];
   driverRecords: AttendanceRecords;
   staffMembers: StaffMember[];
@@ -97,6 +100,7 @@ type AccountStatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 type FilterVehicle = 'ALL' | 'WITH_VEHICLE' | 'WITHOUT_VEHICLE';
 
 export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> = ({
+  currentUser = null,
   drivers,
   driverRecords,
   staffMembers,
@@ -644,8 +648,14 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
     onShowToast(`وضعیت پرسنل به «${label}» به‌روزرسانی شد`, 'success');
   };
 
+  const canEditAttendance = !currentUser || canEditModule(currentUser, 'attendance');
+
   // Mark all present in currently active board
   const handleMarkAllPresent = () => {
+    if (!canEditAttendance) {
+      onShowToast('شما مجوز ثبت یا ویرایش حضور و غیاب را ندارید (دسترسی فقط مشاهده).', 'error');
+      return;
+    }
     if (activeBoard === 'DRIVERS') {
       filteredDrivers.forEach((d) => {
         onUpdateDriverStatus(d.id, activeDateKey, 'none');
@@ -659,13 +669,16 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
     }
   };
 
-  // Export Excel
+  // Export Excel (Strictly restricted to Master Admin)
   const handleExport = () => {
+    if (!assertMasterAdminExcelPermission(currentUser, activeBoard === 'DRIVERS' ? 'خروجی اکسل حضور و غیاب رانندگان' : 'خروجی اکسل حضور و غیاب پرسنل', onShowToast)) {
+      return;
+    }
     if (activeBoard === 'DRIVERS') {
-      exportToExcel(drivers, driverRecords, selectedYear, selectedMonth);
+      exportToExcel(drivers, driverRecords, selectedYear, selectedMonth, currentUser);
       onShowToast('فایل اکسل حضور و غیاب رانندگان با موفقیت دریافت شد', 'success');
     } else {
-      exportStaffToExcel(staffMembers, staffRecords, selectedYear, selectedMonth);
+      exportStaffToExcel(staffMembers, staffRecords, selectedYear, selectedMonth, currentUser);
       onShowToast('فایل اکسل حضور و غیاب پرسنل با موفقیت دریافت شد', 'success');
     }
   };
@@ -801,14 +814,16 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
               <span className="hidden sm:inline">چاپ روزانه</span>
             </button>
 
-            <button
-              onClick={handleExport}
-              title="دریافت فایل اکسل"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-slate-200 border border-[#273d6b] transition-colors cursor-pointer"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">اکسل</span>
-            </button>
+            {(!currentUser || canExportExcel(currentUser)) && (
+              <button
+                onClick={handleExport}
+                title="دریافت فایل اکسل (مختص مدیر ارشد)"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-slate-200 border border-[#273d6b] transition-colors cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">اکسل</span>
+              </button>
+            )}
 
             {activeBoard === 'DRIVERS' ? (
               onNavigateToDriversDirectory && (

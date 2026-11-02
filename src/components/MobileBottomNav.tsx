@@ -3,7 +3,7 @@ import { CalendarCheck, Truck, Users, Droplet, Menu, Shield } from 'lucide-react
 import { ActiveAppTab } from './Header';
 import { toFaDigits } from '../utils/jalaali';
 import { AppUser } from '../types/auth';
-import { isMasterAdmin } from '../utils/authService';
+import { isMasterAdmin, canAccessTab } from '../utils/authService';
 
 interface MobileBottomNavProps {
   activeTab: ActiveAppTab;
@@ -43,7 +43,7 @@ export const MobileBottomNav: FC<MobileBottomNavProps> = ({
       label: 'روغن و خودرو',
       icon: Droplet,
     },
-  ];
+  ].filter((item) => canAccessTab(currentUser, item.id));
 
   return (
     <nav

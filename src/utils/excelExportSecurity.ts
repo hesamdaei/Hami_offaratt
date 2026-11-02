@@ -22,9 +22,11 @@ export function canExportExcel(user: AppUser | null | undefined): boolean {
  */
 export function assertMasterAdminExcelPermission(
   user: AppUser | null | undefined,
-  reportName: string = 'گزارش اکسل'
-): void {
+  reportName: string = 'گزارش اکسل',
+  onShowToast?: (msg: string, type: 'success' | 'error' | 'info') => void
+): boolean {
   if (!canExportExcel(user)) {
+    const message = `خطای دسترسی: دریافت و تولید گزارش‌های اکسل (${reportName}) منحصراً در اختیار نقش «مدیر ارشد» سامانه می‌باشد.`;
     // ثبت تلاش غیرمجاز در دفتر وقایع امنیتی
     try {
       recordAuditLog(user, {
@@ -38,10 +40,14 @@ export function assertMasterAdminExcelPermission(
       console.warn('Could not record security audit log for excel export rejection:', e);
     }
 
-    const err = new Error(
-      `خطای دسترسی: دریافت و تولید گزارش‌های اکسل (${reportName}) منحصراً در اختیار نقش «مدیر ارشد» سامانه می‌باشد.`
-    );
+    if (onShowToast) {
+      onShowToast(message, 'error');
+      return false;
+    }
+
+    const err = new Error(message);
     err.name = 'SecurityAccessDeniedError';
     throw err;
   }
+  return true;
 }

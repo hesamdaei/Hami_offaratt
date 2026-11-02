@@ -46,15 +46,29 @@ const INITIAL_USERS = [
     phoneNumber: '09120000000',
     isMasterAdmin: true,
     isActive: true,
+    createdFrom: 'SEED',
     permissions: {
       attendance: 'full',
+      vehicleAssignment: 'full',
       drivers: 'full',
       staff: 'full',
+      fleetManagement: 'full',
       oilService: 'full',
+      orders: 'full',
+      operations: 'full',
+      handover: 'full',
+      customers: 'full',
+      finance: 'full',
       regulations: 'full',
+      phonebook: 'full',
+      reports: 'full',
+      developerDocs: 'full',
+      canDeleteRecords: true,
+      canExportExcel: true,
       backupRestore: true,
       userManagement: true,
       networkSettings: true,
+      voipSettings: true,
     },
     createdAt: '1403/01/01',
     avatarColor: 'from-amber-500 to-orange-600',
@@ -67,15 +81,29 @@ const INITIAL_USERS = [
     roleTitle: 'اپراتور شیفت',
     isMasterAdmin: false,
     isActive: true,
+    createdFrom: 'SEED',
     permissions: {
       attendance: 'full',
+      vehicleAssignment: 'full',
       drivers: 'view',
       staff: 'view',
+      fleetManagement: 'view',
       oilService: 'none',
+      orders: 'none',
+      operations: 'full',
+      handover: 'full',
+      customers: 'view',
+      finance: 'none',
       regulations: 'view',
+      phonebook: 'full',
+      reports: 'none',
+      developerDocs: 'view',
+      canDeleteRecords: false,
+      canExportExcel: false,
       backupRestore: false,
       userManagement: false,
       networkSettings: false,
+      voipSettings: false,
     },
     createdAt: '1403/07/01',
     avatarColor: 'from-blue-500 to-cyan-600',
@@ -88,15 +116,29 @@ const INITIAL_USERS = [
     roleTitle: 'مدیر فنی و ترابری',
     isMasterAdmin: false,
     isActive: true,
+    createdFrom: 'SEED',
     permissions: {
       attendance: 'view',
+      vehicleAssignment: 'full',
       drivers: 'full',
       staff: 'none',
+      fleetManagement: 'full',
       oilService: 'full',
+      orders: 'none',
+      operations: 'view',
+      handover: 'full',
+      customers: 'view',
+      finance: 'none',
       regulations: 'full',
+      phonebook: 'view',
+      reports: 'none',
+      developerDocs: 'view',
+      canDeleteRecords: false,
+      canExportExcel: false,
       backupRestore: false,
       userManagement: false,
       networkSettings: false,
+      voipSettings: false,
     },
     createdAt: '1403/07/15',
     avatarColor: 'from-emerald-500 to-teal-600',
@@ -258,6 +300,115 @@ function cleanOldBackups() {
   } catch {}
 }
 
+// Helper to sanitize and deduplicate system users while enforcing immutable usernames
+function sanitizeAndValidateUsers(incomingUsers: any[], currentUsers: any[]): any[] {
+  const existingById = new Map<string, any>();
+  const existingByUsername = new Map<string, any>();
+  for (const u of currentUsers) {
+    if (u && typeof u === 'object') {
+      if (u.id) existingById.set(String(u.id), u);
+      if (u.username) existingByUsername.set(String(u.username).trim().toLowerCase(), u);
+    }
+  }
+
+  const seenIds = new Set<string>();
+  const seenUsernames = new Set<string>();
+  const seenStaffIds = new Set<string>();
+  const seenDriverIds = new Set<string>();
+  const result: any[] = [];
+
+  for (const rawUser of incomingUsers) {
+    if (!rawUser || typeof rawUser !== 'object') continue;
+    const existing =
+      (rawUser.id && existingById.get(String(rawUser.id))) ||
+      (rawUser.username && existingByUsername.get(String(rawUser.username).trim().toLowerCase()));
+
+    // Username is strictly immutable once created
+    const immutableUsername = existing && existing.username
+      ? String(existing.username).trim().toLowerCase()
+      : String(rawUser.username || '').trim().toLowerCase();
+
+    if (!immutableUsername) continue;
+
+    if (existing && existing.username && rawUser.username && String(rawUser.username).trim().toLowerCase() !== immutableUsername) {
+      console.warn(
+        `[SECURITY WARNING] تلاش برای تغییر نام‌کاربری غیرقابل‌تغییر «${existing.username}» به «${rawUser.username}» در لایه سرور مسدود شد.`
+      );
+    }
+
+    const stableId = existing && existing.id ? String(existing.id) : String(rawUser.id || `usr-${Date.now()}`);
+    if (seenIds.has(stableId) || seenUsernames.has(immutableUsername)) {
+      continue;
+    }
+
+    const staffId = rawUser.staffId || existing?.staffId;
+    const driverId = rawUser.driverId || existing?.driverId;
+
+    // Prevent duplicate user accounts for the same staff or driver dossier
+    if (staffId && seenStaffIds.has(String(staffId))) {
+      console.warn(`[SECURITY WARNING] جلوگیری از ایجاد حساب کاربری تکراری برای پرونده پرسنلی ${staffId}`);
+      continue;
+    }
+    if (driverId && seenDriverIds.has(String(driverId))) {
+      console.warn(`[SECURITY WARNING] جلوگیری از ایجاد حساب کاربری تکراری برای پرونده راننده ${driverId}`);
+      continue;
+    }
+
+    seenIds.add(stableId);
+    seenUsernames.add(immutableUsername);
+    if (staffId) seenStaffIds.add(String(staffId));
+    if (driverId) seenDriverIds.add(String(driverId));
+
+    const isMaster = Boolean(rawUser.isMasterAdmin || immutableUsername === 'admin' || stableId === 'usr-master-admin');
+
+    result.push({
+      ...(existing || {}),
+      ...rawUser,
+      id: stableId,
+      username: immutableUsername,
+      isMasterAdmin: isMaster,
+      isActive: isMaster ? true : rawUser.isActive !== false,
+      staffId: staffId || undefined,
+      driverId: driverId || undefined,
+      personnelCode: rawUser.personnelCode || existing?.personnelCode || undefined,
+      dossierType: rawUser.dossierType || existing?.dossierType || (staffId ? 'STAFF' : driverId ? 'DRIVER' : 'NONE'),
+      createdFrom: rawUser.createdFrom || existing?.createdFrom || 'USER_MANAGEMENT',
+      permissions: isMaster
+        ? {
+            ...INITIAL_USERS[0].permissions,
+            ...(rawUser.permissions || {}),
+            canDeleteRecords: true,
+            canExportExcel: true,
+            backupRestore: true,
+            userManagement: true,
+            networkSettings: true,
+            voipSettings: true,
+          }
+        : {
+            ...INITIAL_USERS[1].permissions,
+            ...(existing?.permissions || {}),
+            ...(rawUser.permissions || {}),
+            // Non-master users can NEVER have Excel export or LAN network settings
+            reports: 'none',
+            canExportExcel: false,
+            networkSettings: false,
+          },
+    });
+  }
+
+  // Always guarantee Master Admin exists and is active
+  if (!result.some((u) => u.isMasterAdmin && u.isActive !== false)) {
+    const existingMaster = existingById.get('usr-master-admin') || INITIAL_USERS[0];
+    result.unshift({
+      ...existingMaster,
+      isMasterAdmin: true,
+      isActive: true,
+    });
+  }
+
+  return result;
+}
+
 // Save database safely and cross-platform (Windows & Linux resilient)
 function saveDatabase(data: any) {
   try {
@@ -266,8 +417,25 @@ function saveDatabase(data: any) {
     dbVersion = Date.now().toString();
     lastSavedTimestamp = now.toISOString();
 
+    // Read current DB to ensure users are NEVER accidentally wiped by partial DB syncs
+    let existingUsers: any[] = INITIAL_USERS;
+    try {
+      if (fs.existsSync(DB_FILE)) {
+        const currentRaw = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
+        if (currentRaw && Array.isArray(currentRaw.users) && currentRaw.users.length > 0) {
+          existingUsers = currentRaw.users;
+        }
+      }
+    } catch {}
+
+    const resolvedUsers =
+      Array.isArray(data.users) && data.users.length > 0
+        ? sanitizeAndValidateUsers(data.users, existingUsers)
+        : existingUsers;
+
     const payload = {
       ...data,
+      users: resolvedUsers,
       version: dbVersion,
       lastSavedAt: lastSavedTimestamp,
       serverVersion: '1.0.0',
@@ -324,6 +492,7 @@ app.get(['/api/lan/status', '/api/status'], (req, res) => {
       driversCount: Array.isArray(db.drivers) ? db.drivers.length : 0,
       vehiclesCount: Array.isArray(db.vehicles) ? db.vehicles.length : 0,
       staffCount: Array.isArray(db.staffMembers) ? db.staffMembers.length : 0,
+      usersCount: Array.isArray(db.users) ? db.users.length : INITIAL_USERS.length,
       lastSaved: db.lastSavedAt || lastSavedTimestamp,
     } : null,
   });
@@ -371,7 +540,8 @@ app.post(['/api/lan/db', '/api/db'], (req, res) => {
 // Dedicated Users Management API - centralized across network
 app.get(['/api/lan/users', '/api/users'], (req, res) => {
   const db = readDatabase();
-  const users = db && Array.isArray(db.users) ? db.users : INITIAL_USERS;
+  const rawUsers = db && Array.isArray(db.users) && db.users.length > 0 ? db.users : INITIAL_USERS;
+  const users = sanitizeAndValidateUsers(rawUsers, rawUsers);
   res.json({ ok: true, users, version: dbVersion });
 });
 
@@ -382,24 +552,9 @@ app.post(['/api/lan/users', '/api/users'], (req, res) => {
   }
 
   const db = readDatabase() || {};
-  const currentUsers: any[] = Array.isArray(db.users) ? db.users : [...INITIAL_USERS];
-  const userMap = new Map<string, any>(currentUsers.map((u) => [u.id, u]));
+  const currentUsers: any[] = Array.isArray(db.users) && db.users.length > 0 ? db.users : [...INITIAL_USERS];
 
-  // Enforce username immutability: Existing user's username cannot be modified!
-  const sanitizedUsers = incomingUsers.map((incUser: any) => {
-    if (!incUser || typeof incUser !== 'object') return incUser;
-    const existing = userMap.get(incUser.id);
-    if (existing && existing.username) {
-      if (incUser.username !== existing.username) {
-        console.warn(`[SECURITY WARNING] تلاش برای تغییر نام‌کاربری نامتغیر «${existing.username}» به «${incUser.username}» در سرور مسدود شد.`);
-      }
-      return {
-        ...incUser,
-        username: existing.username, // Strictly immutable
-      };
-    }
-    return incUser;
-  });
+  const sanitizedUsers = sanitizeAndValidateUsers(incomingUsers, currentUsers);
 
   // Ensure at least one Master Admin remains active
   const hasActiveMaster = sanitizedUsers.some((u: any) => u.isMasterAdmin && u.isActive !== false);
@@ -413,7 +568,12 @@ app.post(['/api/lan/users', '/api/users'], (req, res) => {
   db.users = sanitizedUsers;
   const success = saveDatabase(db);
   if (success) {
-    res.json({ ok: true, message: 'کاربران با اعمال سیاست امنیت و ثبات نام‌کاربری در دیتابیس شبکه ذخیره شدند', version: dbVersion });
+    res.json({
+      ok: true,
+      users: sanitizedUsers,
+      message: 'کاربران با اعمال سیاست امنیت، یکپارچگی پرونده و ثبات نام‌کاربری در دیتابیس شبکه ذخیره شدند',
+      version: dbVersion,
+    });
   } else {
     res.status(500).json({ ok: false, error: 'خطا در ذخیره کاربران در دیتابیس شبکه' });
   }

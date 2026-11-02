@@ -1,4 +1,4 @@
-import { FC, useState, useMemo, FormEvent } from 'react';
+import { FC, useState, useMemo, FormEvent, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -25,8 +25,23 @@ import {
   List,
   Calendar,
   Send,
+  KeyRound,
+  Lock,
 } from 'lucide-react';
 import { DriverDirectoryItem, DriverDocuments, VehicleItem } from '../utils/fleetSeedData';
+import { AppUser } from '../types/auth';
+import {
+  getStoredUsers,
+  createSystemUser,
+  updateSystemUser,
+  findLinkedUserForDossier,
+  normalizeUserPermissions,
+  canEditModule,
+  canExportExcel,
+  canManageUsers,
+} from '../utils/authService';
+import { assertMasterAdminExcelPermission } from '../utils/excelExportSecurity';
+import { recordAuditLog } from '../utils/auditLogger';
 import { toFaDigits } from '../utils/jalaali';
 import { DocumentUploaderModal, DocSlot } from './DocumentUploaderModal';
 import { DriverCard } from './DriverCard';
@@ -86,6 +101,7 @@ const DRIVER_DOC_SLOTS: DocSlot[] = [
 interface DriversDirectoryViewProps {
   drivers: DriverDirectoryItem[];
   vehicles?: VehicleItem[];
+  currentUser?: AppUser | null;
   onAddDriver: (driver: DriverDirectoryItem) => void;
   onUpdateDriver: (driver: DriverDirectoryItem) => void;
   onAssignVehicleToDriver?: (driverId: string, vehiclePlateOrNone: string) => void;
@@ -99,6 +115,7 @@ interface DriversDirectoryViewProps {
 export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
   drivers,
   vehicles = [],
+  currentUser = null,
   onAddDriver,
   onUpdateDriver,
   onAssignVehicleToDriver,
@@ -108,6 +125,37 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
   onCallPhone,
   onShowToast,
 }) => {
+  const canEditDrivers = currentUser ? canEditModule(currentUser, 'drivers') : true;
+  const canManageAccounts = currentUser ? (canManageUsers(currentUser) || canEditModule(currentUser, 'drivers')) : true;
+  const canExportDriversExcel = currentUser ? canExportExcel(currentUser) : false;
+
+  const [systemUsers, setSystemUsers] = useState<AppUser[]>(() => getStoredUsers());
+  useEffect(() => {
+    const refreshUsers = () => setSystemUsers(getStoredUsers());
+    window.addEventListener('hamibar:users-updated', refreshUsers);
+    return () => window.removeEventListener('hamibar:users-updated', refreshUsers);
+  }, []);
+
+  const getLinkedAccount = (d: DriverDirectoryItem): AppUser | undefined =>
+    findLinkedUserForDossier(
+      {
+        userId: d.userId,
+        username: d.username,
+        driverId: d.id,
+        personnelCode: d.personnelCode || d.code,
+        fullName: d.name,
+      },
+      systemUsers
+    );
+
+  // Driver Account Modal state
+  const [accountModalDriver, setAccountModalDriver] = useState<DriverDirectoryItem | null>(null);
+  const [accountModalExistingUser, setAccountModalExistingUser] = useState<AppUser | null>(null);
+  const [accountUsername, setAccountUsername] = useState('');
+  const [accountPassword, setAccountPassword] = useState('123456');
+  const [accountRoleTitle, setAccountRoleTitle] = useState('راننده ناوگان');
+  const [accountIsActive, setAccountIsActive] = useState(true);
+
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -312,7 +360,146 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
     });
   }, [filtered, sortField, sortDirection]);
 
+  const handleOpenDriverAccountModal = (driver: DriverDirectoryItem) => {
+    if (!canManageAccounts) {
+      onShowToast?.('شما مجوز ایجاد یا مدیریت حساب کاربری سیستمی را ندارید.', 'error');
+      return;
+    }
+    setAccountModalDriver(driver);
+    const existingAcc = getLinkedAccount(driver);
+    if (existingAcc) {
+      setAccountModalExistingUser(existingAcc);
+      setAccountUsername(existingAcc.username);
+      setAccountPassword('');
+      setAccountRoleTitle(existingAcc.roleTitle || 'راننده ناوگان');
+      setAccountIsActive(existingAcc.isActive !== false);
+    } else {
+      setAccountModalExistingUser(null);
+      const codeStr = (driver.personnelCode || driver.code || driver.id.slice(-4)).toLowerCase().replace(/[^a-z0-9]/g, '');
+      setAccountUsername(`drv_${codeStr}`);
+      setAccountPassword('123456');
+      setAccountRoleTitle('راننده ناوگان');
+      setAccountIsActive(true);
+    }
+  };
+
+  const handleConfirmDriverAccount = (e: FormEvent) => {
+    e.preventDefault();
+    if (!accountModalDriver) return;
+
+    const driverPermissions = normalizeUserPermissions({
+      attendance: 'view',
+      vehicleAssignment: 'view',
+      drivers: 'view',
+      staff: 'none',
+      fleetManagement: 'view',
+      oilService: 'view',
+      orders: 'view',
+      operations: 'view',
+      handover: 'view',
+      customers: 'none',
+      finance: 'none',
+      regulations: 'view',
+      phonebook: 'view',
+      reports: 'none',
+      developerDocs: 'none',
+      canDeleteRecords: false,
+      canExportExcel: false,
+      backupRestore: false,
+      userManagement: false,
+      networkSettings: false,
+      voipSettings: false,
+    });
+
+    if (accountModalExistingUser) {
+      const updateRes = updateSystemUser(accountModalExistingUser.id, {
+        fullName: accountModalDriver.name,
+        roleTitle: accountRoleTitle.trim() || accountModalExistingUser.roleTitle,
+        phoneNumber: accountModalDriver.phone || accountModalExistingUser.phoneNumber,
+        password: accountPassword.trim() ? accountPassword.trim() : undefined,
+        isActive: accountIsActive,
+        driverId: accountModalDriver.id,
+        personnelCode: accountModalDriver.personnelCode || accountModalDriver.code,
+        dossierType: 'DRIVER',
+      });
+
+      if (!updateRes.ok || !updateRes.user) {
+        onShowToast?.(updateRes.error || 'خطا در به‌روزرسانی حساب کاربری راننده.', 'error');
+        return;
+      }
+
+      onUpdateDriver({
+        ...accountModalDriver,
+        userId: updateRes.user.id,
+        username: updateRes.user.username,
+      });
+
+      recordAuditLog(currentUser, {
+        action: 'USER_UPDATE',
+        module: 'USERS',
+        title: 'به‌روزرسانی حساب کاربری از بخش پرونده رانندگان',
+        description: `حساب کاربری متصل به پرونده راننده «${accountModalDriver.name}» (${updateRes.user.username}) به‌روزرسانی شد.`,
+        targetId: updateRes.user.id,
+        targetName: updateRes.user.fullName,
+        severity: 'INFO',
+      });
+
+      setSystemUsers(getStoredUsers());
+      setAccountModalDriver(null);
+      setAccountModalExistingUser(null);
+      onShowToast?.(`حساب کاربری «${updateRes.user.username}» با موفقیت به‌روزرسانی شد.`, 'success');
+      return;
+    }
+
+    const createRes = createSystemUser({
+      username: accountUsername,
+      password: accountPassword,
+      fullName: accountModalDriver.name,
+      roleTitle: accountRoleTitle.trim() || 'راننده ناوگان',
+      phoneNumber: accountModalDriver.phone,
+      permissions: driverPermissions,
+      avatarColor: 'from-emerald-500 to-teal-600',
+      driverId: accountModalDriver.id,
+      personnelCode: accountModalDriver.personnelCode || accountModalDriver.code,
+      dossierType: 'DRIVER',
+      createdFrom: 'DRIVER_DOSSIER',
+    });
+
+    if (!createRes.ok || !createRes.user) {
+      onShowToast?.(createRes.error || 'خطا در ایجاد حساب کاربری سیستمی.', 'error');
+      return;
+    }
+
+    onUpdateDriver({
+      ...accountModalDriver,
+      userId: createRes.user.id,
+      username: createRes.user.username,
+    });
+
+    recordAuditLog(currentUser, {
+      action: 'USER_CREATE',
+      module: 'USERS',
+      title: 'ایجاد حساب کاربری سیستمی از بخش پرونده رانندگان',
+      description: `حساب کاربری «${createRes.user.username}» برای پرونده راننده «${accountModalDriver.name}» ایجاد و در مدیریت کاربران ثبت شد.`,
+      targetId: createRes.user.id,
+      targetName: createRes.user.fullName,
+      severity: 'SUCCESS',
+    });
+
+    setSystemUsers(getStoredUsers());
+    setAccountModalDriver(null);
+    setAccountModalExistingUser(null);
+    onShowToast?.(
+      `حساب کاربری سیستمی «${createRes.user.username}» برای راننده ${accountModalDriver.name} ایجاد شد و در «مدیریت کاربران» قابل مشاهده است.`,
+      'success'
+    );
+  };
+
   const handleOpenAdd = () => {
+    if (!canEditDrivers) {
+      onShowToast?.('شما مجوز ثبت یا افتتاح پرونده راننده جدید را ندارید.', 'error');
+      return;
+    }
     setEditingDriver(null);
     setFormData({
       name: '',
@@ -332,6 +519,10 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
   };
 
   const handleOpenEdit = (d: DriverDirectoryItem) => {
+    if (!canEditDrivers) {
+      onShowToast?.('شما مجوز ویرایش پرونده رانندگان را ندارید.', 'error');
+      return;
+    }
     setEditingDriver(d);
     setFormData({
       name: d.name,
@@ -352,6 +543,10 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (!canEditDrivers) {
+      onShowToast?.('شما مجوز ثبت یا ویرایش پرونده رانندگان را ندارید.', 'error');
+      return;
+    }
     if (editingDriver) {
       const updated: DriverDirectoryItem = {
         ...editingDriver,
@@ -364,6 +559,20 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
         status: formData.status,
         assignedVehicles: formData.assignedVehicle ? [formData.assignedVehicle] : [],
       };
+      const existingAcc = getLinkedAccount(editingDriver);
+      if (existingAcc) {
+        const syncRes = updateSystemUser(existingAcc.id, {
+          fullName: updated.name,
+          phoneNumber: updated.phone,
+          driverId: updated.id,
+          personnelCode: updated.personnelCode || updated.code,
+          dossierType: 'DRIVER',
+        });
+        if (syncRes.ok && syncRes.user) {
+          updated.userId = syncRes.user.id;
+          updated.username = syncRes.user.username;
+        }
+      }
       onUpdateDriver(updated);
       if (formData.assignedVehicle !== (editingDriver.assignedVehicles?.[0] || '')) {
         onAssignVehicleToDriver?.(editingDriver.id, formData.assignedVehicle || 'NONE');
@@ -391,9 +600,20 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
   };
 
   const handleExportExcel = () => {
+    try {
+      assertMasterAdminExcelPermission(currentUser, 'فهرست پرونده رانندگان');
+    } catch (err: any) {
+      onShowToast?.(
+        err.message || 'دسترسی غیرمجاز: دریافت خروجی اکسل منحصراً در اختیار مدیر ارشد سامانه است.',
+        'error'
+      );
+      return;
+    }
+
     const data = filtered.map((d) => ({
       'کد پرسنلی': d.code,
       'نام و نام خانوادگی': d.name,
+      'نام کاربری سیستم': getLinkedAccount(d)?.username || d.username || 'بدون حساب کاربری',
       'شماره تماس': d.phone,
       'کد ملی': d.nationalCode,
       'شماره گواهینامه': d.licenseNumber,
@@ -519,13 +739,16 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
             </button>
           </div>
 
-          <button
-            onClick={handleExportExcel}
-            className="px-3 py-2 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>خروجی اکسل</span>
-          </button>
+          {canExportDriversExcel && (
+            <button
+              onClick={handleExportExcel}
+              className="px-3 py-2 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="استخراج فایل اکسل پرونده رانندگان (ویژه مدیر ارشد)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>خروجی اکسل</span>
+            </button>
+          )}
 
           {/* Print List Button (Standard A4 Table List without web headers) */}
           <button
@@ -538,13 +761,15 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
             <span>چاپ لیست</span>
           </button>
 
-          <button
-            onClick={handleOpenAdd}
-            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-900/30 cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>ثبت پرونده راننده جدید</span>
-          </button>
+          {canEditDrivers && (
+            <button
+              onClick={handleOpenAdd}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-900/30 cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>ثبت پرونده راننده جدید</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -849,14 +1074,41 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
                         {/* Actions */}
                         <td className="py-3 px-3.5 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(d)}
-                              className="p-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 transition cursor-pointer"
-                              title="ویرایش پرونده راننده"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
+                            {(() => {
+                              const linkedAcc = getLinkedAccount(d);
+                              if (!canManageAccounts && !linkedAcc) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDriverAccountModal(d)}
+                                  className={`px-1.5 py-1.5 rounded-lg border transition cursor-pointer flex items-center gap-1 text-[10px] ${
+                                    linkedAcc
+                                      ? linkedAcc.isActive
+                                        ? 'bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-300 border-cyan-500/30 font-mono'
+                                        : 'bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 border-rose-500/30 font-mono'
+                                      : 'bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/30'
+                                  }`}
+                                  title={
+                                    linkedAcc
+                                      ? `حساب کاربری متصل: @${linkedAcc.username} (${linkedAcc.isActive ? 'فعال' : 'غیرفعال'})`
+                                      : 'ایجاد حساب کاربری ورود به سامانه برای این راننده'
+                                  }
+                                >
+                                  <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                                  {linkedAcc && <span>@{linkedAcc.username}</span>}
+                                </button>
+                              );
+                            })()}
+                            {canEditDrivers && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEdit(d)}
+                                className="p-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 transition cursor-pointer"
+                                title="ویرایش پرونده راننده"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
 
                             {onOpenHandover && (
                               <button
@@ -1281,6 +1533,132 @@ export const DriversDirectoryView: FC<DriversDirectoryViewProps> = ({
           },
         ]}
       />
+
+      {/* Driver Account Creation / Management Modal */}
+      {accountModalDriver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-[#111b2e] border border-[#1f2c45] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f2c45] bg-[#0d1524]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">
+                    {accountModalExistingUser
+                      ? `مدیریت حساب کاربری راننده (@${accountModalExistingUser.username})`
+                      : 'ساخت حساب کاربری سیستمی برای راننده'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    پرونده راننده: {accountModalDriver.name} (کد: {toFaDigits(accountModalDriver.personnelCode || accountModalDriver.code || '')})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountModalDriver(null);
+                  setAccountModalExistingUser(null);
+                }}
+                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmDriverAccount} className="p-5 space-y-4 text-xs">
+              {accountModalExistingUser && (
+                <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-bold">متصل به حساب کاربری در «مدیریت کاربران»</div>
+                    <div className="text-[10px] text-cyan-300/80 font-mono mt-0.5">شناسه: {accountModalExistingUser.id}</div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={accountModalExistingUser.isMasterAdmin}
+                    onClick={() => setAccountIsActive((prev) => !prev)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer ${
+                      accountIsActive
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    }`}
+                  >
+                    {accountIsActive ? 'فعال' : 'غیرفعال'}
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
+                  {accountModalExistingUser && <Lock className="w-3.5 h-3.5 text-amber-400" />}
+                  <span>نام کاربری ورود {accountModalExistingUser ? '(ثابت و غیرقابل تغییر)' : '*(قابل تعریف)*'}</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  readOnly={!!accountModalExistingUser}
+                  disabled={!!accountModalExistingUser}
+                  value={accountModalExistingUser ? accountModalExistingUser.username : accountUsername}
+                  onChange={(e) =>
+                    !accountModalExistingUser &&
+                    setAccountUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))
+                  }
+                  dir="ltr"
+                  className={`w-full bg-[#0a101f] border rounded-xl px-3.5 py-2 text-sm font-mono text-left ${
+                    accountModalExistingUser
+                      ? 'border-slate-800 text-slate-400 cursor-not-allowed opacity-80'
+                      : 'border-emerald-500/40 text-white focus:outline-none focus:border-emerald-400'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-200 mb-1">
+                  {accountModalExistingUser ? 'رمز عبور جدید (اختیاری)' : 'رمز عبور اختصاصی'}
+                </label>
+                <input
+                  type="text"
+                  required={!accountModalExistingUser}
+                  value={accountPassword}
+                  onChange={(e) => setAccountPassword(e.target.value)}
+                  placeholder={accountModalExistingUser ? 'در صورت خالی بودن تغییر نمی‌کند' : 'رمز عبور...'}
+                  dir="ltr"
+                  className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-white font-mono text-left"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-200 mb-1">عنوان نقش در سامانه</label>
+                <input
+                  type="text"
+                  value={accountRoleTitle}
+                  onChange={(e) => setAccountRoleTitle(e.target.value)}
+                  className="w-full bg-[#0a101f] border border-[#1f2c45] rounded-xl px-3.5 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#1f2c45]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountModalDriver(null);
+                    setAccountModalExistingUser(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg cursor-pointer"
+                >
+                  {accountModalExistingUser ? 'ذخیره تغییرات' : 'ایجاد حساب کاربری'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

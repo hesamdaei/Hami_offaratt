@@ -24,7 +24,7 @@ import {
 } from './utils/staffSeedData';
 import { toFaDigits, getTodayJalaali, formatPersianDateKey } from './utils/jalaali';
 import { DECODED_BACKUP } from './utils/backupDecoder';
-import { exportToExcel } from './utils/excelExport';
+import { exportToExcel, assertMasterAdminExcelPermission } from './utils/excelExport';
 import { Header, ActiveAppTab } from './components/Header';
 import { AttendanceManagementHubView } from './components/AttendanceManagementHubView';
 import { VehicleAssignmentHubView } from './components/VehicleAssignmentHubView';
@@ -55,7 +55,13 @@ import {
   logoutUser,
   isMasterAdmin,
   canViewModule,
+  canEditModule,
+  canDeleteInModule,
+  canAccessTab,
   canManageUsers,
+  getStoredUsers,
+  saveStoredUsers,
+  syncAndMergeUsers,
 } from './utils/authService';
 import { LoginView } from './components/LoginView';
 import { UserProfileModal } from './components/UserProfileModal';
@@ -125,6 +131,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   });
 
   const handleAddOrder = (order: OrderItem) => {
+    if (!canEditModule(currentUser, 'orders')) {
+      showToast('شما مجوز ثبت سفارش جدید را ندارید.', 'error');
+      return;
+    }
     const updated = [order, ...orders];
     setOrders(updated);
     try {
@@ -134,6 +144,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   };
 
   const handleUpdateOrder = (order: OrderItem) => {
+    if (!canEditModule(currentUser, 'orders')) {
+      showToast('شما مجوز ویرایش سفارش را ندارید.', 'error');
+      return;
+    }
     const updated = orders.map((o) => (o.id === order.id ? order : o));
     setOrders(updated);
     try {
@@ -143,6 +157,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   };
 
   const handleDeleteOrder = (orderId: string) => {
+    if (!canDeleteInModule(currentUser, 'orders')) {
+      showToast('شما مجوز حذف سفارش را ندارید.', 'error');
+      return;
+    }
     const updated = orders.filter((o) => o.id !== orderId);
     setOrders(updated);
     try {
@@ -155,6 +173,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   const [highlightedInsuranceVehicleId, setHighlightedInsuranceVehicleId] = useState<string | null>(null);
 
   const handleTabChange = (tab: ActiveAppTab) => {
+    if (currentUser && !canAccessTab(currentUser, tab)) {
+      showToast('شما مجوز دسترسی به این بخش از سامانه را ندارید.', 'error');
+      return;
+    }
     setActiveTab(tab);
   };
 
@@ -509,53 +531,59 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
     showToast('با موفقیت از حساب کاربری خارج شدید.', 'info');
   };
 
+  // Real-time session enforcement when users are updated/deactivated or permissions change
+  useEffect(() => {
+    const syncCurrentSession = () => {
+      if (!currentUser) return;
+      const allUsers = getStoredUsers();
+      const fresh = allUsers.find(
+        (u) => u.id === currentUser.id || u.username.toLowerCase() === currentUser.username.toLowerCase()
+      );
+      if (fresh) {
+        if (!fresh.isActive && !isMasterAdmin(fresh)) {
+          logoutUser();
+          setCurrentUser(null);
+          showToast('حساب کاربری شما توسط مدیریت غیرفعال شد.', 'error');
+          return;
+        }
+        if (JSON.stringify(fresh.permissions) !== JSON.stringify(currentUser.permissions) || fresh.roleTitle !== currentUser.roleTitle || fresh.fullName !== currentUser.fullName) {
+          setCurrentUser(fresh);
+          saveStoredSession(fresh);
+        }
+      }
+    };
+
+    syncAndMergeUsers().then(() => syncCurrentSession());
+    window.addEventListener('hamibar:users-updated', syncCurrentSession);
+    return () => {
+      window.removeEventListener('hamibar:users-updated', syncCurrentSession);
+    };
+  }, [currentUser]);
+
   // Automatically divert user if current activeTab is not permitted
   useEffect(() => {
     if (!currentUser || isMasterAdmin(currentUser)) return;
-    const isCurrentTabAllowed = () => {
-      switch (activeTab) {
-        case 'DASHBOARD':
-          return true;
-        case 'ATTENDANCE':
-          return canViewModule(currentUser, 'attendance');
-        case 'VEHICLE_ASSIGNMENT':
-          return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
-        case 'DRIVERS':
-          return canViewModule(currentUser, 'drivers');
-        case 'STAFF':
-          return canViewModule(currentUser, 'staff');
-        case 'OIL_SERVICE':
-          return canViewModule(currentUser, 'oilService');
-        case 'ORDERS':
-          return isMasterAdmin(currentUser) || canViewModule(currentUser, 'orders');
-        case 'OPERATIONS':
-          return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'oilService');
-        case 'FINANCE':
-          return isMasterAdmin(currentUser) || canViewModule(currentUser, 'finance');
-        case 'CUSTOMERS':
-          return true;
-        case 'HANDOVER':
-          return canViewModule(currentUser, 'drivers') || canViewModule(currentUser, 'regulations');
-        case 'REGULATIONS':
-          return canViewModule(currentUser, 'regulations');
-        case 'REPORTS':
-          return isMasterAdmin(currentUser);
-        case 'USERS_LOGS':
-          return canManageUsers(currentUser) || isMasterAdmin(currentUser);
-        case 'PHONEBOOK':
-          return true;
-        default:
-          return true;
-      }
-    };
-    if (!isCurrentTabAllowed()) {
-      if (canViewModule(currentUser, 'attendance')) handleTabChange('ATTENDANCE');
-      else if (canViewModule(currentUser, 'drivers')) handleTabChange('DRIVERS');
-      else if (canViewModule(currentUser, 'staff')) handleTabChange('STAFF');
-      else if (canViewModule(currentUser, 'oilService')) handleTabChange('OIL_SERVICE');
-      else if (canViewModule(currentUser, 'regulations')) handleTabChange('REGULATIONS');
-      else if (canManageUsers(currentUser)) handleTabChange('USERS_LOGS');
-      else handleTabChange('DASHBOARD');
+    if (!canAccessTab(currentUser, activeTab)) {
+      const candidateTabs: ActiveAppTab[] = [
+        'DASHBOARD',
+        'ATTENDANCE',
+        'VEHICLE_ASSIGNMENT',
+        'DRIVERS',
+        'STAFF',
+        'FLEET_MANAGEMENT',
+        'OIL_SERVICE',
+        'ORDERS',
+        'OPERATIONS',
+        'HANDOVER',
+        'CUSTOMERS',
+        'FINANCE',
+        'REGULATIONS',
+        'PHONEBOOK',
+        'USERS_LOGS',
+        'DEVELOPER_DOCS',
+      ];
+      const allowed = candidateTabs.find((t) => canAccessTab(currentUser, t)) || 'DASHBOARD';
+      setActiveTab(allowed);
     }
   }, [currentUser, activeTab]);
 
@@ -843,6 +871,9 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           if (remoteData.rules) {
             localStorage.setItem('hamibar_service_rules_v1', JSON.stringify(remoteData.rules));
           }
+          if (Array.isArray(remoteData.users) && remoteData.users.length > 0) {
+            await syncAndMergeUsers();
+          }
 
           const versionToUse = remoteData.version || Date.now().toString();
           localDbVersionRef.current = versionToUse;
@@ -861,6 +892,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             driverDirectory,
             staffMembers,
             staffRecords,
+            users: getStoredUsers(),
             ...aux,
           });
           if (saveRes.ok) {
@@ -929,6 +961,9 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
               if (freshData.rules) {
                 localStorage.setItem('hamibar_service_rules_v1', JSON.stringify(freshData.rules));
               }
+              if (Array.isArray(freshData.users) && freshData.users.length > 0) {
+                await syncAndMergeUsers();
+              }
 
               localDbVersionRef.current = freshData.version || ver.version;
               setLastDbSavedAt(freshData.lastSavedAt || ver.lastSavedAt || new Date().toISOString());
@@ -968,6 +1003,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
         driverDirectory,
         staffMembers,
         staffRecords,
+        users: getStoredUsers(),
         ...aux,
       });
       if (res.ok) {
@@ -1169,6 +1205,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           driverDirectory,
           staffMembers,
           staffRecords,
+          users: getStoredUsers(),
           ...aux,
         });
         if (res.ok) {
@@ -1366,6 +1403,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   };
 
   const handleDeleteDriver = (driverId: string) => {
+    if (!canDeleteInModule(currentUser, 'drivers')) {
+      showToast('شما مجوز حذف راننده را ندارید.', 'error');
+      return;
+    }
     const target = drivers.find((d) => d.id === driverId);
     if (!target) return;
     if (window.confirm(`آیا از حذف راننده "${target.name}" از تابلوی حضور و غیاب اطمینان دارید؟`)) {
@@ -1483,6 +1524,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   };
 
   const handleDeleteStaffMember = (staffId: string) => {
+    if (!canDeleteInModule(currentUser, 'staff')) {
+      showToast('شما مجوز حذف پرونده پرسنل را ندارید.', 'error');
+      return;
+    }
     const target = staffMembers.find((s) => s.id === staffId);
     if (!target) return;
     if (window.confirm(`آیا از حذف پرسنل "${target.name}" اطمینان دارید؟`)) {
@@ -1538,6 +1583,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
 
   // Attendance Status Updaters
   const handleUpdateDriverStatus = (driverId: string, dateKey: string, status: AttendanceStatus) => {
+    if (!canEditModule(currentUser, 'attendance')) {
+      showToast('شما مجوز ثبت یا تغییر وضعیت حضور و غیاب را ندارید (فقط مشاهده).', 'error');
+      return;
+    }
     const driver = drivers.find((d) => d.id === driverId) || driverDirectory.find((d) => d.id === driverId);
     const prevStatus = records[driverId]?.[dateKey] || 'none';
     setRecords((prev) => ({
@@ -1571,6 +1620,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   };
 
   const handleUpdateStaffStatus = (staffId: string, dateKey: string, status: AttendanceStatus) => {
+    if (!canEditModule(currentUser, 'attendance')) {
+      showToast('شما مجوز ثبت یا تغییر وضعیت حضور و غیاب پرسنل را ندارید (فقط مشاهده).', 'error');
+      return;
+    }
     const staff = staffMembers.find((s) => s.id === staffId);
     const prevStatus = staffRecords[staffId]?.[dateKey] || 'none';
     setStaffRecords((prev) => ({
@@ -1956,10 +2009,13 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
     }
   };
 
-  // Export Excel
+  // Export Excel (Strictly Master Admin only)
   const handleExportExcel = () => {
+    if (!assertMasterAdminExcelPermission(currentUser, 'خروجی اکسل حضور و غیاب', showToast)) {
+      return;
+    }
     try {
-      exportToExcel(drivers, records, activeYear, activeMonth);
+      exportToExcel(drivers, records, activeYear, activeMonth, currentUser);
       showToast('فایل اکسل حضور و غیاب با موفقیت دانلود شد.', 'success');
     } catch (err) {
       console.error(err);
@@ -2261,7 +2317,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module: Operations & Dispatch (عملیات و اعزام ناوگان) */}
-          {activeTab === 'OPERATIONS' && (
+          {activeTab === 'OPERATIONS' && canAccessTab(currentUser, 'OPERATIONS') && (
             <div className="animate-in fade-in duration-150">
               <OperationsDashboardView
                 vehicles={vehicles}
@@ -2273,7 +2329,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module: Orders & Reservations Hub (سفارش‌ها و بارها) */}
-          {activeTab === 'ORDERS' && (isMasterAdmin(currentUser) || canViewModule(currentUser, 'orders')) && (
+          {activeTab === 'ORDERS' && canAccessTab(currentUser, 'ORDERS') && (
             <div className="animate-in fade-in duration-150">
               <UnifiedOrdersAndReservationHub
                 orders={orders}
@@ -2289,7 +2345,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module: Customers & Cargo Tracking Portal (مشتریان و رهگیری بار) */}
-          {activeTab === 'CUSTOMERS' && (
+          {activeTab === 'CUSTOMERS' && canAccessTab(currentUser, 'CUSTOMERS') && (
             <div className="animate-in fade-in duration-150">
               <CargoTrackingCustomerPortal
                 orderNumber="ORD-1403/9201"
@@ -2299,7 +2355,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module: Finance & Tariff Calculator (امور مالی و تعرفه‌ها) */}
-          {activeTab === 'FINANCE' && (isMasterAdmin(currentUser) || canViewModule(currentUser, 'finance')) && (
+          {activeTab === 'FINANCE' && canAccessTab(currentUser, 'FINANCE') && (
             <div className="animate-in fade-in duration-150">
               <ReservationGuideAndCalculatorView
                 onAddOrder={handleAddOrder}
@@ -2309,14 +2365,15 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             </div>
           )}
 
-              {/* Module 1: Attendance Management Hub (Drivers & Staff) */}
-              {activeTab === 'ATTENDANCE' && (
-                <div className="animate-in fade-in duration-150">
-                  <AttendanceManagementHubView
-                    drivers={drivers}
-                    driverRecords={records}
-                    staffMembers={staffMembers}
-                    staffRecords={staffRecords}
+          {/* Module 1: Attendance Management Hub (Drivers & Staff) */}
+          {activeTab === 'ATTENDANCE' && canAccessTab(currentUser, 'ATTENDANCE') && (
+            <div className="animate-in fade-in duration-150">
+              <AttendanceManagementHubView
+                currentUser={currentUser}
+                drivers={drivers}
+                driverRecords={records}
+                staffMembers={staffMembers}
+                staffRecords={staffRecords}
                 vehicles={vehicles}
                 driverDirectory={driverDirectory}
                 attendanceNotes={attendanceNotes}
@@ -2344,7 +2401,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module: Dedicated Fleet & Driver Vehicle Assignment Hub */}
-          {activeTab === 'VEHICLE_ASSIGNMENT' && (
+          {activeTab === 'VEHICLE_ASSIGNMENT' && canAccessTab(currentUser, 'VEHICLE_ASSIGNMENT') && (
             <div className="animate-in fade-in duration-150">
               <VehicleAssignmentHubView
                 vehicles={vehicles}
@@ -2370,9 +2427,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 2: Driver Directory & Dossiers */}
-          {activeTab === 'DRIVERS' && (
+          {activeTab === 'DRIVERS' && canAccessTab(currentUser, 'DRIVERS') && (
             <div className="animate-in fade-in duration-150">
               <DriversDirectoryView
+                currentUser={currentUser}
                 drivers={driverDirectory}
                 vehicles={vehicles}
                 onAddDriver={handleAddDirectoryDriver}
@@ -2402,9 +2460,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 3: Staff Directory & Dossiers */}
-          {activeTab === 'STAFF' && (
+          {activeTab === 'STAFF' && canAccessTab(currentUser, 'STAFF') && (
             <div className="animate-in fade-in duration-150">
               <StaffDirectoryView
+                currentUser={currentUser}
                 staffMembers={staffMembers}
                 onAddStaffMember={handleAddStaffMember}
                 onUpdateStaffMember={handleUpdateStaffMember}
@@ -2417,7 +2476,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 4A: Fleet Management & Specifications (مدیریت ناوگان، شناسنامه و بیمه‌نامه) */}
-          {activeTab === 'FLEET_MANAGEMENT' && (
+          {activeTab === 'FLEET_MANAGEMENT' && canAccessTab(currentUser, 'FLEET_MANAGEMENT') && (
             <div className="animate-in fade-in duration-150">
               <OilServiceManagementView
                 mode="FLEET"
@@ -2442,7 +2501,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 4B: Dedicated Oil Service & Daily Usage Hub (تعویض روغن و کارکرد روزانه) */}
-          {activeTab === 'OIL_SERVICE' && (
+          {activeTab === 'OIL_SERVICE' && canAccessTab(currentUser, 'OIL_SERVICE') && (
             <div className="animate-in fade-in duration-150">
               <OilServiceManagementView
                 mode="OIL"
@@ -2467,7 +2526,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 5: Dedicated Vehicle Handover & 66-item Checklist (صورت‌جلسه و برگه تحویل خودرو) */}
-          {activeTab === 'HANDOVER' && (
+          {activeTab === 'HANDOVER' && canAccessTab(currentUser, 'HANDOVER') && (
             <div className="animate-in fade-in duration-150">
               <VehicleHandoverManager
                 vehicles={vehicles}
@@ -2482,7 +2541,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 6: Editable Disciplinary Regulations & Vehicle Handover */}
-          {activeTab === 'REGULATIONS' && (
+          {activeTab === 'REGULATIONS' && canAccessTab(currentUser, 'REGULATIONS') && (
             <div className="animate-in fade-in duration-150">
               <DriverRegulationsView
                 onShowToast={showToast}
@@ -2495,7 +2554,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 6: Managerial Excel Reports Hub */}
-          {activeTab === 'REPORTS' && (
+          {activeTab === 'REPORTS' && canAccessTab(currentUser, 'REPORTS') && (
             <div className="animate-in fade-in duration-150">
               <ReportsManagementView
                 currentUser={currentUser}
@@ -2510,7 +2569,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 7: Integrated User Management & System Audit Logs Hub */}
-          {activeTab === 'USERS_LOGS' && (
+          {activeTab === 'USERS_LOGS' && canAccessTab(currentUser, 'USERS_LOGS') && (
             <div className="animate-in fade-in duration-150">
               <IntegratedUserAndAuditHubView
                 currentUser={currentUser}
@@ -2524,7 +2583,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 8: Smart Customizable Phonebook Hub (دفترچه تلفن و سانترال هوشمند) */}
-          {activeTab === 'PHONEBOOK' && (
+          {activeTab === 'PHONEBOOK' && canAccessTab(currentUser, 'PHONEBOOK') && (
             <div className="animate-in fade-in duration-150">
               <PhonebookView
                 drivers={driverDirectory}
@@ -2539,7 +2598,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           )}
 
           {/* Module 9: Developer Documentation & System Reference (مستندات فنی و راهنمای توسعه) */}
-          {activeTab === 'DEVELOPER_DOCS' && (
+          {activeTab === 'DEVELOPER_DOCS' && canAccessTab(currentUser, 'DEVELOPER_DOCS') && (
             <div className="animate-in fade-in duration-150">
               <DeveloperDocsView />
             </div>
