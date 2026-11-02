@@ -333,15 +333,19 @@ export async function saveServerUsers(users: any[]): Promise<boolean> {
 }
 
 /**
- * درخواست ارسال کد بازیابی رمز عبور به ایمیل
+ * درخواست ارسال واقعی کد بازیابی رمز عبور به ایمیل (بدون افشای کد در کلاینت)
  */
 export async function requestForgotPasswordCode(emailOrUsername: string): Promise<{
   ok: boolean;
   message?: string;
+  targetEmail?: string;
   maskedEmail?: string;
   expiresInMinutes?: number;
   sentViaSmtp?: boolean;
-  devCodeFallback?: string;
+  smtpNotConfigured?: boolean;
+  smtpError?: boolean;
+  emailNotRegistered?: boolean;
+  messageId?: string;
   error?: string;
 }> {
   const baseUrl = getLanServerBaseUrl();
@@ -359,13 +363,92 @@ export async function requestForgotPasswordCode(emailOrUsername: string): Promis
 }
 
 /**
+ * دریافت وضعیت پیکربندی سرور ایمیل (SMTP) از سرور مرکزی
+ */
+export interface SmtpServerStatus {
+  ok: boolean;
+  configured: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  fromName: string;
+  fromEmail: string;
+  maskedPass: string;
+  updatedAt?: string | null;
+}
+
+export async function fetchSmtpStatus(): Promise<SmtpServerStatus | null> {
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/smtp-status`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * ذخیره و تأیید تنظیمات سرور ایمیل (SMTP / Gmail App Password) در دیتابیس سرور
+ */
+export async function saveSmtpConfig(payload: {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  fromName?: string;
+  verifyConnection?: boolean;
+}): Promise<{ ok: boolean; configured?: boolean; message?: string; error?: string }> {
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/smtp-config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { ok: false, error: err.message || 'خطا در ارتباط با سرور جهت ذخیره تنظیمات SMTP' };
+  }
+}
+
+/**
+ * تست اتصال واقعی به سرور SMTP و ارسال ایمیل آزمایشی
+ */
+export async function testSmtpEmail(payload: {
+  targetEmail?: string;
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string;
+  pass?: string;
+  fromName?: string;
+}): Promise<{ ok: boolean; message?: string; messageId?: string; error?: string }> {
+  const baseUrl = getLanServerBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/api/auth/smtp-test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { ok: false, error: err.message || 'خطا در ارتباط با سرور جهت تست ارسال ایمیل' };
+  }
+}
+
+/**
  * تأیید کد و تغییر رمز عبور
  */
 export async function resetPasswordWithCode(
   emailOrUsername: string,
   recoveryCode: string,
   newPassword: string
-): Promise<{ ok: boolean; message?: string; username?: string; error?: string }> {
+): Promise<{ ok: boolean; message?: string; username?: string; updatedAt?: string; error?: string }> {
   const baseUrl = getLanServerBaseUrl();
   try {
     const res = await fetch(`${baseUrl}/api/auth/reset-password`, {
@@ -412,5 +495,6 @@ export async function loginWithServerApi(
     return { ok: false, error: err.message || 'خطا در برقراری ارتباط با سرور احراز هویت' };
   }
 }
+
 
 

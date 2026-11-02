@@ -314,6 +314,23 @@ export async function authenticateUser(
     const { loginWithServerApi } = await import('./lanSyncService');
     const serverRes = await loginWithServerApi(cleanUsername, cleanPassword);
     if (serverRes && serverRes.ok && serverRes.user) {
+      // Sync local storage user record with the authenticated password so offline/sync stays consistent
+      try {
+        const localUsers = getStoredUsers();
+        const newHash = await hashPassword(cleanPassword);
+        const nextLocal = localUsers.map((u) =>
+          u.id === serverRes.user.id || u.username.toLowerCase() === String(serverRes.user.username || '').toLowerCase()
+            ? {
+                ...u,
+                ...serverRes.user,
+                password: cleanPassword,
+                passwordHash: newHash,
+                updatedAt: new Date().toISOString(),
+              }
+            : u
+        );
+        saveStoredUsers(nextLocal);
+      } catch {}
       saveStoredSession(serverRes.user);
       resetClientRateLimit(cleanUsername);
       return { success: true, user: serverRes.user as SafeAppUser };
@@ -484,7 +501,7 @@ export async function emergencyMasterDirectLogin(): Promise<SafeAppUser> {
 }
 
 /**
- * Directly change any user password by username or ID
+ * Directly change any user password by username, email, or ID and sync with server
  */
 export async function updateUserPasswordDirectly(
   usernameOrId: string,
@@ -496,22 +513,30 @@ export async function updateUserPasswordDirectly(
 
   const users = getStoredUsers();
   const target = users.find(
-    (u) => u.id === cleanKey || u.username.toLowerCase() === cleanKey
+    (u) =>
+      u.id === cleanKey ||
+      u.username.toLowerCase() === cleanKey ||
+      (u.email && u.email.toLowerCase() === cleanKey) ||
+      ((cleanKey === 'admin' || cleanKey === '1000' || cleanKey === 'hesam.daei@gmail.com') &&
+        (Boolean(u.isMasterAdmin) || u.username.toLowerCase() === 'admin'))
   );
   if (!target) return false;
 
   const newHash = await hashPassword(cleanPass);
+  const nowIso = new Date().toISOString();
   const updatedUsers = users.map((u) =>
     u.id === target.id
       ? {
           ...u,
           password: cleanPass,
           passwordHash: newHash,
+          updatedAt: nowIso,
         }
       : u
   );
 
   saveStoredUsers(updatedUsers);
+  saveServerUsers(updatedUsers).catch(() => {});
   resetClientRateLimit(target.username.toLowerCase());
   return true;
 }

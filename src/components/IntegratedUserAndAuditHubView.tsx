@@ -40,6 +40,7 @@ import {
   ChevronLeft,
   ChevronRight,
   PhoneCall,
+  Mail,
 } from 'lucide-react';
 import { AppUser, UserPermissions, ModulePermission } from '../types/auth';
 import {
@@ -158,6 +159,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   const [newPassword, setNewPassword] = useState('');
   const [newRoleTitle, setNewRoleTitle] = useState('اپراتور شیفت');
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newBaleId, setNewBaleId] = useState('');
   const [newAvatarColor, setNewAvatarColor] = useState(AVATAR_COLORS[1]);
   const [newPermissions, setNewPermissions] = useState<UserPermissions>(() =>
@@ -193,6 +195,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
   const [editRoleTitle, setEditRoleTitle] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editBaleId, setEditBaleId] = useState('');
   const [editAvatarColor, setEditAvatarColor] = useState('');
   const [editPermissions, setEditPermissions] = useState<UserPermissions>(() =>
@@ -234,6 +237,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     setNewPassword('');
     setNewRoleTitle('اپراتور شیفت');
     setNewPhoneNumber('');
+    setNewEmail('');
     setNewBaleId('');
     setNewVoipExtension('101');
     setNewVoipPrefix('');
@@ -290,6 +294,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       fullName: newFullName,
       roleTitle: newRoleTitle.trim() || 'اپراتور سیستم',
       phoneNumber: newPhoneNumber.trim() || undefined,
+      email: newEmail.trim() || undefined,
       baleId: newBaleId.trim() || undefined,
       permissions: newPermissions,
       avatarColor: newAvatarColor,
@@ -336,6 +341,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     setEditRoleTitle(user.roleTitle);
     setEditPassword('');
     setEditPhoneNumber(user.phoneNumber || '');
+    setEditEmail(user.email || (user.isMasterAdmin ? 'hesam.daei@gmail.com' : ''));
     setEditBaleId(user.baleId || '');
     setEditAvatarColor(user.avatarColor || AVATAR_COLORS[0]);
     setEditPermissions(normalizeUserPermissions(user.permissions, user.isMasterAdmin));
@@ -379,6 +385,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       roleTitle: editRoleTitle.trim() || editingUser.roleTitle,
       password: editPassword.trim() ? editPassword.trim() : undefined,
       phoneNumber: editPhoneNumber.trim() || undefined,
+      email: editEmail.trim() || undefined,
       baleId: editBaleId.trim() || undefined,
       avatarColor: editAvatarColor || editingUser.avatarColor,
       permissions: editingUser.isMasterAdmin ? editingUser.permissions : editPermissions,
@@ -990,6 +997,21 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                       <span className="text-slate-500 font-mono shrink-0" title="شناسه یکتای داخلی کاربر">
                         ID: {user.id}
                       </span>
+                    </div>
+
+                    {/* User Recovery Email Strip */}
+                    <div className="flex items-center justify-between gap-2 mb-2 px-2.5 py-1.5 rounded-lg bg-[#0a1222]/90 border border-[#172642] text-[11px]">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                        <span className="text-slate-400">ایمیل بازیابی رمز:</span>
+                        {user.email || user.isMasterAdmin ? (
+                          <span className="font-mono font-bold text-sky-300 truncate" dir="ltr">
+                            {user.email || 'hesam.daei@gmail.com'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-amber-400">ثبت نشده (در ویرایش ثبت کنید)</span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Dedicated User Telephony / PBX Strip */}
@@ -1738,6 +1760,20 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                 </div>
 
                 <div>
+                  <label className="block text-sky-300 font-bold mb-1">
+                    نشانی ایمیل (جهت بازیابی واقعی رمز عبور)
+                  </label>
+                  <input
+                    type="email"
+                    dir="ltr"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="user@gmail.com"
+                    className="w-full bg-[#0a1222] border border-sky-500/40 rounded-xl px-3 py-2 text-sky-200 placeholder-slate-500 focus:outline-none focus:border-sky-400 font-mono"
+                  />
+                </div>
+
+                <div>
                   <label className="block text-slate-300 font-bold mb-1">رنگ آواتار</label>
                   <div className="flex items-center gap-2 pt-1">
                     {AVATAR_COLORS.map((color) => (
@@ -2028,6 +2064,20 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                     value={editPhoneNumber}
                     onChange={(e) => setEditPhoneNumber(e.target.value)}
                     className="w-full bg-[#0a1222] border border-[#1e2f52] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sky-300 font-bold mb-1">
+                    نشانی ایمیل (جهت ارسال کد بازیابی رمز عبور)
+                  </label>
+                  <input
+                    type="email"
+                    dir="ltr"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="hesam.daei@gmail.com"
+                    className="w-full bg-[#0a1222] border border-sky-500/40 rounded-xl px-3 py-2 text-sky-200 placeholder-slate-500 focus:outline-none focus:border-sky-400 font-mono"
                   />
                 </div>
               </div>

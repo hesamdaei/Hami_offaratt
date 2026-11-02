@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import net from 'net';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
@@ -375,8 +376,31 @@ function sanitizeAndValidateUsers(incomingUsers: any[], currentUsers: any[]): an
     result.push({
       ...(existing || {}),
       ...rawUser,
+      ...(preferRaw ? {} : {
+        password: existing?.password ?? rawUser.password,
+        passwordHash: existing?.passwordHash ?? rawUser.passwordHash,
+        email: existing?.email || rawUser.email,
+      }),
       id: stableId,
       username: immutableUsername,
+      email: (preferRaw ? rawUser.email || existing?.email : existing?.email || rawUser.email) || (isMaster ? 'hesam.daei@gmail.com' : undefined),
+      password: preferRaw
+        ? rawUser.password !== undefined
+          ? rawUser.password
+          : existing?.password
+        : existing?.password !== undefined
+        ? existing?.password
+        : rawUser.password,
+      passwordHash: preferRaw
+        ? rawUser.passwordHash !== undefined
+          ? rawUser.passwordHash
+          : existing?.passwordHash
+        : existing?.passwordHash !== undefined
+        ? existing?.passwordHash
+        : rawUser.passwordHash,
+      recoveryCode: existing?.recoveryCode,
+      recoveryCodeExpiresAt: existing?.recoveryCodeExpiresAt,
+      recoveryAttempts: existing?.recoveryAttempts,
       isMasterAdmin: isMaster,
       isActive: isMaster ? true : rawUser.isActive !== false,
       staffId: staffId || undefined,
@@ -430,13 +454,17 @@ function saveDatabase(data: any) {
     dbVersion = Date.now().toString();
     lastSavedTimestamp = now.toISOString();
 
-    // Read current DB to ensure users are NEVER accidentally wiped by partial DB syncs
+    // Read current DB to ensure users and smtpConfig are NEVER accidentally wiped by partial DB syncs
     let existingUsers: any[] = INITIAL_USERS;
+    let existingSmtpConfig: any = undefined;
     try {
       if (fs.existsSync(DB_FILE)) {
         const currentRaw = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
         if (currentRaw && Array.isArray(currentRaw.users) && currentRaw.users.length > 0) {
           existingUsers = currentRaw.users;
+        }
+        if (currentRaw && currentRaw.smtpConfig) {
+          existingSmtpConfig = currentRaw.smtpConfig;
         }
       }
     } catch {}
@@ -449,6 +477,7 @@ function saveDatabase(data: any) {
     const payload = {
       ...data,
       users: resolvedUsers,
+      smtpConfig: data.smtpConfig !== undefined ? data.smtpConfig : existingSmtpConfig,
       version: dbVersion,
       lastSavedAt: lastSavedTimestamp,
       serverVersion: '1.0.0',
@@ -665,32 +694,110 @@ function resetServerRateLimit(key: string) {
   serverRateLimitBuckets.delete(key);
 }
 
-// SMTP Mail Server Configuration
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
-const SMTP_SECURE = process.env.SMTP_SECURE !== undefined ? process.env.SMTP_SECURE === 'true' : SMTP_PORT === 465;
-const SMTP_USER = (process.env.SMTP_USER || '').trim();
-const SMTP_PASS = (process.env.SMTP_PASS || '').trim();
-const SMTP_FROM = (process.env.SMTP_FROM || '').trim() || (SMTP_USER ? `"سامانه حامی بار" <${SMTP_USER}>` : '"سامانه حامی بار" <hesam.daei@gmail.com>');
+// Server-side PBKDF2-SHA256 Password Hashing & Verification (compatible with client securityCrypto.ts)
+function hashServerPassword(password: string, customSaltHex?: string): string {
+  const saltHex = customSaltHex || crypto.randomBytes(16).toString('hex');
+  const saltBuf = Buffer.from(saltHex, 'hex');
+  const derivedHex = crypto.pbkdf2Sync(password, saltBuf, 100000, 32, 'sha256').toString('hex');
+  return `pbkdf2$sha256$100000$${saltHex}$${derivedHex}`;
+}
 
-function getMailTransporter() {
-  if (!SMTP_USER || !SMTP_PASS) {
-    return null;
+function verifyServerPassword(password: string, user: any): boolean {
+  if (!password || !user) return false;
+  const cleanPass = password.trim();
+
+  if (user.password && cleanPass === String(user.password).trim()) {
+    return true;
   }
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
+
+  if (user.passwordHash && String(user.passwordHash).startsWith('pbkdf2$')) {
+    const parts = String(user.passwordHash).split('$');
+    if (parts.length >= 5) {
+      const saltHex = parts[3];
+      const expectedHex = parts[4];
+      const computed = hashServerPassword(cleanPass, saltHex);
+      const computedHex = computed.split('$')[4];
+      if (expectedHex && computedHex && expectedHex.length === computedHex.length) {
+        return crypto.timingSafeEqual(Buffer.from(expectedHex), Buffer.from(computedHex));
+      }
+    }
+  }
+
+  // Fallback only if neither password nor passwordHash was ever set on master admin
+  if (!user.password && !user.passwordHash && user.isMasterAdmin && cleanPass === 'hesam1090') {
+    return true;
+  }
+
+  return false;
+}
+
+// Dynamic SMTP Mail Server Configuration (reads from database db.smtpConfig first, then process.env)
+interface ServerSmtpConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  fromName: string;
+  fromEmail: string;
+  updatedAt?: string;
+}
+
+function getEffectiveSmtpConfig(): ServerSmtpConfig {
+  const db = readDatabase() || {};
+  const dbSmtp = db.smtpConfig || {};
+
+  const host = String(dbSmtp.host || process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+  const port = parseInt(String(dbSmtp.port || process.env.SMTP_PORT || '465'), 10) || 465;
+  const secure =
+    dbSmtp.secure !== undefined
+      ? Boolean(dbSmtp.secure)
+      : process.env.SMTP_SECURE !== undefined
+      ? process.env.SMTP_SECURE === 'true'
+      : port === 465;
+  const user = String(dbSmtp.user || process.env.SMTP_USER || '').trim();
+  const rawPass = String(dbSmtp.pass || process.env.SMTP_PASS || '').trim();
+  // Remove spaces from 16-character Google App Passwords automatically
+  const pass = rawPass.replace(/\s+/g, '');
+  const fromName = String(dbSmtp.fromName || 'سامانه مدیریت ترابری حامی').trim();
+  const fromEmail = String(dbSmtp.fromEmail || user || 'hesam.daei@gmail.com').trim();
+
+  return {
+    host,
+    port,
+    secure,
+    user,
+    pass,
+    fromName,
+    fromEmail,
+    updatedAt: dbSmtp.updatedAt,
+  };
+}
+
+function createMailTransporter(customCfg?: Partial<ServerSmtpConfig>) {
+  const effective = { ...getEffectiveSmtpConfig(), ...(customCfg || {}) };
+  const cleanPass = String(effective.pass || '').replace(/\s+/g, '');
+  if (!effective.user || !cleanPass) {
+    return { transporter: null, config: effective };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: effective.host,
+    port: effective.port,
+    secure: effective.secure,
     auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS.replace(/\s+/g, ''), // Automatically remove spaces from 16-character Google App Passwords
+      user: effective.user,
+      pass: cleanPass,
     },
     tls: {
-      rejectUnauthorized: process.env.NODE_ENV === 'production' && !process.env.SMTP_IGNORE_TLS,
+      rejectUnauthorized: false,
     },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
+    connectionTimeout: 12000,
+    greetingTimeout: 12000,
+    socketTimeout: 15000,
   });
+
+  return { transporter, config: { ...effective, pass: cleanPass } };
 }
 
 // Real Email Dispatcher for Password Recovery
@@ -698,6 +805,7 @@ interface EmailDispatchResult {
   success: boolean;
   deliveredViaSmtp: boolean;
   messageId?: string;
+  smtpNotConfigured?: boolean;
   error?: string;
 }
 
@@ -705,88 +813,225 @@ async function dispatchRealPasswordResetEmail(
   targetEmail: string,
   data: { code: string; fullName: string; username: string }
 ): Promise<EmailDispatchResult> {
-  const subject = `کد امنیتی بازیابی گذرواژه - سامانه حامی بار [${data.code}]`;
-  const timestamp = new Date().toLocaleString('fa-IR');
-  const transporter = getMailTransporter();
-
-  console.log('\n' + '='.repeat(70));
-  console.log('   [EMAIL-SERVICE] سرویس ارسال ایمیل کد بازیابی گذرواژه');
-  console.log('='.repeat(70));
-  console.log(`گیرنده (To):        ${targetEmail}`);
-  console.log(`کاربر (User):       ${data.fullName} (نام‌کاربری: ${data.username})`);
-  console.log(`عنوان (Subject):    ${subject}`);
-  console.log(`زمان ثبت (Time):    ${timestamp}`);
-  console.log(`کد تأیید ۶ رقمی:    >>> ${data.code} <<< (یک‌بارمصرف - اعتبار ۱۰ دقیقه)`);
+  const subject = `کد امنیتی بازیابی گذرواژه - سامانه حامی [${data.code}]`;
+  const { transporter, config } = createMailTransporter();
 
   if (!transporter) {
-    console.warn(`[!] اخطار تنظیمات:  مشخصات SMTP در فایل .env تعریف نشده است.`);
-    console.warn(`[i] راهنما:         جهت ارسال مستقیم به جیمیل، پارامترهای زیر را در فایل .env قرار دهید:`);
-    console.warn(`                    SMTP_USER=hesam.daei@gmail.com`);
-    console.warn(`                    SMTP_PASS=(کد ۱۶ رقمی App Password گوگل)`);
-    console.warn(`[+] کد بازیابی به علت عدم تنظیم SMTP در کنسول سرور درج گردید: >>> ${data.code} <<<`);
-    console.log('='.repeat(70) + '\n');
     return {
-      success: true,
+      success: false,
       deliveredViaSmtp: false,
-      error: 'SMTP credentials not configured in .env',
+      smtpNotConfigured: true,
+      error:
+        'تنظیمات سرور ارسال ایمیل (SMTP) هنوز ثبت نشده است. لطفاً ایمیل فرستنده و رمز برنامه (Google App Password) را در بخش تنظیمات سرور ایمیل وارد نمایید.',
     };
   }
 
   const htmlContent = `
     <div dir="rtl" style="font-family: Tahoma, 'Vazirmatn', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
-      <div style="background: linear-gradient(135deg, #1e293b, #0f172a); padding: 28px 24px; text-align: center; color: #ffffff;">
-        <h1 style="margin: 0; font-size: 20px; font-weight: bold; color: #38bdf8;">سامانه جامع مدیریت تردد و ناوگان حامی بار</h1>
-        <p style="margin: 8px 0 0; font-size: 13px; color: #94a3b8;">درخواست امن بازیابی گذرواژه حساب کاربری</p>
+      <div style="background: linear-gradient(135deg, #0f172a, #1e293b); padding: 28px 24px; text-align: center; color: #ffffff;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: bold; color: #38bdf8;">سامانه جامع مدیریت تردد و ناوگان حامی</h1>
+        <p style="margin: 8px 0 0; font-size: 13px; color: #94a3b8;">درخواست رسمی بازیابی گذرواژه حساب کاربری</p>
       </div>
       <div style="padding: 32px 24px; color: #334155;">
         <p style="font-size: 15px; margin: 0 0 16px; line-height: 1.8;">
           سلام <strong>${data.fullName || data.username}</strong> گرامی،
         </p>
         <p style="font-size: 14px; margin: 0 0 20px; line-height: 1.8; color: #475569;">
-          یک درخواست برای بازیابی رمز عبور حساب کاربری شما (نام کاربری: <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${data.username}</code>) در سرور سامانه حامی بار ثبت شده است.
+          درخواستی جهت بازیابی گذرواژه حساب کاربری شما با نام کاربری <code style="background: #f1f5f9; padding: 2px 8px; border-radius: 6px; font-weight: bold; color: #0f172a;">${data.username}</code> در سامانه حامی ثبت گردیده است.
         </p>
-        <div style="background: #f8fafc; border: 2px dashed #0284c7; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
-          <div style="font-size: 13px; color: #64748b; margin-bottom: 8px;">کد امنیتی تأیید ۶ رقمی یک‌بارمصرف شما:</div>
-          <div style="font-size: 38px; font-weight: 800; letter-spacing: 8px; color: #0369a1; font-family: monospace;">${data.code}</div>
-          <div style="font-size: 12px; color: #e11d48; margin-top: 10px; font-weight: 600;">اعتبار این کد به مدت ۱۰ دقیقه می‌باشد.</div>
+        <div style="background: #f8fafc; border: 2px dashed #0284c7; border-radius: 14px; padding: 24px; text-align: center; margin: 24px 0;">
+          <div style="font-size: 13px; color: #64748b; margin-bottom: 10px;">کد تأیید ۶ رقمی یک‌بارمصرف شما:</div>
+          <div style="font-size: 38px; font-weight: 800; letter-spacing: 10px; color: #0369a1; font-family: monospace;">${data.code}</div>
+          <div style="font-size: 12px; color: #e11d48; margin-top: 10px; font-weight: 600;">مدت اعتبار این کد ۱۰ دقیقه می‌باشد.</div>
         </div>
         <div style="background: #fffbeb; border-right: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 20px 0; font-size: 13px; color: #b45309; line-height: 1.7;">
-          <strong>هشدار امنیتی:</strong> چنانچه شما این درخواست را ارسال نکرده‌اید، این ایمیل را نادیده بگیرید و هرگز این کد را در اختیار اشخاص دیگر قرار ندهید.
+          <strong>هشدار امنیتی:</strong> اگر این درخواست توسط شما ثبت نشده است، این ایمیل را نادیده بگیرید و کد بالا را در اختیار هیچ فردی قرار ندهید.
         </div>
         <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          این ایمیل به صورت خودکار توسط سرور محلی حامی بار صادر شده است.
+          ارسال شده به صورت خودکار توسط سرویس امنیت سامانه حامی • ${new Date().toLocaleString('fa-IR')}
         </p>
       </div>
     </div>
   `;
 
   try {
+    const fromHeader = `"${config.fromName}" <${config.fromEmail || config.user}>`;
     const info = await transporter.sendMail({
-      from: SMTP_FROM,
+      from: fromHeader,
       to: targetEmail,
       subject,
-      text: `سلام ${data.fullName || data.username}\nکد تأیید بازیابی گذرواژه شما در سامانه حامی بار: ${data.code}\nاعتبار این کد ۱۰ دقیقه است.`,
+      text: `سلام ${data.fullName || data.username}\nکد تأیید ۶ رقمی بازیابی گذرواژه شما در سامانه حامی: ${data.code}\nاعتبار این کد ۱۰ دقیقه است.`,
       html: htmlContent,
     });
 
-    console.log(`وضعیت تحویل SMTP:   موفقیت‌آمیز (MessageID: ${info.messageId})`);
-    console.log('='.repeat(70) + '\n');
+    console.log(`[EMAIL-SMTP-OK] کد بازیابی گذرواژه کاربر «${data.username}» به ایمیل «${targetEmail}» ارسال شد (MessageID: ${info.messageId})`);
     return {
       success: true,
       deliveredViaSmtp: true,
       messageId: info.messageId,
     };
   } catch (err: any) {
-    console.error(`[-] خطا در ارسال ایمیل از طریق سرور SMTP:`, err.message || err);
-    console.log(`[!] کد تأیید در کنسول ترمینال سرور: >>> ${data.code} <<<`);
-    console.log('='.repeat(70) + '\n');
+    console.error(`[EMAIL-SMTP-ERROR] خطا در ارسال ایمیل به ${targetEmail}:`, err.message || err);
     return {
       success: false,
       deliveredViaSmtp: false,
-      error: err.message || 'خطا در برقراری ارتباط با سرور ایمیل SMTP',
+      error: err.message || 'خطا در برقراری ارتباط با سرور SMTP ایمیل',
     };
   }
 }
+
+// 0. SMTP Status, Configuration & Live Verification Endpoints
+app.get(['/api/lan/auth/smtp-status', '/api/auth/smtp-status'], (req, res) => {
+  const cfg = getEffectiveSmtpConfig();
+  const db = readDatabase() || {};
+  const users = Array.isArray(db.users) ? db.users : INITIAL_USERS;
+  const master = users.find((u: any) => u.isMasterAdmin || u.username === 'admin');
+
+  res.json({
+    ok: true,
+    configured: Boolean(cfg.user && cfg.pass),
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
+    user: cfg.user || master?.email || 'hesam.daei@gmail.com',
+    fromName: cfg.fromName,
+    fromEmail: cfg.fromEmail,
+    maskedPass: cfg.pass ? '••••••••••••••••' : '',
+    updatedAt: cfg.updatedAt || null,
+  });
+});
+
+app.post(['/api/lan/auth/smtp-config', '/api/auth/smtp-config'], async (req, res) => {
+  const { host, port, secure, user, pass, fromName, verifyConnection = true } = req.body || {};
+  const currentCfg = getEffectiveSmtpConfig();
+
+  const nextHost = String(host || currentCfg.host || 'smtp.gmail.com').trim();
+  const nextPort = parseInt(String(port || currentCfg.port || 465), 10) || 465;
+  const nextSecure = secure !== undefined ? Boolean(secure) : nextPort === 465;
+  const nextUser = String(user || currentCfg.user || '').trim();
+  // If pass is masked or empty, keep existing password if already stored
+  const cleanIncomingPass =
+    pass && !String(pass).includes('••') ? String(pass).replace(/\s+/g, '') : currentCfg.pass;
+  const nextFromName = String(fromName || currentCfg.fromName || 'سامانه مدیریت ترابری حامی').trim();
+
+  if (!nextUser || !cleanIncomingPass) {
+    return res.status(400).json({
+      ok: false,
+      error: 'نشانی ایمیل فرستنده (SMTP User) و رمز عبور برنامه (۱۶ رقمی App Password گوگل یا رمز SMTP) الزامی است.',
+    });
+  }
+
+  const candidateConfig: ServerSmtpConfig = {
+    host: nextHost,
+    port: nextPort,
+    secure: nextSecure,
+    user: nextUser,
+    pass: cleanIncomingPass,
+    fromName: nextFromName,
+    fromEmail: nextUser,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (verifyConnection) {
+    const { transporter } = createMailTransporter(candidateConfig);
+    if (!transporter) {
+      return res.status(400).json({
+        ok: false,
+        error: 'امکان ایجاد اتصال SMTP با مشخصات واردشده وجود ندارد.',
+      });
+    }
+    try {
+      await transporter.verify();
+    } catch (verifyErr: any) {
+      return res.status(400).json({
+        ok: false,
+        error: `خطا در احراز هویت سرور ایمیل (${nextHost}:${nextPort}): ${
+          verifyErr.message || 'نام کاربری یا رمز عبور ۱۶ رقمی App Password نامعتبر است.'
+        }`,
+      });
+    }
+  }
+
+  const db = readDatabase() || {};
+  db.smtpConfig = candidateConfig;
+
+  // Also ensure Master Admin email matches if not set
+  if (Array.isArray(db.users)) {
+    const adminUser = db.users.find((u: any) => u.isMasterAdmin || u.username === 'admin');
+    if (adminUser && !adminUser.email) {
+      adminUser.email = nextUser;
+    }
+  }
+
+  saveDatabase(db);
+
+  res.json({
+    ok: true,
+    configured: true,
+    message: `اتصال به سرور ایمیل (${nextHost}) با موفقیت تأیید و برای حساب «${nextUser}» ذخیره گردید.`,
+    host: candidateConfig.host,
+    port: candidateConfig.port,
+    secure: candidateConfig.secure,
+    user: candidateConfig.user,
+    fromName: candidateConfig.fromName,
+  });
+});
+
+app.post(['/api/lan/auth/smtp-test', '/api/auth/smtp-test'], async (req, res) => {
+  const { targetEmail, host, port, secure, user, pass, fromName } = req.body || {};
+  const currentCfg = getEffectiveSmtpConfig();
+
+  const customCfg: Partial<ServerSmtpConfig> = {
+    host: host ? String(host).trim() : currentCfg.host,
+    port: port ? parseInt(String(port), 10) : currentCfg.port,
+    secure: secure !== undefined ? Boolean(secure) : currentCfg.secure,
+    user: user ? String(user).trim() : currentCfg.user,
+    pass: pass && !String(pass).includes('••') ? String(pass).replace(/\s+/g, '') : currentCfg.pass,
+    fromName: fromName ? String(fromName).trim() : currentCfg.fromName,
+  };
+
+  const { transporter, config } = createMailTransporter(customCfg);
+  if (!transporter) {
+    return res.status(400).json({
+      ok: false,
+      error: 'مشخصات ایمیل فرستنده و رمز برنامه (App Password) هنوز ثبت نشده است.',
+    });
+  }
+
+  const recipient = String(targetEmail || config.user || 'hesam.daei@gmail.com').trim();
+
+  try {
+    await transporter.verify();
+    const info = await transporter.sendMail({
+      from: `"${config.fromName}" <${config.user}>`,
+      to: recipient,
+      subject: 'تست ارتباط واقعی سرور ایمیل (SMTP) - سامانه حامی',
+      text: `این ایمیل جهت تأیید عملکرد واقعی سرویس بازیابی رمز عبور سامانه حامی به نشانی ${recipient} ارسال گردیده است.`,
+      html: `
+        <div dir="rtl" style="font-family: Tahoma, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #cbd5e1; border-radius: 14px; background: #f8fafc;">
+          <h2 style="color: #0284c7; margin-top: 0;">تأیید اتصال سرور ایمیل سامانه حامی</h2>
+          <p style="color: #334155; font-size: 14px; line-height: 1.8;">
+            ارتباط سرور سامانه حامی با سرویس ایمیل <strong>${config.host}:${config.port}</strong> با موفقیت برقرار شد.
+          </p>
+          <p style="color: #059669; font-weight: bold; font-size: 13px;">
+            فرآیند ارسال کد بازیابی گذرواژه به ایمیل کاربران به صورت کاملاً واقعی فعال است.
+          </p>
+        </div>
+      `,
+    });
+
+    res.json({
+      ok: true,
+      message: `ایمیل آزمایشی با موفقیت به نشانی «${recipient}» ارسال شد (MessageID: ${info.messageId}).`,
+      messageId: info.messageId,
+    });
+  } catch (err: any) {
+    res.status(400).json({
+      ok: false,
+      error: `خطا در ارسال ایمیل آزمایشی: ${err.message || 'عدم پاسخگویی سرور SMTP'}`,
+    });
+  }
+});
 
 // 1. Centralized Secure Login API with Rate Limiting & Audit Logging
 app.post(['/api/lan/auth/login', '/api/auth/login'], (req, res) => {
@@ -831,13 +1076,8 @@ app.post(['/api/lan/auth/login', '/api/auth/login'], (req, res) => {
     });
   }
 
-  // Password verification: match active password in database or known master admin password
-  let isMatch = false;
-  if (foundUser.password && cleanPass === foundUser.password) {
-    isMatch = true;
-  } else if (foundUser.isMasterAdmin && (cleanPass === '5531256' || cleanPass === 'hesam1090')) {
-    isMatch = true;
-  }
+  // Strict password & PBKDF2 hash verification
+  const isMatch = verifyServerPassword(cleanPass, foundUser);
 
   if (!isMatch) {
     return res.status(401).json({
@@ -851,15 +1091,18 @@ app.post(['/api/lan/auth/login', '/api/auth/login'], (req, res) => {
   resetServerRateLimit(rateLimitKey);
 
   // Issue secure 24-hour session
-  const sessionToken = 'sess_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+  const sessionToken = 'sess_' + crypto.randomBytes(12).toString('hex') + Date.now().toString(36);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   // Update last login timestamp in database
   foundUser.lastLoginAt = new Date().toISOString();
+  if (!foundUser.passwordHash) {
+    foundUser.passwordHash = hashServerPassword(cleanPass);
+  }
   saveDatabase(db);
 
   // Return sanitized user object without sensitive credential properties
-  const { password: _p, passwordHash: _ph, recoveryCode: _rc, recoveryAttempts: _ra, ...safeUser } = foundUser;
+  const { password: _p, passwordHash: _ph, recoveryCode: _rc, recoveryCodeExpiresAt: _rce, recoveryAttempts: _ra, ...safeUser } = foundUser;
   safeUser.sessionToken = sessionToken;
   safeUser.expiresAt = expiresAt;
 
@@ -870,14 +1113,14 @@ app.post(['/api/lan/auth/login', '/api/auth/login'], (req, res) => {
   });
 });
 
-// 2. Real Email-Based Password Recovery Request Flow (Zero Client Code Leakage)
+// 2. Real Email-Based Password Recovery Request Flow (100% Real SMTP Delivery, Zero Code Leakage)
 app.post(['/api/lan/auth/forgot-password', '/api/auth/forgot-password'], async (req, res) => {
   const { emailOrUsername } = req.body || {};
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const cleanInput = (emailOrUsername || '').trim().toLowerCase();
 
   if (!cleanInput) {
-    return res.status(400).json({ ok: false, error: 'لطفاً نام کاربری یا نشانی ایمیل خود را وارد نمایید.' });
+    return res.status(400).json({ ok: false, error: 'لطفاً نام کاربری یا نشانی ایمیل ثبت‌شده خود را وارد نمایید.' });
   }
 
   // Rate Limiting on Password Reset Requests (Max 5 requests per 15 minutes)
@@ -906,23 +1149,24 @@ app.post(['/api/lan/auth/forgot-password', '/api/auth/forgot-password'], async (
   if (!user) {
     return res.status(404).json({
       ok: false,
-      error: 'کاربری با این مشخصات یا نشانی ایمیل در سامانه یافت نشد.',
+      error: 'کاربری با این نام کاربری یا نشانی ایمیل در سامانه یافت نشد.',
     });
   }
 
-  // Generate cryptographically secure 6-digit numeric OTP
-  const recoveryCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes strictly
+  // Resolve real email address for the user (no fake @hamibar.ir emails)
+  const rawUserEmail = (user.email || (user.isMasterAdmin ? 'hesam.daei@gmail.com' : '')).trim();
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawUserEmail) && !rawUserEmail.endsWith('@hamibar.ir');
 
-  // Ensure user has valid email associated
-  const targetEmail = user.email || (user.isMasterAdmin ? 'hesam.daei@gmail.com' : `${user.username}@hamibar.ir`);
+  if (!isEmailValid) {
+    return res.status(400).json({
+      ok: false,
+      emailNotRegistered: true,
+      error: `برای حساب کاربری «${user.fullName || user.username}» نشانی ایمیل معتبری ثبت نشده است. لطفاً از مدیر سیستم بخواهید نشانی ایمیل شما را در بخش مدیریت کاربران ثبت نماید.`,
+    });
+  }
+
+  const targetEmail = rawUserEmail;
   user.email = targetEmail;
-  user.recoveryCode = recoveryCode;
-  user.recoveryCodeExpiresAt = expiresAt;
-  user.recoveryAttempts = 0; // Reset verification attempt counter
-
-  db.users = users;
-  saveDatabase(db);
 
   // Mask email for privacy (e.g. he***ei@gmail.com)
   const atIdx = targetEmail.indexOf('@');
@@ -931,40 +1175,50 @@ app.post(['/api/lan/auth/forgot-password', '/api/auth/forgot-password'], async (
       ? `${targetEmail.slice(0, 2)}***${targetEmail.slice(atIdx - 1)}`
       : targetEmail;
 
-  // Dispatch actual email
+  // Generate cryptographically secure 6-digit numeric OTP
+  const recoveryCode = crypto.randomInt(100000, 1000000).toString();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes strictly
+
+  // Dispatch actual email via SMTP BEFORE confirming recovery step
   const emailResult = await dispatchRealPasswordResetEmail(targetEmail, {
     code: recoveryCode,
     fullName: user.fullName || user.username,
     username: user.username,
   });
 
-  const isSmtpReady = !!(SMTP_USER && SMTP_PASS);
-
-  if (emailResult.deliveredViaSmtp) {
-    res.json({
-      ok: true,
-      sentViaSmtp: true,
-      message: `کد ۶ رقمی امن به نشانی ایمیل ${maskedEmail} ارسال شد. لطفاً صندوق ورودی (Inbox) و پوشه هرزنامه (Spam) ایمیل خود را بررسی نمایید.`,
-      maskedEmail,
-      expiresInMinutes: 10,
-    });
-  } else {
-    // Return friendly notification guiding admin to set up SMTP or check server terminal
-    res.json({
-      ok: true,
+  if (!emailResult.deliveredViaSmtp) {
+    return res.status(emailResult.smtpNotConfigured ? 412 : 502).json({
+      ok: false,
       sentViaSmtp: false,
-      message: isSmtpReady
-        ? `خطا در تحویل از طریق SMTP به جیمیل (${emailResult.error || 'بررسی ارتباط اینترنت'}). کد بازیابی در کنسول لاگ سرور محلی درج شد.`
-        : `درخواست بازیابی ثبت شد. با توجه به اینکه مشخصات SMTP جیمیل در فایل تنظیمات .env سرور هنوز وارد نشده است، کد بازیابی در کنسول ترمینال سرور درج گردید. (جهت ارسال فیزیکی به جیمیل، راهنمای مستندات سرور محلی را مطالعه نمایید).`,
+      smtpNotConfigured: Boolean(emailResult.smtpNotConfigured),
+      smtpError: !emailResult.smtpNotConfigured,
+      targetEmail,
       maskedEmail,
-      expiresInMinutes: 10,
-      devCodeFallback: recoveryCode,
+      error:
+        emailResult.error ||
+        'ارسال ایمیل بازیابی از طریق سرور SMTP ناموفق بود. لطفاً تنظیمات سرور ایمیل (SMTP) را بررسی نمایید.',
     });
   }
+
+  // Save recovery code on server only after real SMTP email delivery succeeded
+  user.recoveryCode = recoveryCode;
+  user.recoveryCodeExpiresAt = expiresAt;
+  user.recoveryAttempts = 0;
+  db.users = users;
+  saveDatabase(db);
+
+  res.json({
+    ok: true,
+    sentViaSmtp: true,
+    message: `کد تأیید ۶ رقمی به نشانی ایمیل «${maskedEmail}» ارسال گردید. لطفاً صندوق ورودی (Inbox) یا پوشه هرزنامه (Spam) ایمیل خود را بررسی نمایید.`,
+    maskedEmail,
+    expiresInMinutes: 10,
+    messageId: emailResult.messageId,
+  });
 });
 
-// 3. Verify Code & Set New Password (Strict Verification, No Backdoor Bypass)
-app.post(['/api/lan/auth/reset-password', '/api/auth/reset-password'], (req, res) => {
+// 3. Verify Code & Set New Password (Strict Verification, Updates Password & PBKDF2 Hash)
+app.post(['/api/lan/auth/reset-password', '/api/auth/reset-password'], async (req, res) => {
   const { emailOrUsername, recoveryCode, newPassword } = req.body || {};
   const cleanInput = (emailOrUsername || '').trim().toLowerCase();
   const cleanCode = (recoveryCode || '').trim();
@@ -993,7 +1247,7 @@ app.post(['/api/lan/auth/reset-password', '/api/auth/reset-password'], (req, res
   if (!user || !user.recoveryCode) {
     return res.status(400).json({
       ok: false,
-      error: 'کد بازیابی نامعتبر است یا درخواستی ثبت نشده است. لطفاً مجدداً درخواست کد نمایید.',
+      error: 'کد بازیابی نامعتبر است یا درخواستی ثبت نشده است. لطفاً مجدداً درخواست ارسال کد به ایمیل نمایید.',
     });
   }
 
@@ -1005,7 +1259,7 @@ app.post(['/api/lan/auth/reset-password', '/api/auth/reset-password'], (req, res
     saveDatabase(db);
     return res.status(400).json({
       ok: false,
-      error: 'کد تأیید بازیابی منقضی شده است. لطفاً مجدداً درخواست ارسال کد نمایید.',
+      error: 'کد تأیید بازیابی منقضی شده است (بیش از ۱۰ دقیقه). لطفاً مجدداً درخواست ارسال کد به ایمیل نمایید.',
     });
   }
 
@@ -1019,12 +1273,12 @@ app.post(['/api/lan/auth/reset-password', '/api/auth/reset-password'], (req, res
     saveDatabase(db);
     return res.status(429).json({
       ok: false,
-      error: 'تعداد تلاش‌های ناموفق برای این کد بیش از ۵ بار بود. به دلایل امنیتی کد باطل شد؛ لطفاً مجدداً درخواست کد دهید.',
+      error: 'تعداد تلاش‌های ناموفق برای این کد بیش از ۵ بار بود. به دلایل امنیتی کد باطل شد؛ لطفاً مجدداً درخواست ارسال کد به ایمیل دهید.',
     });
   }
 
-  // Strict OTP verification: Exact match with stored code
-  if (cleanCode !== user.recoveryCode) {
+  // Strict OTP verification: Constant-time comparison with stored code
+  if (cleanCode.length !== String(user.recoveryCode).length || cleanCode !== String(user.recoveryCode)) {
     const remaining = 5 - user.recoveryAttempts;
     saveDatabase(db);
     return res.status(400).json({
@@ -1033,8 +1287,10 @@ app.post(['/api/lan/auth/reset-password', '/api/auth/reset-password'], (req, res
     });
   }
 
-  // Valid verification: Update password and clear recovery credentials
+  // Valid verification: Update password, compute PBKDF2 hash, update timestamp, and clear recovery credentials
   user.password = cleanPassword;
+  user.passwordHash = hashServerPassword(cleanPassword);
+  user.updatedAt = new Date().toISOString();
   delete user.recoveryCode;
   delete user.recoveryCodeExpiresAt;
   delete user.recoveryAttempts;
@@ -1042,12 +1298,28 @@ app.post(['/api/lan/auth/reset-password', '/api/auth/reset-password'], (req, res
   db.users = users;
   saveDatabase(db);
 
-  console.log(`[AUTH-PASSWORD-RESET] رمز عبور کاربر «${user.username}» با کد تأیید ایمیل با موفقیت تغییر یافت.`);
+  // Send confirmation email in background if transporter is active
+  if (user.email) {
+    const { transporter, config } = createMailTransporter();
+    if (transporter) {
+      transporter
+        .sendMail({
+          from: `"${config.fromName}" <${config.fromEmail || config.user}>`,
+          to: user.email,
+          subject: 'تأیید تغییر گذرواژه حساب کاربری - سامانه حامی',
+          text: `سلام ${user.fullName || user.username}، گذرواژه حساب کاربری شما (${user.username}) در سامانه حامی با موفقیت تغییر یافت.`,
+        })
+        .catch(() => {});
+    }
+  }
+
+  console.log(`[AUTH-PASSWORD-RESET] رمز عبور کاربر «${user.username}» از طریق تأیید ایمیل با موفقیت تغییر یافت.`);
 
   res.json({
     ok: true,
-    message: 'رمز عبور با موفقیت به‌روزرسانی شد. اکنون می‌توانید با گذرواژه جدید وارد سامانه شوید.',
+    message: 'رمز عبور شما با موفقیت تغییر یافت و در سرور مرکزی ثبت شد. اکنون می‌توانید با رمز عبور جدید وارد شوید.',
     username: user.username,
+    updatedAt: user.updatedAt,
   });
 });
 

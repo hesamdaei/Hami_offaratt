@@ -15,10 +15,24 @@ import {
   KeyRound,
   Check,
   Fingerprint,
+  Settings2,
+  Server,
 } from 'lucide-react';
 import { AppUser } from '../types/auth';
-import { authenticateUser } from '../utils/authService';
-import { requestForgotPasswordCode, resetPasswordWithCode } from '../utils/lanSyncService';
+import {
+  authenticateUser,
+  getStoredUsers,
+  saveServerUsers,
+  updateUserPasswordDirectly,
+} from '../utils/authService';
+import {
+  requestForgotPasswordCode,
+  resetPasswordWithCode,
+  fetchSmtpStatus,
+  saveSmtpConfig,
+  testSmtpEmail,
+  SmtpServerStatus,
+} from '../utils/lanSyncService';
 
 interface LoginViewProps {
   onLoginSuccess: (user: AppUser) => void;
@@ -53,19 +67,47 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
     return () => clearInterval(timer);
   }, [lockoutSeconds]);
 
-  // Email Password Recovery Flow State
-  const [recoveryEmailOrUser, setRecoveryEmailOrUser] = useState('');
+  // Email Password Recovery Flow State (100% Real SMTP Email Delivery)
+  const [recoveryEmailOrUser, setRecoveryEmailOrUser] = useState('hesam.daei@gmail.com');
   const [recoveryStep, setRecoveryStep] = useState<1 | 2>(1);
   const [recoveryCode, setRecoveryCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [maskedEmail, setMaskedEmail] = useState<string>('');
-  const [sentViaSmtp, setSentViaSmtp] = useState<boolean | null>(null);
-  const [devCodeFallback, setDevCodeFallback] = useState<string | null>(null);
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [resendCooldown, setResendCooldown] = useState<number>(0);
+
+  // Real SMTP Server Configuration State
+  const [smtpStatus, setSmtpStatus] = useState<SmtpServerStatus | null>(null);
+  const [showSmtpSetup, setShowSmtpSetup] = useState(false);
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState('465');
+  const [smtpSecure, setSmtpSecure] = useState(true);
+  const [smtpUser, setSmtpUser] = useState('hesam.daei@gmail.com');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpFromName, setSmtpFromName] = useState('سامانه مدیریت ترابری حامی');
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+
+  // Load SMTP status when switching to email_recovery tab
+  useEffect(() => {
+    if (activeTab !== 'email_recovery') return;
+    fetchSmtpStatus().then((status) => {
+      if (status) {
+        setSmtpStatus(status);
+        setSmtpHost(status.host || 'smtp.gmail.com');
+        setSmtpPort(String(status.port || 465));
+        setSmtpSecure(status.secure !== false);
+        setSmtpUser(status.user || 'hesam.daei@gmail.com');
+        setSmtpFromName(status.fromName || 'سامانه مدیریت ترابری حامی');
+        if (!status.configured) {
+          setShowSmtpSetup(true);
+        }
+      }
+    });
+  }, [activeTab]);
 
   // Resend cooldown timer
   useEffect(() => {
@@ -119,7 +161,75 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  // Step 1: Request 6-digit recovery code to official registered email
+  // Save & Verify Real SMTP Configuration on Server
+  const handleSaveSmtpConfiguration = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMsg(null);
+
+    if (!smtpUser.trim() || (!smtpPass.trim() && !smtpStatus?.configured)) {
+      setError('لطفاً نشانی ایمیل فرستنده و رمز ۱۶ رقمی App Password گوگل (یا رمز SMTP) را وارد نمایید.');
+      return;
+    }
+
+    setIsSavingSmtp(true);
+    try {
+      const res = await saveSmtpConfig({
+        host: smtpHost.trim() || 'smtp.gmail.com',
+        port: parseInt(smtpPort, 10) || 465,
+        secure: smtpSecure,
+        user: smtpUser.trim(),
+        pass: smtpPass.trim(),
+        fromName: smtpFromName.trim() || 'سامانه مدیریت ترابری حامی',
+        verifyConnection: true,
+      });
+
+      if (res.ok) {
+        const updatedStatus = await fetchSmtpStatus();
+        if (updatedStatus) setSmtpStatus(updatedStatus);
+        setShowSmtpSetup(false);
+        setSmtpPass('');
+        setSuccessMsg(
+          res.message ||
+            'اتصال به سرور ایمیل (SMTP) با موفقیت احراز هویت و ذخیره شد. اکنون می‌توانید کد بازیابی را به ایمیل ارسال نمایید.'
+        );
+      } else {
+        setError(res.error || 'خطا در اتصال به سرور ایمیل (SMTP). لطفاً رمز ۱۶ رقمی App Password را بررسی کنید.');
+      }
+    } catch {
+      setError('خطا در ارتباط با سرور جهت ذخیره تنظیمات ایمیل.');
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  const handleTestSmtpConnection = async () => {
+    setError(null);
+    setSuccessMsg(null);
+    setIsTestingSmtp(true);
+    try {
+      const res = await testSmtpEmail({
+        targetEmail: recoveryEmailOrUser.includes('@') ? recoveryEmailOrUser.trim() : smtpUser.trim(),
+        host: smtpHost.trim(),
+        port: parseInt(smtpPort, 10) || 465,
+        secure: smtpSecure,
+        user: smtpUser.trim(),
+        pass: smtpPass.trim() || undefined,
+        fromName: smtpFromName.trim(),
+      });
+      if (res.ok) {
+        setSuccessMsg(res.message || 'ایمیل آزمایشی با موفقیت ارسال شد. صندوق ورودی ایمیل خود را بررسی کنید.');
+      } else {
+        setError(res.error || 'ارسال ایمیل آزمایشی ناموفق بود.');
+      }
+    } catch {
+      setError('خطا در تست ارسال ایمیل.');
+    } finally {
+      setIsTestingSmtp(false);
+    }
+  };
+
+  // Step 1: Request 6-digit recovery code to official registered email via real SMTP
   const handleSendRecoveryCode = async (e: FormEvent) => {
     e.preventDefault();
     if (resendCooldown > 0) return;
@@ -129,34 +239,43 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     const cleanInput = recoveryEmailOrUser.trim();
     if (!cleanInput) {
-      setError('لطفاً نشانی ایمیل یا نام کاربری خود را وارد نمایید.');
+      setError('لطفاً نشانی ایمیل ثبت‌شده یا نام کاربری خود را وارد نمایید.');
       return;
     }
 
     setIsSendingCode(true);
     try {
+      // Ensure local users are synced to server before lookup so newly registered user emails are recognized
+      try {
+        await saveServerUsers(getStoredUsers());
+      } catch {}
+
       const res = await requestForgotPasswordCode(cleanInput);
-      if (res.ok) {
+      if (res.ok && res.sentViaSmtp) {
         setMaskedEmail(res.maskedEmail || cleanInput);
-        setSentViaSmtp(res.sentViaSmtp ?? true);
-        setDevCodeFallback(res.devCodeFallback || null);
         setSuccessMsg(
           res.message ||
-            `کد تأیید ۶ رقمی امن به نشانی ایمیل ${res.maskedEmail || cleanInput} ارسال گردید. لطفاً صندوق ورودی (Inbox) یا پوشه هرزنامه (Spam) ایمیل خود را بررسی نمایید.`
+            `کد تأیید ۶ رقمی به نشانی ایمیل ${res.maskedEmail || cleanInput} ارسال گردید. لطفاً صندوق ورودی (Inbox) یا پوشه هرزنامه (Spam) ایمیل خود را بررسی نمایید.`
         );
         setRecoveryStep(2);
         setResendCooldown(60); // 60s cooldown before allowing resend
       } else {
-        setError(res.error || 'خطا در ارسال کد بازیابی. لطفاً ورودی را بررسی نمایید.');
+        if (res.smtpNotConfigured || res.smtpError) {
+          setShowSmtpSetup(true);
+        }
+        setError(
+          res.error ||
+            'ارسال ایمیل ناموفق بود. لطفاً تنظیمات سرور ارسال ایمیل (SMTP) را بررسی و تکمیل نمایید.'
+        );
       }
     } catch {
-      setError('خطا در برقراری ارتباط با سرویس امنیتی سرور.');
+      setError('خطا در برقراری ارتباط با سرویس ایمیل سرور.');
     } finally {
       setIsSendingCode(false);
     }
   };
 
-  // Step 2: Verify code and set new password
+  // Step 2: Verify 6-digit email code and set new password on both server and client
   const handleResetPasswordWithCode = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -166,7 +285,7 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
     const cleanPass = newPassword.trim();
 
     if (!cleanCode) {
-      setError('لطفاً کد تأیید ۶ رقمی دریافتی از ایمیل را وارد نمایید.');
+      setError('لطفاً کد تأیید ۶ رقمی دریافت‌شده در ایمیل خود را وارد نمایید.');
       return;
     }
     if (cleanCode.length !== 6) {
@@ -186,17 +305,22 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
     try {
       const res = await resetPasswordWithCode(recoveryEmailOrUser, cleanCode, cleanPass);
       if (res.ok) {
-        setSuccessMsg('رمز عبور شما با موفقیت به‌روزرسانی شد. اکنون می‌توانید با رمز عبور جدید وارد شوید.');
+        // Synchronize new password and PBKDF2 hash in local storage immediately
+        await updateUserPasswordDirectly(res.username || recoveryEmailOrUser, cleanPass);
+
+        setSuccessMsg(
+          res.message ||
+            'رمز عبور شما پس از تأیید کد ایمیل با موفقیت تغییر یافت. اکنون می‌توانید با رمز عبور جدید وارد شوید.'
+        );
         setUsername(res.username || username || 'admin');
         setPassword('');
-        // Switch back to login form after brief confirmation
         setTimeout(() => {
           setActiveTab('login');
           setRecoveryStep(1);
           setRecoveryCode('');
           setNewPassword('');
           setConfirmNewPassword('');
-        }, 1500);
+        }, 1600);
       } else {
         setError(res.error || 'کد تأیید وارد شده نادرست یا منقضی شده است.');
       }
@@ -228,10 +352,10 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </div>
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center justify-center gap-2">
-              <span>سامانه لجستیک حامی بار</span>
+              <span>سامانه مدیریت ترابری حامی</span>
             </h1>
             <p className="text-xs text-slate-400 mt-1 font-medium">
-              درگاه ورود یکپارچه امن، احراز هویت متمرکز و کنترل دسترسی
+              درگاه ورود یکپارچه امن، احراز هویت متمرکز و بازیابی واقعی با ایمیل
             </p>
           </div>
 
@@ -316,7 +440,7 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     dir="ltr"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="1000 یا admin یا hesam.daei@gmail.com"
+                    placeholder="admin یا hesam.daei@gmail.com"
                     autoFocus
                     required
                     disabled={isSubmitting || lockoutSeconds > 0}
@@ -386,13 +510,169 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </form>
           )}
 
-          {/* TAB 2: REAL EMAIL PASSWORD RECOVERY FLOW */}
+          {/* TAB 2: 100% REAL EMAIL PASSWORD RECOVERY FLOW (NO FORMALITY / NO DEV CODE LEAK) */}
           {activeTab === 'email_recovery' && (
             <div className="space-y-4 animate-in fade-in duration-200">
+              {/* SMTP Status Bar & Toggle */}
+              <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                      smtpStatus?.configured
+                        ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                        : 'bg-amber-400 animate-pulse'
+                    }`}
+                  />
+                  <div className="truncate">
+                    <span className="font-bold text-slate-200 block">
+                      {smtpStatus?.configured
+                        ? 'سرور ارسال ایمیل (SMTP) متصل و فعال است'
+                        : 'نیازمند تنظیم اولیه سرور ارسال ایمیل (SMTP)'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono truncate block">
+                      {smtpStatus?.configured
+                        ? `${smtpStatus.host}:${smtpStatus.port} (${smtpStatus.user})`
+                        : 'ارسال واقعی ایمیل از طریق Gmail / SMTP سازمانی'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSmtpSetup((prev) => !prev)}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  <span>{showSmtpSetup ? 'بستن تنظیمات' : 'تنظیمات SMTP'}</span>
+                </button>
+              </div>
+
+              {/* Expandable Real SMTP Configuration Panel */}
+              {showSmtpSetup && (
+                <form
+                  onSubmit={handleSaveSmtpConfiguration}
+                  className="p-4 rounded-2xl bg-[#091224] border border-sky-500/40 space-y-3 text-xs animate-in fade-in duration-150"
+                >
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-1.5 text-sky-300 font-bold">
+                      <Server className="w-4 h-4" />
+                      <span>پیکربندی سرور ارسال ایمیل واقعی (Gmail / SMTP)</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">ذخیره دائمی در سرور</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-200/90 leading-relaxed">
+                    برای ارسال واقعی کد بازیابی به جیمیل (مثلاً <code className="font-mono text-amber-300">hesam.daei@gmail.com</code>)، در تنظیمات حساب گوگل بخش{' '}
+                    <strong>Security &rarr; 2-Step Verification &rarr; App passwords</strong> یک رمز ۱۶ رقمی بسازید و در کادر زیر وارد نمایید.
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <label className="block text-[11px] text-slate-300 font-bold mb-1">
+                        آدرس سرور SMTP
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        required
+                        value={smtpHost}
+                        onChange={(e) => setSmtpHost(e.target.value)}
+                        placeholder="smtp.gmail.com"
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 font-mono text-xs focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-300 font-bold mb-1">
+                        پورت (SSL)
+                      </label>
+                      <input
+                        type="number"
+                        dir="ltr"
+                        required
+                        value={smtpPort}
+                        onChange={(e) => {
+                          setSmtpPort(e.target.value);
+                          setSmtpSecure(parseInt(e.target.value, 10) === 465);
+                        }}
+                        placeholder="465"
+                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 font-mono text-xs text-center focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-slate-300 font-bold mb-1">
+                      نشانی ایمیل فرستنده (Gmail / Organizational Email)
+                    </label>
+                    <input
+                      type="email"
+                      dir="ltr"
+                      required
+                      value={smtpUser}
+                      onChange={(e) => setSmtpUser(e.target.value)}
+                      placeholder="hesam.daei@gmail.com"
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 font-mono text-xs focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-amber-300 font-bold mb-1">
+                      رمز ۱۶ رقمی برنامه گوگل (Google App Password) یا رمز SMTP
+                    </label>
+                    <input
+                      type="password"
+                      dir="ltr"
+                      value={smtpPass}
+                      onChange={(e) => setSmtpPass(e.target.value)}
+                      placeholder={
+                        smtpStatus?.configured
+                          ? '•••••••••••••••• (ذخیره شده - برای تغییر وارد کنید)'
+                          : 'xxxx xxxx xxxx xxxx'
+                      }
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-amber-500/40 rounded-xl text-amber-200 font-mono text-xs focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="submit"
+                      disabled={isSavingSmtp}
+                      className="flex-1 py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingSmtp ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>درحال تست و ذخیره در سرور...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>تأیید اتصال و ذخیره تنظیمات ایمیل</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestSmtpConnection}
+                      disabled={isTestingSmtp}
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer disabled:opacity-50"
+                      title="ارسال ایمیل آزمایشی واقعی"
+                    >
+                      {isTestingSmtp ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>تست ارسال</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
               <div className="p-3.5 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-xs text-blue-200 leading-relaxed flex items-start gap-2.5">
                 <Fingerprint className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                 <span>
-                  فرآیند امن بازیابی گذرواژه: کد یک‌بارمصرف ۶ رقمی به نشانی ایمیل رسمی ثبت‌شده شما در سامانه ارسال خواهد شد.
+                  فرآیند کاملاً واقعی بازیابی گذرواژه: کد تأیید ۶ رقمی یک‌بارمصرف منحصراً از طریق سرور ایمیل (SMTP) به صندوق ورودی ایمیل ثبت‌شده شما ارسال می‌گردد و در صفحه نمایش داده نمی‌شود.
                 </span>
               </div>
 
@@ -428,7 +708,7 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     {isSendingCode ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>درحال ارسال ایمیل حاوی کد تأیید...</span>
+                        <span>درحال ارسال واقعی ایمیل حاوی کد تأیید...</span>
                       </>
                     ) : (
                       <>
@@ -439,13 +719,13 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   </button>
                 </form>
               ) : (
-                /* STEP 2: ENTER CODE & NEW PASSWORD */
+                /* STEP 2: ENTER CODE RECEIVED IN EMAIL & NEW PASSWORD */
                 <form onSubmit={handleResetPasswordWithCode} className="space-y-3.5">
                   {maskedEmail && (
                     <div className="p-3 bg-[#0a1224] rounded-xl border border-sky-500/30 text-xs flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <Mail className="w-3.5 h-3.5 text-sky-400" />
-                        <span className="text-slate-400">ارسال شده به: </span>
+                        <span className="text-slate-400">ارسال شده به ایمیل: </span>
                         <span className="font-mono text-emerald-300 font-bold">{maskedEmail}</span>
                       </div>
                       <button
@@ -459,36 +739,16 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     </div>
                   )}
 
-                  {/* Real SMTP Delivery or LAN Local Mode Notice */}
-                  {sentViaSmtp === true ? (
-                    <div className="p-2.5 bg-emerald-950/40 rounded-xl border border-emerald-500/30 text-[11px] text-emerald-300 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>ایمیل با موفقیت از طریق SMTP ارسال شد. لطفاً Inbox و Spam را چک کنید.</span>
-                    </div>
-                  ) : sentViaSmtp === false && devCodeFallback ? (
-                    <div className="p-3 bg-amber-950/30 rounded-xl border border-amber-500/30 text-xs text-amber-200 space-y-2">
-                      <div className="flex items-start gap-1.5">
-                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                        <span className="text-[11px] leading-relaxed text-amber-200/90">
-                          تنظیمات SMTP در فایل .env تعریف نشده است. جهت راحتی در سرور محلی، کد امنیتی در کنسول ترمینال و کادر زیر در دسترس است:
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between bg-black/40 px-3 py-1.5 rounded-lg border border-amber-500/20">
-                        <span className="font-mono text-amber-300 text-sm font-bold tracking-widest">{devCodeFallback}</span>
-                        <button
-                          type="button"
-                          onClick={() => setRecoveryCode(devCodeFallback)}
-                          className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 rounded text-[10px] font-bold cursor-pointer transition"
-                        >
-                          درج خودکار کد
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
+                  <div className="p-2.5 bg-emerald-950/40 rounded-xl border border-emerald-500/30 text-[11px] text-emerald-300 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>
+                      ایمیل حاوی کد ۶ رقمی از طریق سرور SMTP ارسال شد. لطفاً صندوق ورودی (Inbox) و پوشه هرزنامه (Spam) خود را بررسی کنید.
+                    </span>
+                  </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-1">
-                      کد تأیید ۶ رقمی دریافتی از ایمیل (Verification Code)
+                      کد تأیید ۶ رقمی دریافتی در ایمیل (Verification Code)
                     </label>
                     <input
                       type="text"
@@ -578,12 +838,12 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
                       {isVerifyingCode ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>درحال تأیید و تغییر رمز...</span>
+                          <span>درحال تأیید کد و ثبت رمز جدید...</span>
                         </>
                       ) : (
                         <>
                           <Check className="w-4 h-4" />
-                          <span>تأیید کد و تغییر رمز عبور</span>
+                          <span>تأیید کد ایمیل و تغییر رمز عبور</span>
                         </>
                       )}
                     </button>
@@ -601,14 +861,14 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
             <div className="flex items-center gap-2 text-slate-400">
               <KeyRound className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-              <span>بازیابی گذرواژه رسمی با کد تأیید رمزنگاری‌شده ارسالی به ایمیل اختصاصی کاربر</span>
+              <span>ارسال واقعی کد تأیید ۶ رقمی به ایمیل اختصاصی کاربر از طریق پروتکل SMTP</span>
             </div>
           </div>
         </div>
 
         {/* Footer info */}
         <div className="text-center mt-4 text-[11px] text-slate-400">
-          <span>حامی بار | سامانه یکپارچه مدیریت ترابری و لجستیک</span>
+          <span>حامی | سامانه یکپارچه مدیریت ترابری و لجستیک</span>
         </div>
       </div>
     </div>

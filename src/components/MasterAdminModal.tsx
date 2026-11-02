@@ -28,6 +28,7 @@ import {
   Clock,
   Radio,
   SlidersHorizontal,
+  Mail,
 } from 'lucide-react';
 import { DataIntegrityDiagnosticTab } from './DataIntegrityDiagnosticTab';
 import { AppUser } from '../types/auth';
@@ -38,6 +39,10 @@ import {
   getCustomLanServerUrl,
   setCustomLanServerUrl,
   getLanServerBaseUrl,
+  fetchSmtpStatus,
+  saveSmtpConfig,
+  testSmtpEmail,
+  SmtpServerStatus,
 } from '../utils/lanSyncService';
 import {
   getBaleBotConfig,
@@ -125,6 +130,17 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
   const [voipTestResult, setVoipTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [voipLogs, setVoipLogs] = useState<VoipCallLog[]>([]);
 
+  // SMTP Server State (for real email password recovery)
+  const [smtpStatus, setSmtpStatus] = useState<SmtpServerStatus | null>(null);
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState('465');
+  const [smtpSecure, setSmtpSecure] = useState(true);
+  const [smtpUser, setSmtpUser] = useState('hesam.daei@gmail.com');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpFromName, setSmtpFromName] = useState('سامانه مدیریت ترابری حامی');
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+
   // Load state when opened
   useEffect(() => {
     if (!isOpen) return;
@@ -145,6 +161,18 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
     checkLanServerStatus().then((res) => {
       setLanStatus(res);
       setLoadingLan(false);
+    });
+
+    // Fetch SMTP status
+    fetchSmtpStatus().then((st) => {
+      if (st) {
+        setSmtpStatus(st);
+        setSmtpHost(st.host || 'smtp.gmail.com');
+        setSmtpPort(String(st.port || 465));
+        setSmtpSecure(st.secure !== false);
+        setSmtpUser(st.user || 'hesam.daei@gmail.com');
+        setSmtpFromName(st.fromName || 'سامانه مدیریت ترابری حامی');
+      }
     });
   }, [isOpen, initialTab, currentUser?.id]);
 
@@ -225,6 +253,57 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
     clearBaleHistory();
     setHistoryCount(0);
     onShowToast('تاریخچه پیام‌های بله پاک‌سازی شد.', 'info');
+  };
+
+  const handleSaveSmtpSettings = async () => {
+    if (!smtpUser.trim() || (!smtpPass.trim() && !smtpStatus?.configured)) {
+      onShowToast('لطفاً نشانی ایمیل فرستنده و رمز ۱۶ رقمی App Password گوگل را وارد نمایید.', 'error');
+      return;
+    }
+    setIsSavingSmtp(true);
+    try {
+      const res = await saveSmtpConfig({
+        host: smtpHost.trim() || 'smtp.gmail.com',
+        port: parseInt(smtpPort, 10) || 465,
+        secure: smtpSecure,
+        user: smtpUser.trim(),
+        pass: smtpPass.trim(),
+        fromName: smtpFromName.trim() || 'سامانه مدیریت ترابری حامی',
+        verifyConnection: true,
+      });
+      if (res.ok) {
+        const fresh = await fetchSmtpStatus();
+        if (fresh) setSmtpStatus(fresh);
+        setSmtpPass('');
+        onShowToast(res.message || 'تنظیمات سرور ایمیل (SMTP) با موفقیت تأیید و در سرور ذخیره شد.', 'success');
+      } else {
+        onShowToast(res.error || 'خطا در اتصال و ذخیره تنظیمات SMTP.', 'error');
+      }
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  const handleTestSmtpSend = async () => {
+    setIsTestingSmtp(true);
+    try {
+      const res = await testSmtpEmail({
+        targetEmail: smtpUser.trim() || 'hesam.daei@gmail.com',
+        host: smtpHost.trim(),
+        port: parseInt(smtpPort, 10) || 465,
+        secure: smtpSecure,
+        user: smtpUser.trim(),
+        pass: smtpPass.trim() || undefined,
+        fromName: smtpFromName.trim(),
+      });
+      if (res.ok) {
+        onShowToast(res.message || 'ایمیل آزمایشی با موفقیت ارسال شد.', 'success');
+      } else {
+        onShowToast(res.error || 'ارسال ایمیل آزمایشی ناموفق بود.', 'error');
+      }
+    } finally {
+      setIsTestingSmtp(false);
+    }
   };
 
   // Handlers for VoIP
@@ -536,6 +615,109 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
                   >
                     <Send className="w-3.5 h-3.5 text-emerald-400" />
                     <span>{isSendingBot ? 'درحال ارسال تست...' : 'تست وب‌سرویس بله'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 3: Real SMTP Mail Server Configuration for Password Recovery */}
+              <div className="p-4 rounded-xl bg-[#111a30] border border-sky-500/35 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-sky-400" />
+                    <span className="text-xs font-bold text-white">
+                      سرور ارسال ایمیل واقعی (SMTP / Gmail) جهت بازیابی گذرواژه
+                    </span>
+                  </div>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                      smtpStatus?.configured
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    }`}
+                  >
+                    {smtpStatus?.configured ? 'فعال و متصل به SMTP' : 'نیازمند ثبت App Password'}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  کد ۶ رقمی بازیابی گذرواژه کاربران به صورت کاملاً واقعی و از طریق این سرور ایمیل به صندوق ورودی آن‌ها ارسال می‌گردد. برای جیمیل، رمز ۱۶ رقمی <strong>Google App Password</strong> حساب خود را وارد نمایید.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] text-slate-400 mb-1">آدرس سرور SMTP:</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={smtpHost}
+                      onChange={(e) => setSmtpHost(e.target.value)}
+                      placeholder="smtp.gmail.com"
+                      className="w-full px-3 py-1.5 text-xs bg-[#0b1222] border border-slate-700 rounded-lg text-slate-200 font-mono text-left focus:outline-hidden focus:border-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">پورت (SSL):</label>
+                    <input
+                      type="number"
+                      dir="ltr"
+                      value={smtpPort}
+                      onChange={(e) => {
+                        setSmtpPort(e.target.value);
+                        setSmtpSecure(parseInt(e.target.value, 10) === 465);
+                      }}
+                      placeholder="465"
+                      className="w-full px-3 py-1.5 text-xs bg-[#0b1222] border border-slate-700 rounded-lg text-slate-200 font-mono text-center focus:outline-hidden focus:border-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">ایمیل فرستنده (SMTP User):</label>
+                    <input
+                      type="email"
+                      dir="ltr"
+                      value={smtpUser}
+                      onChange={(e) => setSmtpUser(e.target.value)}
+                      placeholder="hesam.daei@gmail.com"
+                      className="w-full px-3 py-1.5 text-xs bg-[#0b1222] border border-slate-700 rounded-lg text-slate-200 font-mono text-left focus:outline-hidden focus:border-sky-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] text-amber-300 font-bold mb-1">
+                      رمز ۱۶ رقمی برنامه گوگل (App Password) یا رمز SMTP:
+                    </label>
+                    <input
+                      type="password"
+                      dir="ltr"
+                      value={smtpPass}
+                      onChange={(e) => setSmtpPass(e.target.value)}
+                      placeholder={
+                        smtpStatus?.configured
+                          ? '•••••••••••••••• (ذخیره شده در سرور)'
+                          : 'xxxx xxxx xxxx xxxx'
+                      }
+                      className="w-full px-3 py-1.5 text-xs bg-[#0b1222] border border-amber-500/40 rounded-lg text-amber-200 font-mono text-left focus:outline-hidden focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={handleSaveSmtpSettings}
+                    disabled={isSavingSmtp}
+                    className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{isSavingSmtp ? 'درحال بررسی و ذخیره...' : 'تأیید اتصال و ذخیره تنظیمات SMTP'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestSmtpSend}
+                    disabled={isTestingSmtp}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-emerald-300 text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{isTestingSmtp ? 'درحال ارسال ایمیل...' : 'ارسال ایمیل آزمایشی واقعی'}</span>
                   </button>
                 </div>
               </div>
