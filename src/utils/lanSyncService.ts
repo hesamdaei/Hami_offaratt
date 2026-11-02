@@ -315,7 +315,18 @@ export async function saveServerUsers(users: any[]): Promise<boolean> {
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
-    return res.ok;
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && data.version && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('hamibar:server-version-updated', {
+            detail: { version: data.version },
+          })
+        );
+      }
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }

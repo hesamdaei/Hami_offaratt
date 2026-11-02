@@ -81,14 +81,16 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
         ...currentCfg,
         dialPrefix: prefixToUse,
       };
-      saveVoipConfig(nextConfig, currentUser);
+      if (currentCfg.dialPrefix !== prefixToUse) {
+        saveVoipConfig(nextConfig, currentUser);
+      }
       setConfig(nextConfig);
 
       const result = await initiateVoipCall(phoneNumber, recipientName, nextConfig, currentUser);
 
       if (result.ok) {
         setCallState('CONNECTED');
-        setStatusMessage('تماس برقرار است');
+        setStatusMessage(result.message || 'تماس برقرار است');
         onShowToast?.(result.message, 'success');
       } else {
         setCallState('ERROR');
@@ -97,6 +99,21 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
     },
     [dialPrefixInput, phoneNumber, recipientName, currentUser, onShowToast]
   );
+
+  // Sync config whenever modal opens or user's VoIP config is updated in VoipSettingsModal
+  useEffect(() => {
+    const syncUserVoip = () => {
+      const fresh = getVoipConfig(currentUser);
+      setConfig(fresh);
+      setDialPrefixInput(fresh.dialPrefix || '');
+    };
+    window.addEventListener('hamibar:voip-config-updated', syncUserVoip);
+    window.addEventListener('hamibar:users-updated', syncUserVoip);
+    return () => {
+      window.removeEventListener('hamibar:voip-config-updated', syncUserVoip);
+      window.removeEventListener('hamibar:users-updated', syncUserVoip);
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     if (isOpen) {
@@ -135,10 +152,13 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
 
     try {
       if (callState === 'CALLING' || callState === 'CONNECTED' || config.mode !== 'softphone') {
-        await hangupVoipCall({
-          ...config,
-          dialPrefix: dialPrefixInput.trim(),
-        });
+        await hangupVoipCall(
+          {
+            ...config,
+            dialPrefix: dialPrefixInput.trim(),
+          },
+          currentUser
+        );
       }
     } catch {
       // Ignore network errors on hangup so popup always closes cleanly
@@ -146,7 +166,7 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
 
     onShowToast?.(`تماس با «${recipientName}» پایان یافت.`, 'info');
     onClose();
-  }, [isHangingUp, callState, config, dialPrefixInput, recipientName, onShowToast, onClose]);
+  }, [isHangingUp, callState, config, dialPrefixInput, currentUser, recipientName, onShowToast, onClose]);
 
   // Keyboard shortcuts: Escape to close/hangup, Enter to dial when IDLE
   useEffect(() => {
@@ -199,6 +219,15 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
     } catch {}
   };
 
+  const modeLabel =
+    config.mode === 'asterisk_ami'
+      ? `سانترال (${config.channelType || 'SIP'}/${toFaDigits(config.operatorExtension || '101')})`
+      : config.mode === 'ipphone_cti'
+      ? `تلفن رومیزی (${config.ipPhoneIp ? toFaDigits(config.ipPhoneIp) : 'بدون IP'})`
+      : config.mode === 'webhook'
+      ? `وب‌هوک (داخلی ${toFaDigits(config.operatorExtension || '101')})`
+      : `سافت‌فون (${(config.softphoneProtocol || 'tel').toUpperCase()})`;
+
   return (
     <div
       className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-3 animate-fadeIn"
@@ -212,7 +241,7 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
       }}
     >
       <div
-        className="relative bg-gradient-to-b from-[#131f38] via-[#0d1629] to-[#080e1c] border border-slate-700/80 rounded-3xl w-full max-w-[330px] shadow-[0_25px_70px_-12px_rgba(0,0,0,0.9)] overflow-hidden text-slate-100 p-5 space-y-4 ring-1 ring-white/10"
+        className="relative bg-gradient-to-b from-[#131f38] via-[#0d1629] to-[#080e1c] border border-slate-700/80 rounded-3xl w-full max-w-[340px] shadow-[0_25px_70px_-12px_rgba(0,0,0,0.9)] overflow-hidden text-slate-100 p-5 space-y-3.5 ring-1 ring-white/10"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient Status Glow */}
@@ -235,10 +264,11 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
               <button
                 type="button"
                 onClick={onOpenSettings}
-                className="p-1.5 rounded-xl bg-slate-800/70 hover:bg-slate-700/90 text-slate-400 hover:text-white border border-slate-700/60 transition cursor-pointer"
-                title="تنظیمات سانترال و تلفن ویپ"
+                className="px-2 py-1 rounded-xl bg-slate-800/80 hover:bg-blue-600/30 text-slate-300 hover:text-white border border-slate-700/70 hover:border-blue-500/40 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                title="تنظیمات سانترال و داخلی تلفن شما"
               >
-                <Settings className="w-3.5 h-3.5" />
+                <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                <span>داخلی {toFaDigits(config.operatorExtension || '101')}</span>
               </button>
             )}
             <button
@@ -270,6 +300,18 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
           >
             <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+
+        {/* Active User PBX Profile Strip */}
+        <div
+          onClick={onOpenSettings}
+          className="relative z-10 flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-cyan-500/40 text-[10px] text-slate-300 cursor-pointer transition"
+          title="برای تغییر حالت اتصال سانترال یا شماره داخلی کلیک کنید"
+        >
+          <span className="truncate font-semibold text-slate-400">
+            اپراتور: <strong className="text-slate-200">{currentUser?.fullName || 'کاربر جاری'}</strong>
+          </span>
+          <span className="font-mono font-bold text-cyan-300 shrink-0">{modeLabel}</span>
         </div>
 
         {/* 1. Avatar Ring + Driver/Contact Info + Phone Number */}

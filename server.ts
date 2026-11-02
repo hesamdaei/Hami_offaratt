@@ -361,6 +361,17 @@ function sanitizeAndValidateUsers(incomingUsers: any[], currentUsers: any[]): an
 
     const isMaster = Boolean(rawUser.isMasterAdmin || immutableUsername === 'admin' || stableId === 'usr-master-admin');
 
+    const rawTime = rawUser.updatedAt ? new Date(rawUser.updatedAt).getTime() : 0;
+    const existTime = existing?.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+    const preferRaw = rawTime >= existTime;
+
+    const mergedVoipConfig =
+      rawUser.voipConfig || existing?.voipConfig
+        ? preferRaw
+          ? { ...(existing?.voipConfig || {}), ...(rawUser.voipConfig || {}) }
+          : { ...(rawUser.voipConfig || {}), ...(existing?.voipConfig || {}) }
+        : undefined;
+
     result.push({
       ...(existing || {}),
       ...rawUser,
@@ -373,6 +384,8 @@ function sanitizeAndValidateUsers(incomingUsers: any[], currentUsers: any[]): an
       personnelCode: rawUser.personnelCode || existing?.personnelCode || undefined,
       dossierType: rawUser.dossierType || existing?.dossierType || (staffId ? 'STAFF' : driverId ? 'DRIVER' : 'NONE'),
       createdFrom: rawUser.createdFrom || existing?.createdFrom || 'USER_MANAGEMENT',
+      voipConfig: mergedVoipConfig,
+      updatedAt: preferRaw ? rawUser.updatedAt || existing?.updatedAt : existing?.updatedAt || rawUser.updatedAt,
       permissions: isMaster
         ? {
             ...INITIAL_USERS[0].permissions,
@@ -1211,6 +1224,89 @@ function executeAsteriskAmiOriginate(params: AsteriskAmiParams): Promise<{ ok: b
   });
 }
 
+function normalizeVoipDigits(input: unknown): string {
+  if (input === undefined || input === null) return '';
+  return String(input)
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .trim();
+}
+
+function executeAsteriskAmiHangup(params: {
+  host: string;
+  port: number;
+  user: string;
+  secret: string;
+  extension: string;
+  channelType: string;
+}): Promise<{ ok: boolean; message: string }> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let timer: any;
+    let buffer = '';
+    let step: 'connect' | 'login' | 'hangup_cmd' | 'done' = 'connect';
+
+    const host = sanitizeAmiParam(normalizeVoipDigits(params.host) || '127.0.0.1');
+    const port = params.port || 5038;
+    const user = sanitizeAmiParam(params.user);
+    const secret = sanitizeAmiParam(params.secret);
+    const ext = sanitizeAmiParam(normalizeVoipDigits(params.extension));
+    const chType = sanitizeAmiParam(params.channelType || 'SIP');
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      try {
+        socket.destroy();
+      } catch {}
+    };
+
+    timer = setTimeout(() => {
+      if (step !== 'done') {
+        step = 'done';
+        cleanup();
+        resolve({ ok: true, message: 'فرمان قطع کانال به سانترال ارسال شد.' });
+      }
+    }, 4500);
+
+    socket.connect(port, host, () => {});
+
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString('utf-8');
+      if (step === 'connect' && buffer.includes('Asterisk Call Manager')) {
+        step = 'login';
+        buffer = '';
+        socket.write(`Action: Login\r\nUsername: ${user}\r\nSecret: ${secret}\r\n\r\n`);
+      } else if (step === 'login' && buffer.includes('Response: Success')) {
+        step = 'hangup_cmd';
+        buffer = '';
+        socket.write(
+          `Action: Command\r\nCommand: channel request hangup ${chType}/${ext}\r\n\r\n` +
+            `Action: Logoff\r\n\r\n`
+        );
+        setTimeout(() => {
+          if (step !== 'done') {
+            step = 'done';
+            cleanup();
+            resolve({ ok: true, message: `فرمان قطع تماس داخلی ${ext} به سانترال ارسال شد.` });
+          }
+        }, 400);
+      } else if (step === 'login' && buffer.includes('Response: Error')) {
+        step = 'done';
+        cleanup();
+        resolve({ ok: false, message: 'خطای احراز هویت AMI هنگام قطع تماس.' });
+      }
+    });
+
+    socket.on('error', () => {
+      if (step !== 'done') {
+        step = 'done';
+        cleanup();
+        resolve({ ok: true, message: 'تماس پایان یافت.' });
+      }
+    });
+  });
+}
+
 // 1. Originate VoIP Call API
 app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) => {
   try {
@@ -1220,26 +1316,37 @@ app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) =>
     }
 
     const mode = config?.mode || 'softphone';
-    const targetPhone = String(phoneNumber).trim();
+    const targetPhone = normalizeVoipDigits(phoneNumber).replace(/[^0-9+*#]/g, '');
+    const ext = normalizeVoipDigits(config?.operatorExtension || '101').replace(/[^0-9A-Za-z_.-]/g, '') || '101';
 
-    console.log(`\n[VoIP] درخواست تماس با ${recipientName || 'کاربر'} (${targetPhone}) - حالت: ${mode}`);
+    console.log(`\n[VoIP] درخواست تماس با ${recipientName || 'کاربر'} (${targetPhone}) - داخلی: ${ext} - حالت: ${mode}`);
 
     // Mode: Asterisk AMI (Issabel / FreePBX)
     if (mode === 'asterisk_ami') {
-      const ext = config.operatorExtension || '101';
-      const channelPrefix = config.channelType || 'SIP';
-      const channel = `${channelPrefix}/${ext}`;
+      const host = normalizeVoipDigits(config?.amiHost || '').replace(/\s+/g, '');
+      if (!host) {
+        return res.status(400).json({
+          ok: false,
+          message: 'آدرس IP سرور سانترال (AMI Host) در تنظیمات کاربر ثبت نشده است.',
+        });
+      }
+
+      const channelPrefix = config?.channelType || 'SIP';
+      const channel =
+        channelPrefix === 'Local'
+          ? `Local/${ext}@${normalizeVoipDigits(config?.amiContext || 'from-internal') || 'from-internal'}`
+          : `${channelPrefix}/${ext}`;
 
       const amiResult = await executeAsteriskAmiOriginate({
-        host: config.amiHost,
-        port: parseInt(config.amiPort || '5038', 10),
-        user: config.amiUser,
-        secret: config.amiSecret,
+        host,
+        port: parseInt(normalizeVoipDigits(config?.amiPort || '5038'), 10) || 5038,
+        user: normalizeVoipDigits(config?.amiUser || 'admin'),
+        secret: String(config?.amiSecret || '').trim(),
         channel,
         exten: targetPhone,
-        context: config.amiContext || 'from-internal',
-        callerId: config.callerId || 'HamiBar',
-        autoAnswer: config.autoAnswer !== false,
+        context: normalizeVoipDigits(config?.amiContext || 'from-internal') || 'from-internal',
+        callerId: config?.callerId || `Ext ${ext}`,
+        autoAnswer: config?.autoAnswer !== false,
       });
 
       return res.json(amiResult);
@@ -1247,16 +1354,19 @@ app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) =>
 
     // Mode: Hardware IP Phone Direct CTI (Yealink, Grandstream, Fanvil)
     if (mode === 'ipphone_cti') {
-      const phoneIp = config.ipPhoneIp;
+      const phoneIp = normalizeVoipDigits(config?.ipPhoneIp || '')
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '')
+        .replace(/\s+/g, '');
       if (!phoneIp) {
-        return res.status(400).json({ ok: false, error: 'آدرس IP تلفن رومیزی در تنظیمات مشخص نشده است.' });
+        return res.status(400).json({ ok: false, message: 'آدرس IP تلفن رومیزی در تنظیمات مشخص نشده است.' });
       }
 
       let ctiUrl = '';
       if (config.ipPhoneModel === 'grandstream') {
         ctiUrl = `http://${phoneIp}/cgi-bin/api-make_call?phonenumber=${encodeURIComponent(targetPhone)}`;
       } else {
-        // Yealink default Action URI
+        // Yealink / Fanvil default Action URI
         ctiUrl = `http://${phoneIp}/servlet?key=number=${encodeURIComponent(targetPhone)}`;
       }
 
@@ -1268,13 +1378,13 @@ app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) =>
         }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
         await fetch(ctiUrl, { headers, signal: controller.signal }).catch(() => null);
         clearTimeout(timeoutId);
 
         return res.json({
           ok: true,
-          message: `دستور شماره‌گیری (${targetPhone}) به تلفن رومیزی (${phoneIp}) ارسال شد. تلفن در حال شماره‌گیری است.`,
+          message: `دستور شماره‌گیری (${targetPhone}) به تلفن رومیزی (${phoneIp} - داخلی ${ext}) ارسال شد.`,
           details: { dialedNumber: targetPhone, ctiUrl },
         });
       } catch (ctiErr: any) {
@@ -1287,15 +1397,15 @@ app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) =>
 
     // Mode: Custom Webhook
     if (mode === 'webhook') {
-      let url = config.webhookUrl || '';
+      let url = normalizeVoipDigits(config?.webhookUrl || '');
       if (!url) {
-        return res.status(400).json({ ok: false, error: 'آدرس وب‌هوک سانترال تعریف نشده است.' });
+        return res.status(400).json({ ok: false, message: 'آدرس وب‌هوک سانترال تعریف نشده است.' });
       }
 
       url = url
-        .replace('{to}', encodeURIComponent(targetPhone))
-        .replace('{from}', encodeURIComponent(config.operatorExtension || '101'))
-        .replace('{name}', encodeURIComponent(recipientName || ''));
+        .replace(/\{to\}/g, encodeURIComponent(targetPhone))
+        .replace(/\{from\}/g, encodeURIComponent(ext))
+        .replace(/\{name\}/g, encodeURIComponent(recipientName || ''));
 
       try {
         const controller = new AbortController();
@@ -1309,7 +1419,7 @@ app.post(['/api/lan/voip/originate', '/api/voip/originate'], async (req, res) =>
         return res.json({
           ok: webhookRes.ok,
           message: webhookRes.ok
-            ? 'درخواست تماس با موفقیت به وب‌هوک سانترال ارسال شد.'
+            ? `درخواست تماس از داخلی ${ext} با موفقیت به وب‌هوک سانترال ارسال شد.`
             : `خطای سانترال در پردازش تماس (${webhookRes.status})`,
         });
       } catch (hookErr: any) {
@@ -1338,7 +1448,10 @@ app.post(['/api/lan/voip/hangup', '/api/voip/hangup'], async (req, res) => {
     const mode = config?.mode || 'softphone';
 
     if (mode === 'ipphone_cti' && config?.ipPhoneIp) {
-      const phoneIp = config.ipPhoneIp;
+      const phoneIp = normalizeVoipDigits(config.ipPhoneIp)
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '')
+        .replace(/\s+/g, '');
       const headers: Record<string, string> = {};
       if (config.ipPhoneUser && config.ipPhonePass) {
         const auth = Buffer.from(`${config.ipPhoneUser}:${config.ipPhonePass}`).toString('base64');
@@ -1346,7 +1459,7 @@ app.post(['/api/lan/voip/hangup', '/api/voip/hangup'], async (req, res) => {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
 
       if (config.ipPhoneModel === 'grandstream') {
         const url = `http://${phoneIp}/cgi-bin/api-phone_operation?cmd=endcall`;
@@ -1368,6 +1481,18 @@ app.post(['/api/lan/voip/hangup', '/api/voip/hangup'], async (req, res) => {
       });
     }
 
+    if (mode === 'asterisk_ami' && config?.amiHost && config?.operatorExtension) {
+      const hangupRes = await executeAsteriskAmiHangup({
+        host: config.amiHost,
+        port: parseInt(normalizeVoipDigits(config.amiPort || '5038'), 10) || 5038,
+        user: config.amiUser || 'admin',
+        secret: config.amiSecret || '',
+        extension: config.operatorExtension,
+        channelType: config.channelType || 'SIP',
+      });
+      return res.json(hangupRes);
+    }
+
     return res.json({
       ok: true,
       message: 'تماس پایان یافت.',
@@ -1385,9 +1510,11 @@ app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
       return res.status(400).json({ ok: false, error: 'تنظیمات ارسال نشده است.' });
     }
 
+    const ext = normalizeVoipDigits(config.operatorExtension || '101') || '101';
+
     if (config.mode === 'asterisk_ami') {
-      const host = config.amiHost || '127.0.0.1';
-      const port = parseInt(config.amiPort || '5038', 10);
+      const host = normalizeVoipDigits(config.amiHost || '127.0.0.1').replace(/\s+/g, '');
+      const port = parseInt(normalizeVoipDigits(config.amiPort || '5038'), 10) || 5038;
       const socket = new net.Socket();
       let buffer = '';
       let timer: any;
@@ -1395,7 +1522,7 @@ app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
       const testResult = await new Promise<{ ok: boolean; message: string }>((resolve) => {
         timer = setTimeout(() => {
           try { socket.destroy(); } catch {}
-          resolve({ ok: false, message: `پاسخی از ${host}:${port} دریافت نشد (Timeout). پورت ۵۰۳۸ سرور را بررسی کنید.` });
+          resolve({ ok: false, message: `پاسخی از ${host}:${port} دریافت نشد (Timeout). پورت ۵۰۳۸ سرور سانترال را بررسی کنید.` });
         }, 5000);
 
         socket.connect(port, host, () => {
@@ -1405,7 +1532,7 @@ app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
         socket.on('data', (chunk) => {
           buffer += chunk.toString();
           if (buffer.includes('Asterisk Call Manager')) {
-            socket.write(`Action: Login\r\nUsername: ${config.amiUser}\r\nSecret: ${config.amiSecret}\r\n\r\n`);
+            socket.write(`Action: Login\r\nUsername: ${sanitizeAmiParam(config.amiUser)}\r\nSecret: ${sanitizeAmiParam(config.amiSecret)}\r\n\r\n`);
           } else if (buffer.includes('Response: Success')) {
             clearTimeout(timer);
             try {
@@ -1414,21 +1541,21 @@ app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
             } catch {}
             resolve({
               ok: true,
-              message: `اتصال به سانترال استریسک بر روی ${host}:${port} با موفقیت برقرار و احراز هویت شد!`,
+              message: `اتصال به سانترال استریسک (${host}:${port}) برای داخلی ${ext} (${config.channelType || 'SIP'}/${ext}) با موفقیت برقرار و احراز هویت شد!`,
             });
           } else if (buffer.includes('Response: Error')) {
             clearTimeout(timer);
             try { socket.end(); } catch {}
             resolve({
               ok: false,
-              message: 'پورت ۵۰۳۸ استریسک در دسترس است، اما نام کاربری یا پسورد AMI اشتباه است.',
+              message: 'پورت ۵۰۳۸ استریسک در دسترس است، اما نام کاربری یا رمز عبور AMI در manager.conf اشتباه است.',
             });
           }
         });
 
         socket.on('error', (err) => {
           clearTimeout(timer);
-          resolve({ ok: false, message: `عدم امکان برقراری ارتباط با پورت ۵۰۳۸: ${err.message}` });
+          resolve({ ok: false, message: `عدم امکان برقراری ارتباط با ${host}:${port}: ${err.message}` });
         });
       });
 
@@ -1436,13 +1563,36 @@ app.post(['/api/lan/voip/test', '/api/voip/test'], async (req, res) => {
     }
 
     if (config.mode === 'ipphone_cti') {
+      const phoneIp = normalizeVoipDigits(config.ipPhoneIp || '')
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '')
+        .replace(/\s+/g, '');
+      if (!phoneIp) {
+        return res.json({
+          ok: false,
+          message: 'لطفاً ابتدا آدرس IP تلفن رومیزی (مثلاً 192.168.1.45) را وارد نمایید.',
+        });
+      }
       return res.json({
         ok: true,
-        message: `پیکربندی برای تلفن رومیزی IP: ${config.ipPhoneIp} آماده ارسال فرامین شماره‌گیری است.`,
+        message: `پیکربندی تلفن رومیزی (${config.ipPhoneModel || 'yealink'} - IP: ${phoneIp} - داخلی: ${ext}) معتبر و آماده ارسال فرمان شماره‌گیری است.`,
       });
     }
 
-    res.json({ ok: true, message: 'تنظیمات معتبر است.' });
+    if (config.mode === 'webhook') {
+      if (!config.webhookUrl || !String(config.webhookUrl).trim()) {
+        return res.json({
+          ok: false,
+          message: 'لطفاً آدرس URL وب‌هوک سانترال را وارد نمایید.',
+        });
+      }
+      return res.json({
+        ok: true,
+        message: `وب‌هوک سانترال برای داخلی ${ext} آماده ارسال درخواست است.`,
+      });
+    }
+
+    res.json({ ok: true, message: `تنظیمات داخلی ${ext} معتبر است.` });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message || 'خطا در تست اتصال' });
   }

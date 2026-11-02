@@ -235,16 +235,18 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
   };
 
   const handleSaveVoip = () => {
-    saveVoipConfig(voipConfig, selectedVoipUserId, {
-      alsoUpdateGlobalServerDefaults: true,
+    const saved = saveVoipConfig(voipConfig, selectedVoipUserId, {
+      alsoUpdateGlobalServerDefaults:
+        selectedVoipUserId === 'GLOBAL_DEFAULT' || voipConfig.mode === 'asterisk_ami',
     });
+    setVoipConfig(saved);
     setVoipUsers(getStoredUsers());
     const targetUser = voipUsers.find((u) => u.id === selectedVoipUserId);
     onShowToast(
       selectedVoipUserId === 'GLOBAL_DEFAULT'
         ? 'تنظیمات پایه مرکزی سانترال با موفقیت ذخیره شد.'
         : `تنظیمات مرکز تلفن کاربر «${targetUser?.fullName || 'انتخابی'}» (داخلی ${toFaDigits(
-            voipConfig.operatorExtension || '—'
+            saved.operatorExtension || '—'
           )}) با موفقیت ذخیره شد.`,
       'success'
     );

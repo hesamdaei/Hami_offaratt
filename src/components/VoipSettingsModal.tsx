@@ -105,33 +105,36 @@ export const VoipSettingsModal: FC<VoipSettingsModalProps> = ({
       ? selectedUserId
       : currentUser?.id || selectedUserId;
 
-    saveVoipConfig(config, targetToSave, {
-      alsoUpdateGlobalServerDefaults: canManageAllUsersVoip,
+    const saved = saveVoipConfig(config, targetToSave, {
+      alsoUpdateGlobalServerDefaults:
+        targetToSave === 'GLOBAL_DEFAULT' ||
+        (canManageAllUsersVoip && config.mode === 'asterisk_ami'),
     });
 
+    setConfig(saved);
     setSystemUsers(getStoredUsers());
 
     const label =
       targetToSave === 'GLOBAL_DEFAULT'
         ? 'تنظیمات پیش‌فرض مرکزی سانترال'
         : selectedUserObj
-        ? `تنظیمات تلفن کاربر «${selectedUserObj.fullName}» (داخلی ${toFaDigits(config.operatorExtension || '—')})`
-        : 'تنظیمات مرکز تلفن شما';
+        ? `تنظیمات تلفن کاربر «${selectedUserObj.fullName}» (داخلی ${toFaDigits(saved.operatorExtension || '—')})`
+        : `تنظیمات مرکز تلفن شما (داخلی ${toFaDigits(saved.operatorExtension || '—')})`;
 
     onShowToast?.(`${label} با موفقیت ثبت و ذخیره شد.`, 'success');
     onClose();
   };
 
   const handleQuickSaveUserRow = (user: AppUser, updatedCfg: VoipConfig) => {
-    saveVoipConfig(updatedCfg, user.id, {
+    const saved = saveVoipConfig(updatedCfg, user.id, {
       alsoUpdateGlobalServerDefaults: false,
     });
     setSystemUsers(getStoredUsers());
     if (selectedUserId === user.id) {
-      setConfig(updatedCfg);
+      setConfig(saved);
     }
     onShowToast?.(
-      `تنظیمات تلفن «${user.fullName}» (داخلی ${toFaDigits(updatedCfg.operatorExtension || '—')}) ذخیره شد.`,
+      `تنظیمات تلفن «${user.fullName}» (داخلی ${toFaDigits(saved.operatorExtension || '—')}) ذخیره شد.`,
       'success'
     );
   };
@@ -163,7 +166,7 @@ export const VoipSettingsModal: FC<VoipSettingsModalProps> = ({
   return (
     <div
       dir="rtl"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-[170] flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
       onClick={onClose}
     >
       <div

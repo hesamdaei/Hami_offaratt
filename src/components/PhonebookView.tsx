@@ -47,7 +47,7 @@ import {
   CATEGORY_META,
   assignContactExtension,
 } from '../utils/phonebookService';
-import { getVoipCallLogs } from '../utils/voipService';
+import { getVoipCallLogs, getVoipConfig } from '../utils/voipService';
 import { DriverDirectoryItem } from '../utils/fleetSeedData';
 import { StaffMember } from '../types';
 import { toFaDigits, normalizePersianDigits } from '../utils/jalaali';
@@ -62,6 +62,7 @@ interface PhonebookViewProps {
   isPopupMode?: boolean;
   onOpenPopupModal?: () => void;
   onClosePopup?: () => void;
+  onOpenVoipSettings?: () => void;
   currentUser?: AppUser | null;
   onCallPhone: (phone: string, recipientName: string, recipientRole?: string) => void;
   onShowToast?: (message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
@@ -110,6 +111,7 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
   isPopupMode = false,
   onOpenPopupModal,
   onClosePopup,
+  onOpenVoipSettings,
   currentUser,
   onCallPhone,
   onShowToast,
@@ -122,6 +124,7 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeLetter, setActiveLetter] = useState('همه');
   const [refreshTick, setRefreshTick] = useState(0);
+  const [userVoipConfig, setUserVoipConfig] = useState(() => getVoipConfig(currentUser));
 
   // Quick Dial & Keypad Popover state
   const [directDialInput, setDirectDialInput] = useState('');
@@ -139,6 +142,21 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const allowExport = canExportExcel(currentUser);
+
+  // Sync user's active PBX config when changed
+  useEffect(() => {
+    const syncVoip = () => {
+      setUserVoipConfig(getVoipConfig(currentUser));
+      setRefreshTick((t) => t + 1);
+    };
+    syncVoip();
+    window.addEventListener('hamibar:voip-config-updated', syncVoip);
+    window.addEventListener('hamibar:users-updated', syncVoip);
+    return () => {
+      window.removeEventListener('hamibar:voip-config-updated', syncVoip);
+      window.removeEventListener('hamibar:users-updated', syncVoip);
+    };
+  }, [currentUser]);
 
   // Keyboard shortcut "/" to focus search
   useEffect(() => {
@@ -480,6 +498,21 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Active User PBX / Extension Settings Button */}
+            {onOpenVoipSettings && (
+              <button
+                type="button"
+                onClick={onOpenVoipSettings}
+                className="px-2.5 py-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/35 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                title="تنظیمات سانترال، داخلی و نحوه شماره‌گیری اختصاصی شما"
+              >
+                <PhoneCall className="w-3.5 h-3.5 text-blue-400" />
+                <span>
+                  سانترال من (داخلی {toFaDigits(userVoipConfig.operatorExtension || '101')})
+                </span>
+              </button>
+            )}
+
             {/* Open as Minimal Floating Popup */}
             {!isPopupMode && onOpenPopupModal && (
               <button

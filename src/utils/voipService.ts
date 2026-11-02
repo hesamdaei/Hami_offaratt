@@ -9,6 +9,99 @@ const STORAGE_KEY_VOIP_USER_CONFIGS = 'hamibar_voip_user_configs_v1';
 const STORAGE_KEY_VOIP_LOGS = 'hamibar_voip_logs_v1';
 
 /**
+ * نرمال‌سازی و پاک‌سازی مقادیر تنظیمات ویپ (تبدیل اعداد فارسی به انگلیسی برای داخلی، آی‌پی، پورت و پیش‌شماره)
+ */
+export function sanitizeVoipConfig(
+  raw: Partial<VoipConfig> | undefined | null,
+  fallback: VoipConfig = DEFAULT_VOIP_CONFIG
+): VoipConfig {
+  const src = raw || {};
+  const cleanStr = (val: unknown, def = ''): string => {
+    if (val === undefined || val === null) return def;
+    return normalizePersianDigits(String(val)).trim();
+  };
+
+  const validModes: VoipConfig['mode'][] = ['softphone', 'asterisk_ami', 'ipphone_cti', 'webhook'];
+  const mode: VoipConfig['mode'] =
+    src.mode && validModes.includes(src.mode) ? src.mode : fallback.mode || 'softphone';
+
+  const validChannels: VoipConfig['channelType'][] = ['SIP', 'PJSIP', 'Local'];
+  const channelType: VoipConfig['channelType'] =
+    src.channelType && validChannels.includes(src.channelType)
+      ? src.channelType
+      : fallback.channelType || 'SIP';
+
+  const validPhoneModels: VoipConfig['ipPhoneModel'][] = ['yealink', 'grandstream', 'fanvil'];
+  const ipPhoneModel: VoipConfig['ipPhoneModel'] =
+    src.ipPhoneModel && validPhoneModels.includes(src.ipPhoneModel)
+      ? src.ipPhoneModel
+      : fallback.ipPhoneModel || 'yealink';
+
+  const softphoneProtocol: VoipConfig['softphoneProtocol'] =
+    src.softphoneProtocol === 'sip' || src.softphoneProtocol === 'tel'
+      ? src.softphoneProtocol
+      : fallback.softphoneProtocol || 'tel';
+
+  const rawPort = src.amiPort !== undefined ? cleanStr(src.amiPort, '5038') : String(fallback.amiPort || 5038);
+  const parsedPort = parseInt(rawPort.replace(/[^0-9]/g, ''), 10);
+
+  return {
+    enabled: src.enabled !== undefined ? Boolean(src.enabled) : fallback.enabled !== false,
+    mode,
+    operatorExtension: cleanStr(
+      src.operatorExtension !== undefined ? src.operatorExtension : fallback.operatorExtension,
+      '101'
+    ).replace(/[^0-9A-Za-z_.-]/g, '') || '101',
+    dialPrefix: cleanStr(
+      src.dialPrefix !== undefined ? src.dialPrefix : fallback.dialPrefix,
+      ''
+    ).replace(/[^0-9*#,+]/g, ''),
+    callerId:
+      src.callerId !== undefined && String(src.callerId).trim()
+        ? String(src.callerId).trim()
+        : fallback.callerId || 'HamiBar Dispatch',
+    softphoneProtocol,
+    amiHost: cleanStr(
+      src.amiHost !== undefined ? src.amiHost : fallback.amiHost,
+      '192.168.1.200'
+    ).replace(/\s+/g, ''),
+    amiPort: !isNaN(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? parsedPort : 5038,
+    amiUser: cleanStr(src.amiUser !== undefined ? src.amiUser : fallback.amiUser, 'admin'),
+    amiSecret:
+      src.amiSecret !== undefined ? String(src.amiSecret).trim() : fallback.amiSecret || '',
+    amiContext:
+      cleanStr(
+        src.amiContext !== undefined ? src.amiContext : fallback.amiContext,
+        'from-internal'
+      ) || 'from-internal',
+    channelType,
+    autoAnswer:
+      src.autoAnswer !== undefined ? Boolean(src.autoAnswer) : Boolean(fallback.autoAnswer),
+    ipPhoneModel,
+    ipPhoneIp: cleanStr(
+      src.ipPhoneIp !== undefined ? src.ipPhoneIp : fallback.ipPhoneIp,
+      ''
+    ).replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/\s+/g, ''),
+    ipPhoneUser: cleanStr(
+      src.ipPhoneUser !== undefined ? src.ipPhoneUser : fallback.ipPhoneUser,
+      'admin'
+    ),
+    ipPhonePass:
+      src.ipPhonePass !== undefined
+        ? String(src.ipPhonePass).trim()
+        : fallback.ipPhonePass || 'admin',
+    webhookUrl: cleanStr(
+      src.webhookUrl !== undefined ? src.webhookUrl : fallback.webhookUrl,
+      ''
+    ),
+    webhookMethod:
+      src.webhookMethod === 'POST' || src.webhookMethod === 'GET'
+        ? src.webhookMethod
+        : fallback.webhookMethod || 'GET',
+  };
+}
+
+/**
  * دریافت تنظیمات پایه / سراسری مرکز تلفن (مقادیر پیش‌فرض سرور سانترال)
  */
 export function getGlobalBaseVoipConfig(): VoipConfig {
@@ -16,7 +109,7 @@ export function getGlobalBaseVoipConfig(): VoipConfig {
     const saved = localStorage.getItem(STORAGE_KEY_VOIP_CONFIG);
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...DEFAULT_VOIP_CONFIG, ...parsed };
+      return sanitizeVoipConfig(parsed, DEFAULT_VOIP_CONFIG);
     }
   } catch (e) {
     console.warn('خطا در بارگذاری تنظیمات پایه ویپ:', e);
@@ -30,7 +123,7 @@ export function getGlobalBaseVoipConfig(): VoipConfig {
 export function saveGlobalBaseVoipConfig(config: Partial<VoipConfig>): void {
   try {
     const current = getGlobalBaseVoipConfig();
-    const merged: VoipConfig = { ...current, ...config };
+    const merged = sanitizeVoipConfig({ ...current, ...config }, current);
     localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(merged));
     window.dispatchEvent(new CustomEvent('hamibar:voip-config-updated'));
   } catch (e) {
@@ -55,9 +148,39 @@ function getPerUserVoipConfigMap(): Record<string, Partial<VoipConfig>> {
 }
 
 /**
+ * همگام‌سازی کش تنظیمات ویپ کاربر در localStorage (فراخوانی هنگام بارگذاری یا ادغام کاربران)
+ */
+export function syncUserVoipConfigToLocalMap(
+  userId: string,
+  username: string | undefined,
+  voipConfig: Partial<VoipConfig> | undefined
+): void {
+  if (!userId || !voipConfig || Object.keys(voipConfig).length === 0) return;
+  try {
+    const userMap = getPerUserVoipConfigMap();
+    const globalBase = getGlobalBaseVoipConfig();
+    const cleanCfg = sanitizeVoipConfig(
+      { ...(userMap[userId] || {}), ...voipConfig },
+      globalBase
+    );
+    userMap[userId] = cleanCfg;
+    if (username && username.trim()) {
+      userMap[username.trim().toLowerCase()] = cleanCfg;
+    }
+    localStorage.setItem(STORAGE_KEY_VOIP_USER_CONFIGS, JSON.stringify(userMap));
+  } catch {}
+}
+
+/**
  * تشخیص کاربر هدف (شناسه کاربر مشخص‌شده یا کاربر لاگین‌شده فعلی)
  */
-function resolveTargetUser(userOrId?: AppUser | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> } | string | null): {
+function resolveTargetUser(
+  userOrId?:
+    | AppUser
+    | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> }
+    | string
+    | null
+): {
   userId: string | null;
   username: string | null;
   userObj: AppUser | null;
@@ -86,22 +209,35 @@ function resolveTargetUser(userOrId?: AppUser | { id?: string; username?: string
         (userOrId.id && u.id === userOrId.id) ||
         (userOrId.username && u.username.toLowerCase() === userOrId.username.toLowerCase())
     );
+    // اگر شیء کاربر ارسال‌شده دارای voipConfig جدیدتر باشد با رکورد ذخیره شده ادغام شود
+    const mergedUserObj = found
+      ? ({
+          ...found,
+          voipConfig:
+            found.voipConfig || userOrId.voipConfig
+              ? { ...(userOrId.voipConfig || {}), ...(found.voipConfig || {}) }
+              : undefined,
+        } as AppUser)
+      : (userOrId as AppUser);
+
     return {
       userId: found?.id || userOrId.id || null,
       username: found?.username || userOrId.username || null,
-      userObj: found || (userOrId as AppUser),
+      userObj: mergedUserObj,
     };
   }
 
   // اگر آرگومان ارسال نشده باشد، کاربر فعال در نشست جاری را بررسی کن
   const session = getStoredSession();
-  if (session && session.id) {
+  if (session && (session.id || session.username)) {
     const found = allUsers.find(
-      (u) => u.id === session.id || u.username.toLowerCase() === session.username.toLowerCase()
+      (u) =>
+        (session.id && u.id === session.id) ||
+        (session.username && u.username.toLowerCase() === session.username.toLowerCase())
     );
     return {
-      userId: found?.id || session.id,
-      username: found?.username || session.username,
+      userId: found?.id || session.id || null,
+      username: found?.username || session.username || null,
       userObj: found || (session as AppUser),
     };
   }
@@ -115,7 +251,11 @@ function resolveTargetUser(userOrId?: AppUser | { id?: string; username?: string
  * و در صورت عدم ثبت مقادیر سرور، از مقادیر پیش‌فرض مرکزی سانترال ارث‌بری می‌کند.
  */
 export function getVoipConfig(
-  userOrId?: AppUser | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> } | string | null
+  userOrId?:
+    | AppUser
+    | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> }
+    | string
+    | null
 ): VoipConfig {
   const globalBase = getGlobalBaseVoipConfig();
 
@@ -137,12 +277,15 @@ export function getVoipConfig(
 
     const storedInUserRecord = userObj?.voipConfig || {};
 
-    return {
+    // ادغام تنظیمات پایه سانترال با تنظیمات اختصاصی کاربر (رکورد کاربر و کش محلی)
+    const rawMerged: Partial<VoipConfig> = {
       ...DEFAULT_VOIP_CONFIG,
       ...globalBase,
-      ...storedInUserRecord,
       ...localPerUser,
+      ...storedInUserRecord,
     };
+
+    return sanitizeVoipConfig(rawMerged, globalBase);
   } catch (e) {
     console.warn('خطا در بارگذاری تنظیمات اختصاصی ویپ کاربر:', e);
     return globalBase;
@@ -154,56 +297,76 @@ export function getVoipConfig(
  */
 export function saveVoipConfig(
   config: VoipConfig,
-  userOrId?: AppUser | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> } | string | null,
+  userOrId?:
+    | AppUser
+    | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> }
+    | string
+    | null,
   options?: { alsoUpdateGlobalServerDefaults?: boolean }
-): void {
+): VoipConfig {
+  const globalBase = getGlobalBaseVoipConfig();
+  const cleanConfig = sanitizeVoipConfig(config, globalBase);
+
   try {
     if (userOrId === 'GLOBAL_DEFAULT') {
-      localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(config));
-      window.dispatchEvent(new CustomEvent('hamibar:voip-config-updated'));
-      return;
+      localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(cleanConfig));
+      window.dispatchEvent(
+        new CustomEvent('hamibar:voip-config-updated', {
+          detail: { userId: 'GLOBAL_DEFAULT', config: cleanConfig },
+        })
+      );
+      return cleanConfig;
     }
 
     const { userId, username, userObj } = resolveTargetUser(userOrId);
 
-    // ۱. اگر گزینه بروزرسانی پایه سرور فعال باشد یا کاربر مشخصی در کار نباشد، تنظیمات پایه سرور را هم ذخیره کن
-    if (!userId || options?.alsoUpdateGlobalServerDefaults) {
-      const currentGlobal = getGlobalBaseVoipConfig();
-      const nextGlobal: VoipConfig = !userId
-        ? config
-        : {
-            ...currentGlobal,
-            amiHost: config.amiHost || currentGlobal.amiHost,
-            amiPort: config.amiPort || currentGlobal.amiPort,
-            amiUser: config.amiUser || currentGlobal.amiUser,
-            amiSecret: config.amiSecret || currentGlobal.amiSecret,
-            amiContext: config.amiContext || currentGlobal.amiContext,
-            channelType: config.channelType || currentGlobal.channelType,
-          };
+    // ۱. اگر کاربر مشخصی در کار نباشد یا صراحتاً درخواست بروزرسانی پارامترهای مشترک سرور AMI شده باشد:
+    // توجه مهم: هرگز حالت تماس (mode)، شماره داخلی (operatorExtension)، پیش‌شماره (dialPrefix) یا IP تلفن یک کاربر
+    // نباید تنظیمات پیش‌فرض سایر کاربران سیستم را بازنویسی کند!
+    if (!userId) {
+      localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(cleanConfig));
+    } else if (options?.alsoUpdateGlobalServerDefaults) {
+      const nextGlobal: VoipConfig = sanitizeVoipConfig(
+        {
+          ...globalBase,
+          amiHost: cleanConfig.amiHost || globalBase.amiHost,
+          amiPort: cleanConfig.amiPort || globalBase.amiPort,
+          amiUser: cleanConfig.amiUser || globalBase.amiUser,
+          amiSecret: cleanConfig.amiSecret || globalBase.amiSecret,
+          amiContext: cleanConfig.amiContext || globalBase.amiContext,
+          channelType: cleanConfig.channelType || globalBase.channelType,
+        },
+        globalBase
+      );
       localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(nextGlobal));
     }
 
     // ۲. ذخیره در نقشه اختصاصی کاربر در localStorage
     if (userId) {
       const userMap = getPerUserVoipConfigMap();
-      userMap[userId] = { ...config };
+      userMap[userId] = { ...cleanConfig };
       if (username) {
-        userMap[username.toLowerCase()] = { ...config };
+        userMap[username.toLowerCase()] = { ...cleanConfig };
       }
       localStorage.setItem(STORAGE_KEY_VOIP_USER_CONFIGS, JSON.stringify(userMap));
 
       // ۳. ذخیره در رکورد کاربری (AppUser.voipConfig) جهت همگام‌سازی پایدار در سرور شبکه و نشست‌ها
-      if (userObj) {
-        updateSystemUser(userObj.id, {
-          voipConfig: { ...config },
-        });
-      }
+      const targetId = userObj?.id || userId;
+      updateSystemUser(targetId, {
+        voipConfig: { ...cleanConfig },
+      });
     }
 
-    window.dispatchEvent(new CustomEvent('hamibar:voip-config-updated'));
+    window.dispatchEvent(
+      new CustomEvent('hamibar:voip-config-updated', {
+        detail: { userId: userId || 'GLOBAL_DEFAULT', config: cleanConfig },
+      })
+    );
   } catch (e) {
     console.error('خطا در ذخیره تنظیمات ویپ کاربر:', e);
   }
+
+  return cleanConfig;
 }
 
 /**
@@ -215,7 +378,9 @@ export function hasCustomUserVoipConfig(userOrId: AppUser | string): boolean {
   const userMap = getPerUserVoipConfigMap();
   const hasInMap = Boolean(
     (userId && userMap[userId] && Object.keys(userMap[userId]).length > 0) ||
-      (username && userMap[username.toLowerCase()] && Object.keys(userMap[username.toLowerCase()]).length > 0)
+      (username &&
+        userMap[username.toLowerCase()] &&
+        Object.keys(userMap[username.toLowerCase()]).length > 0)
   );
   const hasInRecord = Boolean(userObj?.voipConfig && Object.keys(userObj.voipConfig).length > 0);
   return hasInMap || hasInRecord;
@@ -306,10 +471,14 @@ export async function initiateVoipCall(
   overrideConfig?: Partial<VoipConfig>,
   userOrId?: AppUser | string | null
 ): Promise<VoipCallResult> {
-  const currentConfig: VoipConfig = {
-    ...getVoipConfig(userOrId),
-    ...(overrideConfig || {}),
-  };
+  const baseUserConfig = getVoipConfig(userOrId);
+  const currentConfig: VoipConfig = sanitizeVoipConfig(
+    {
+      ...baseUserConfig,
+      ...(overrideConfig || {}),
+    },
+    baseUserConfig
+  );
 
   const dialNumber = sanitizePhoneNumber(rawPhoneNumber, currentConfig.dialPrefix);
 
@@ -333,7 +502,11 @@ export async function initiateVoipCall(
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
-      setTimeout(() => document.body.removeChild(a), 300);
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+        } catch {}
+      }, 300);
 
       const log = addVoipCallLog({
         recipientName,
@@ -347,7 +520,7 @@ export async function initiateVoipCall(
       return {
         ok: true,
         mode: 'softphone',
-        message: `شماره‌گیری در نرم‌افزار تلفنی (${protocol.toUpperCase()}) آغاز شد.`,
+        message: `شماره‌گیری در نرم‌افزار تلفنی (${protocol.toUpperCase()}) برای داخلی ${currentConfig.operatorExtension || '—'} آغاز شد.`,
         callLog: log,
       };
     } catch (err: any) {
@@ -359,8 +532,57 @@ export async function initiateVoipCall(
     }
   }
 
+  // اعتبارسنجی پیش از ارسال برای تلفن تحت شبکه (IP Phone CTI)
+  if (currentConfig.mode === 'ipphone_cti') {
+    if (!currentConfig.ipPhoneIp) {
+      return {
+        ok: false,
+        mode: 'ipphone_cti',
+        message:
+          'آدرس IP تلفن رومیزی برای کاربری شما ثبت نشده است. از دکمه تنظیمات (⚙️) آی‌پی تلفن خود را وارد کنید.',
+      };
+    }
+
+    // ارسال مستقیم دستور Action URI از مرورگر اپراتور به تلفن رومیزی در شبکه محلی (LAN)
+    const ip = currentConfig.ipPhoneIp;
+    try {
+      const directCtiUrl =
+        currentConfig.ipPhoneModel === 'grandstream'
+          ? `http://${ip}/cgi-bin/api-make_call?phonenumber=${encodeURIComponent(dialNumber)}`
+          : `http://${ip}/servlet?key=number=${encodeURIComponent(dialNumber)}`;
+      fetch(directCtiUrl, { mode: 'no-cors' }).catch(() => null);
+    } catch {}
+  }
+
+  // اعتبارسنجی پیش از ارسال برای سانترال استریسک / ایزابل (AMI)
+  if (currentConfig.mode === 'asterisk_ami') {
+    if (!currentConfig.amiHost) {
+      return {
+        ok: false,
+        mode: 'asterisk_ami',
+        message:
+          'آدرس IP سرور سانترال (AMI Host) در تنظیمات وارد نشده است. لطفاً تنظیمات مرکز تلفن را تکمیل کنید.',
+      };
+    }
+    if (!currentConfig.operatorExtension) {
+      return {
+        ok: false,
+        mode: 'asterisk_ami',
+        message: 'شماره داخلی تلفن شما (Extension) جهت زنگ خوردن در سانترال مشخص نشده است.',
+      };
+    }
+  }
+
+  // اعتبارسنجی پیش از ارسال برای وب‌هوک سفارشی
+  if (currentConfig.mode === 'webhook' && !currentConfig.webhookUrl) {
+    return {
+      ok: false,
+      mode: 'webhook',
+      message: 'آدرس URL وب‌هوک سانترال در تنظیمات شما تعریف نشده است.',
+    };
+  }
+
   // حالت‌های ۲ و ۳ و ۴: تماس از طریق سرور سانترال (Asterisk AMI / Issabel / IP Phone / Webhook)
-  // درخواست به بک‌اند اکسپرس سامانه حامی بار ارسال می‌شود تا سرور محلی مستقیماً با سانترال یا گوشی صحبت کند
   const baseUrl = getLanServerBaseUrl();
   try {
     const res = await fetch(`${baseUrl}/api/voip/originate`, {
@@ -378,24 +600,51 @@ export async function initiateVoipCall(
     });
 
     const data = await res.json();
+    const isSuccess = Boolean(data.ok);
 
     const log = addVoipCallLog({
       recipientName,
       phoneNumber: dialNumber,
       operatorExtension: currentConfig.operatorExtension,
       mode: currentConfig.mode,
-      status: data.ok ? 'connected' : 'failed',
-      message: data.message || (data.ok ? 'تماس با موفقیت برقرار شد' : 'خطا در برقراری تماس'),
+      status: isSuccess ? 'connected' : 'failed',
+      message:
+        data.message ||
+        data.error ||
+        (isSuccess ? 'تماس با موفقیت برقرار شد' : 'خطا در برقراری تماس'),
     });
 
     return {
-      ok: !!data.ok,
+      ok: isSuccess,
       mode: currentConfig.mode,
-      message: data.message || (data.ok ? 'تلفن داخلی شما در حال زنگ خوردن است...' : 'خطا در سرور ویپ'),
+      message:
+        data.message ||
+        data.error ||
+        (isSuccess
+          ? `تلفن داخلی شما (${currentConfig.operatorExtension}) در حال زنگ خوردن است...`
+          : 'خطا در سرور ویپ'),
       details: data.details,
       callLog: log,
     };
   } catch (err: any) {
+    // اگر در حالت تلفن تحت شبکه (ipphone_cti) دستور مستقیم مرورگر ارسال شده باشد، حتی در صورت آفلاین بودن بک‌اند، فرمان به گوشی ارسال شده است
+    if (currentConfig.mode === 'ipphone_cti' && currentConfig.ipPhoneIp) {
+      const log = addVoipCallLog({
+        recipientName,
+        phoneNumber: dialNumber,
+        operatorExtension: currentConfig.operatorExtension,
+        mode: 'ipphone_cti',
+        status: 'initiated',
+        message: `فرمان شماره‌گیری مستقیم به تلفن رومیزی (${currentConfig.ipPhoneIp}) ارسال شد.`,
+      });
+      return {
+        ok: true,
+        mode: 'ipphone_cti',
+        message: `فرمان شماره‌گیری (${dialNumber}) به تلفن رومیزی (${currentConfig.ipPhoneIp}) ارسال شد.`,
+        callLog: log,
+      };
+    }
+
     const log = addVoipCallLog({
       recipientName,
       phoneNumber: dialNumber,
@@ -417,11 +666,15 @@ export async function initiateVoipCall(
 /**
  * تست اتصال به سانترال ویپ
  */
-export async function testVoipConnection(config: VoipConfig): Promise<{ ok: boolean; message: string; details?: any }> {
-  if (config.mode === 'softphone') {
+export async function testVoipConnection(
+  config: VoipConfig
+): Promise<{ ok: boolean; message: string; details?: any }> {
+  const cleanConfig = sanitizeVoipConfig(config, DEFAULT_VOIP_CONFIG);
+
+  if (cleanConfig.mode === 'softphone') {
     return {
       ok: true,
-      message: 'حالت سافت‌فون نیازی به تنظیم سرور ندارد و با نرم‌افزارهای MicroSIP و Zoiper ویندوز آماده به کار است.',
+      message: `حالت سافت‌فون (پروتکل ${cleanConfig.softphoneProtocol.toUpperCase()} - داخلی ${cleanConfig.operatorExtension}) آماده به کار است.`,
     };
   }
 
@@ -430,9 +683,14 @@ export async function testVoipConnection(config: VoipConfig): Promise<{ ok: bool
     const res = await fetch(`${baseUrl}/api/voip/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config }),
+      body: JSON.stringify({ config: cleanConfig }),
     });
-    return await res.json();
+    const data = await res.json();
+    return {
+      ok: Boolean(data.ok),
+      message: data.message || data.error || 'پاسخی از سرور دریافت نشد.',
+      details: data.details,
+    };
   } catch (err: any) {
     return {
       ok: false,
@@ -444,18 +702,27 @@ export async function testVoipConnection(config: VoipConfig): Promise<{ ok: bool
 /**
  * قطع تماس فعال (Hangup / Release) روی تلفن رومیزی یا سانترال
  */
-export async function hangupVoipCall(overrideConfig?: Partial<VoipConfig>): Promise<{ ok: boolean; message: string }> {
-  const currentConfig: VoipConfig = {
-    ...getVoipConfig(),
-    ...(overrideConfig || {}),
-  };
+export async function hangupVoipCall(
+  overrideConfig?: Partial<VoipConfig>,
+  userOrId?: AppUser | string | null
+): Promise<{ ok: boolean; message: string }> {
+  const baseUserConfig = getVoipConfig(userOrId);
+  const currentConfig: VoipConfig = sanitizeVoipConfig(
+    {
+      ...baseUserConfig,
+      ...(overrideConfig || {}),
+    },
+    baseUserConfig
+  );
 
-  // ارسال مستقیم دستور قطع به گوشی یالینک در شبکه محلی (در صورت دسترسی مستقیم مرورگر) + ارسال به سرور
+  // ارسال مستقیم دستور قطع به گوشی یالینک/گرنداستریم در شبکه محلی (در صورت دسترسی مستقیم مرورگر) + ارسال به سرور
   if (currentConfig.mode === 'ipphone_cti' && currentConfig.ipPhoneIp) {
     const ip = currentConfig.ipPhoneIp.trim();
     try {
       if (currentConfig.ipPhoneModel === 'grandstream') {
-        fetch(`http://${ip}/cgi-bin/api-phone_operation?cmd=endcall`, { mode: 'no-cors' }).catch(() => null);
+        fetch(`http://${ip}/cgi-bin/api-phone_operation?cmd=endcall`, { mode: 'no-cors' }).catch(
+          () => null
+        );
       } else {
         fetch(`http://${ip}/servlet?key=RELEASE`, { mode: 'no-cors' }).catch(() => null);
         fetch(`http://${ip}/servlet?key=X`, { mode: 'no-cors' }).catch(() => null);
@@ -482,4 +749,5 @@ export async function hangupVoipCall(overrideConfig?: Partial<VoipConfig>): Prom
     };
   }
 }
+
 

@@ -106,6 +106,7 @@ export const Header: FC<HeaderProps> = ({
   onOpenEitaa,
   onOpenMasterAdmin,
   onNavigateToInsuranceAlerts,
+  onOpenVoipSettings,
   onOpenPhonebookPopup,
   isMobileMenuOpen: propIsMobileMenuOpen,
   onToggleMobileMenu,
@@ -531,6 +532,23 @@ export const Header: FC<HeaderProps> = ({
                     </div>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMasterMenuOpen(false);
+                      onOpenVoipSettings?.();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                  >
+                    <PhoneCall className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <div>
+                      <div className="font-bold">تنظیمات سانترال و داخلی تلفن (VoIP)</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        ثبت شماره داخلی، پیش‌کد خط و تلفن رومیزی هر کاربر
+                      </div>
+                    </div>
+                  </button>
+
                   {currentUser && canAccessBackup(currentUser) && !canManageSystemSettings(currentUser) && (
                     <button
                       type="button"
@@ -579,14 +597,17 @@ export const Header: FC<HeaderProps> = ({
 
                             <button
                               type="button"
-                              onClick={() => handleTriggerMasterModal('voip')}
+                              onClick={() => {
+                                setIsMasterMenuOpen(false);
+                                onOpenVoipSettings?.();
+                              }}
                               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
                             >
                               <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                               <div>
-                                <div className="font-bold">مرکز تلفن سانترال ویپ (VoIP)</div>
+                                <div className="font-bold">مدیریت داخلی همه کاربران و سانترال</div>
                                 <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  اتصال AMI، ایزابل/استریسک و کالرآیدی
+                                  اتصال AMI، ایزابل/استریسک و جدول داخلی‌ها
                                 </div>
                               </div>
                             </button>

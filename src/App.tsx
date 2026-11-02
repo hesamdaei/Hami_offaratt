@@ -571,7 +571,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
     showToast('با موفقیت از حساب کاربری خارج شدید.', 'info');
   };
 
-  // Real-time session enforcement when users are updated/deactivated or permissions change
+  // Real-time session enforcement when users are updated/deactivated, permissions change, or VoIP settings change
   useEffect(() => {
     const syncCurrentSession = () => {
       if (!currentUser) return;
@@ -586,7 +586,12 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           showToast('حساب کاربری شما توسط مدیریت غیرفعال شد.', 'error');
           return;
         }
-        if (JSON.stringify(fresh.permissions) !== JSON.stringify(currentUser.permissions) || fresh.roleTitle !== currentUser.roleTitle || fresh.fullName !== currentUser.fullName) {
+        if (
+          JSON.stringify(fresh.permissions) !== JSON.stringify(currentUser.permissions) ||
+          JSON.stringify(fresh.voipConfig) !== JSON.stringify(currentUser.voipConfig) ||
+          fresh.roleTitle !== currentUser.roleTitle ||
+          fresh.fullName !== currentUser.fullName
+        ) {
           setCurrentUser(fresh);
           saveStoredSession(fresh);
         }
@@ -595,8 +600,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
 
     syncAndMergeUsers().then(() => syncCurrentSession());
     window.addEventListener('hamibar:users-updated', syncCurrentSession);
+    window.addEventListener('hamibar:voip-config-updated', syncCurrentSession);
     return () => {
       window.removeEventListener('hamibar:users-updated', syncCurrentSession);
+      window.removeEventListener('hamibar:voip-config-updated', syncCurrentSession);
     };
   }, [currentUser]);
 
@@ -912,7 +919,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             localStorage.setItem('hamibar_service_rules_v1', JSON.stringify(remoteData.rules));
           }
           if (Array.isArray(remoteData.users) && remoteData.users.length > 0) {
-            await syncAndMergeUsers();
+            await syncAndMergeUsers(remoteData.users);
           }
 
           const versionToUse = remoteData.version || Date.now().toString();
@@ -1002,7 +1009,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
                 localStorage.setItem('hamibar_service_rules_v1', JSON.stringify(freshData.rules));
               }
               if (Array.isArray(freshData.users) && freshData.users.length > 0) {
-                await syncAndMergeUsers();
+                await syncAndMergeUsers(freshData.users);
               }
 
               localDbVersionRef.current = freshData.version || ver.version;
@@ -1027,7 +1034,18 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
       }
     }, 5000);
 
-    return () => clearInterval(interval);
+    const handleServerVersionUpdated = (e: Event) => {
+      const customEvt = e as CustomEvent<{ version?: string }>;
+      if (customEvt.detail?.version) {
+        localDbVersionRef.current = customEvt.detail.version;
+      }
+    };
+    window.addEventListener('hamibar:server-version-updated', handleServerVersionUpdated);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('hamibar:server-version-updated', handleServerVersionUpdated);
+    };
   }, []);
 
   // Force manual push to Central Network Database
@@ -2208,6 +2226,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           isPopupMode={true}
           currentUser={currentUser}
           onCallPhone={handleStartVoipCall}
+          onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
           onShowToast={showToast}
         />
         {/* VoIP Click-to-Call Modal */}
@@ -2220,8 +2239,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             recipientRole={voipCallTarget.role}
             currentUser={currentUser}
             onOpenSettings={() => {
-              setVoipCallTarget(null);
-              handleOpenMasterAdmin('voip');
+              setIsVoipSettingsOpen(true);
             }}
             onShowToast={(msg, type) => showToast(msg, type)}
           />
@@ -2337,7 +2355,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             onOpenEitaa={() => handleOpenBale()}
             onOpenMasterAdmin={handleOpenMasterAdmin}
             onNavigateToInsuranceAlerts={() => handleNavigateToFleetInsurance()}
-            onOpenVoipSettings={() => handleOpenMasterAdmin('voip')}
+            onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
             onOpenPhonebookPopup={() => setIsPhonebookPopupOpen(true)}
             theme={theme}
             onToggleTheme={handleToggleTheme}
@@ -2630,6 +2648,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
                 staffMembers={staffMembers}
                 isStandalone={false}
                 onOpenPopupModal={() => setIsPhonebookPopupOpen(true)}
+                onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
                 currentUser={currentUser}
                 onCallPhone={handleStartVoipCall}
                 onShowToast={showToast}
@@ -2818,7 +2837,6 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           recipientRole={voipCallTarget.role}
           currentUser={currentUser}
           onOpenSettings={() => {
-            setVoipCallTarget(null);
             setIsVoipSettingsOpen(true);
           }}
           onShowToast={(msg, type) => showToast(msg, type)}
@@ -2850,6 +2868,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
               isStandalone={false}
               isPopupMode={true}
               onClosePopup={() => setIsPhonebookPopupOpen(false)}
+              onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
               currentUser={currentUser}
               onCallPhone={handleStartVoipCall}
               onShowToast={showToast}

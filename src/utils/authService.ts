@@ -813,7 +813,7 @@ export function findLinkedUserForDossier(
 
 /**
  * همگام‌سازی و ادغام ایمن کاربران محلی (localStorage) و کاربران سرور (serverUsers)
- * بدون حذف یا بازنویسی کاربرانی که از بخش «پرونده» یا در حالت آفلاین ایجاد شده‌اند.
+ * بدون حذف یا بازنویسی کاربرانی که از بخش «پرونده» ایجاد شده‌اند یا تنظیمات سانترال آن‌ها به تازگی تغییر کرده است.
  */
 export async function syncAndMergeUsers(serverUsers?: AppUser[] | null): Promise<AppUser[]> {
   const localUsers = getStoredUsers();
@@ -830,11 +830,23 @@ export async function syncAndMergeUsers(serverUsers?: AppUser[] | null): Promise
   }
   const resolvedServerUsers = remoteList;
 
+  let localVoipMap: Record<string, any> = {};
+  try {
+    const rawMap = localStorage.getItem('hamibar_voip_user_configs_v1');
+    if (rawMap) {
+      const parsed = JSON.parse(rawMap);
+      if (parsed && typeof parsed === 'object') {
+        localVoipMap = parsed;
+      }
+    }
+  } catch {}
+
   const mergedMap = new Map<string, AppUser>();
   const usernameToIdMap = new Map<string, string>();
   let needsServerPush = false;
+  let voipMapChanged = false;
 
-  // ابتدا کاربران سرور را با حفظ لینک‌های پرونده محلی بارگذاری می‌کنیم
+  // ابتدا کاربران سرور را با حفظ لینک‌های پرونده محلی و آخرین وضعیت تنظیمات سانترال بارگذاری می‌کنیم
   for (const srvUser of resolvedServerUsers) {
     if (!srvUser || !srvUser.username) continue;
     const cleanUsername = srvUser.username.trim().toLowerCase();
@@ -842,16 +854,62 @@ export async function syncAndMergeUsers(serverUsers?: AppUser[] | null): Promise
       (lu) => lu.id === srvUser.id || lu.username.trim().toLowerCase() === cleanUsername
     );
 
+    const localTime = matchingLocal?.updatedAt ? new Date(matchingLocal.updatedAt).getTime() : 0;
+    const serverTime = srvUser.updatedAt ? new Date(srvUser.updatedAt).getTime() : 0;
+    const isLocalNewer = Boolean(matchingLocal && localTime >= serverTime && localTime > 0);
+
+    const stableId = matchingLocal?.id || srvUser.id || `usr-${Date.now()}`;
+    const immutableUsername = matchingLocal?.username || cleanUsername;
+    const mapVoip = localVoipMap[stableId] || localVoipMap[immutableUsername.toLowerCase()];
+
+    let resolvedVoipConfig: AppUser['voipConfig'] = undefined;
+    if (srvUser.voipConfig || matchingLocal?.voipConfig || mapVoip) {
+      if (isLocalNewer) {
+        resolvedVoipConfig = {
+          ...(srvUser.voipConfig || {}),
+          ...(mapVoip || {}),
+          ...(matchingLocal?.voipConfig || {}),
+        };
+      } else {
+        resolvedVoipConfig = {
+          ...(mapVoip || {}),
+          ...(matchingLocal?.voipConfig || {}),
+          ...(srvUser.voipConfig || {}),
+        };
+      }
+    }
+
+    if (
+      resolvedVoipConfig &&
+      JSON.stringify(resolvedVoipConfig) !== JSON.stringify(srvUser.voipConfig)
+    ) {
+      needsServerPush = true;
+    }
+    if (localTime > serverTime) {
+      needsServerPush = true;
+    }
+
+    if (resolvedVoipConfig) {
+      localVoipMap[stableId] = { ...resolvedVoipConfig };
+      localVoipMap[immutableUsername.toLowerCase()] = { ...resolvedVoipConfig };
+      voipMapChanged = true;
+    }
+
     // حفظ نام کاربری اولیه، شناسه داخلی و ارتباط پرونده
     const mergedUser: AppUser = {
       ...matchingLocal,
       ...srvUser,
-      id: matchingLocal?.id || srvUser.id || `usr-${Date.now()}`,
-      username: matchingLocal?.username || cleanUsername, // نام کاربری تغییرناپذیر است
-      isMasterAdmin: Boolean(srvUser.isMasterAdmin || matchingLocal?.isMasterAdmin || cleanUsername === 'admin'),
+      ...(isLocalNewer ? matchingLocal : {}),
+      id: stableId,
+      username: immutableUsername, // نام کاربری تغییرناپذیر است
+      isMasterAdmin: Boolean(
+        srvUser.isMasterAdmin || matchingLocal?.isMasterAdmin || cleanUsername === 'admin'
+      ),
       isActive:
         srvUser.isMasterAdmin || matchingLocal?.isMasterAdmin || cleanUsername === 'admin'
           ? true
+          : isLocalNewer && matchingLocal?.isActive !== undefined
+          ? matchingLocal.isActive
           : srvUser.isActive !== undefined
           ? srvUser.isActive
           : matchingLocal?.isActive !== false,
@@ -860,11 +918,15 @@ export async function syncAndMergeUsers(serverUsers?: AppUser[] | null): Promise
       personnelCode: srvUser.personnelCode || matchingLocal?.personnelCode,
       dossierType: srvUser.dossierType || matchingLocal?.dossierType,
       createdFrom: srvUser.createdFrom || matchingLocal?.createdFrom,
-      voipConfig: srvUser.voipConfig || matchingLocal?.voipConfig
-        ? { ...(matchingLocal?.voipConfig || {}), ...(srvUser.voipConfig || {}) }
-        : undefined,
+      voipConfig: resolvedVoipConfig,
+      updatedAt:
+        isLocalNewer && matchingLocal?.updatedAt
+          ? matchingLocal.updatedAt
+          : srvUser.updatedAt || matchingLocal?.updatedAt,
       permissions: normalizeUserPermissions(
-        srvUser.permissions || matchingLocal?.permissions,
+        isLocalNewer
+          ? matchingLocal?.permissions || srvUser.permissions
+          : srvUser.permissions || matchingLocal?.permissions,
         Boolean(srvUser.isMasterAdmin || matchingLocal?.isMasterAdmin || cleanUsername === 'admin')
       ),
     };
@@ -878,14 +940,31 @@ export async function syncAndMergeUsers(serverUsers?: AppUser[] | null): Promise
     if (!locUser || !locUser.username) continue;
     const cleanU = locUser.username.trim().toLowerCase();
     if (!mergedMap.has(locUser.id) && !usernameToIdMap.has(cleanU)) {
+      const mapVoip = localVoipMap[locUser.id] || localVoipMap[cleanU];
+      const resolvedVoip =
+        locUser.voipConfig || mapVoip
+          ? { ...(mapVoip || {}), ...(locUser.voipConfig || {}) }
+          : undefined;
+      if (resolvedVoip) {
+        localVoipMap[locUser.id] = { ...resolvedVoip };
+        localVoipMap[cleanU] = { ...resolvedVoip };
+        voipMapChanged = true;
+      }
       const normalizedLoc: AppUser = {
         ...locUser,
+        voipConfig: resolvedVoip,
         permissions: normalizeUserPermissions(locUser.permissions, Boolean(locUser.isMasterAdmin)),
       };
       mergedMap.set(normalizedLoc.id, normalizedLoc);
       usernameToIdMap.set(cleanU, normalizedLoc.id);
       needsServerPush = true;
     }
+  }
+
+  if (voipMapChanged) {
+    try {
+      localStorage.setItem('hamibar_voip_user_configs_v1', JSON.stringify(localVoipMap));
+    } catch {}
   }
 
   const finalUsers = Array.from(mergedMap.values());
