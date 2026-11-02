@@ -40,10 +40,11 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
   phoneNumber,
   recipientName,
   recipientRole,
+  currentUser,
   onOpenSettings,
   onShowToast,
 }) => {
-  const [config, setConfig] = useState<VoipConfig>(() => getVoipConfig());
+  const [config, setConfig] = useState<VoipConfig>(() => getVoipConfig(currentUser));
   const [dialPrefixInput, setDialPrefixInput] = useState<string>(config.dialPrefix || '');
   const [callState, setCallState] = useState<'IDLE' | 'CALLING' | 'CONNECTED' | 'ENDED' | 'ERROR'>('IDLE');
   const [statusMessage, setStatusMessage] = useState<string>('آماده برقراری تماس');
@@ -75,15 +76,15 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
       setStatusMessage('در حال شماره‌گیری...');
       setElapsedSeconds(0);
 
-      const currentCfg = getVoipConfig();
+      const currentCfg = getVoipConfig(currentUser);
       const nextConfig: VoipConfig = {
         ...currentCfg,
         dialPrefix: prefixToUse,
       };
-      saveVoipConfig(nextConfig);
+      saveVoipConfig(nextConfig, currentUser);
       setConfig(nextConfig);
 
-      const result = await initiateVoipCall(phoneNumber, recipientName, nextConfig);
+      const result = await initiateVoipCall(phoneNumber, recipientName, nextConfig, currentUser);
 
       if (result.ok) {
         setCallState('CONNECTED');
@@ -94,12 +95,12 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
         setStatusMessage(result.message || 'خطا در برقراری تماس');
       }
     },
-    [dialPrefixInput, phoneNumber, recipientName, onShowToast]
+    [dialPrefixInput, phoneNumber, recipientName, currentUser, onShowToast]
   );
 
   useEffect(() => {
     if (isOpen) {
-      const current = getVoipConfig();
+      const current = getVoipConfig(currentUser);
       setConfig(current);
       setDialPrefixInput(current.dialPrefix || '');
       setCallState('IDLE');
@@ -115,7 +116,7 @@ export const VoipCallModal: FC<VoipCallModalProps> = ({
         return () => clearTimeout(timer);
       }
     }
-  }, [isOpen, phoneNumber]);
+  }, [isOpen, phoneNumber, currentUser?.id]);
 
   // Call duration timer when connected
   useEffect(() => {

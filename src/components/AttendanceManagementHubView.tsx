@@ -799,7 +799,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
             <button
               onClick={() => setLeaveCalendarPrintMode(activeBoard)}
               title="چاپ فرم تقویم ماهانه مرخصی (A4)"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#142340] hover:bg-[#1a2d52] text-amber-300 border border-amber-500/30 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-colors cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />
               <span>چاپ تقویم مرخصی</span>
@@ -942,7 +942,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
         <div className="inline-flex p-1 bg-[#091120] border border-[#1b2b48] rounded-lg self-start">
           <button
             onClick={() => setViewMode('CARDS')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
               viewMode === 'CARDS'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -954,7 +954,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
           <button
             onClick={() => setViewMode('MATRIX')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
               viewMode === 'MATRIX'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -966,7 +966,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
           <button
             onClick={() => setViewMode('ANALYTICS')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
               viewMode === 'ANALYTICS'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -1013,7 +1013,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
         <button
           onClick={() => setStatusFilter('ALL')}
-          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
             statusFilter === 'ALL'
               ? 'bg-blue-600 text-white'
               : 'bg-[#121d33] text-slate-400 hover:text-white border border-[#1f2e4d]'
@@ -1024,7 +1024,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
         <button
           onClick={() => setStatusFilter('PRESENT')}
-          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
             statusFilter === 'PRESENT'
               ? 'bg-emerald-600 text-white'
               : 'bg-[#121d33] text-emerald-400 hover:text-emerald-300 border border-emerald-500/30'
@@ -1035,7 +1035,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
         <button
           onClick={() => setStatusFilter('LEAVE')}
-          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
             statusFilter === 'LEAVE'
               ? 'bg-amber-600 text-white'
               : 'bg-[#121d33] text-amber-400 hover:text-amber-300 border border-amber-500/30'
@@ -1046,7 +1046,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
         <button
           onClick={() => setStatusFilter('WORKSHOP')}
-          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
             statusFilter === 'WORKSHOP'
               ? 'bg-orange-600 text-white'
               : 'bg-[#121d33] text-orange-400 hover:text-orange-300 border border-orange-500/30'
@@ -1057,7 +1057,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
         <button
           onClick={() => setStatusFilter('ABSENT')}
-          className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
             statusFilter === 'ABSENT'
               ? 'bg-rose-600 text-white'
               : 'bg-[#121d33] text-rose-400 hover:text-rose-300 border border-rose-500/30'
@@ -1071,9 +1071,9 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
           <span className="text-[10px] text-slate-400 px-1 font-medium">حساب کاربری:</span>
           <button
             onClick={() => setAccountStatusFilter('ALL')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
               accountStatusFilter === 'ALL'
-                ? 'bg-slate-700 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -1081,7 +1081,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
           </button>
           <button
             onClick={() => setAccountStatusFilter('ACTIVE')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+            className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
               accountStatusFilter === 'ACTIVE'
                 ? 'bg-emerald-600 text-white'
                 : 'text-emerald-400 hover:text-emerald-300'
@@ -1092,7 +1092,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
           </button>
           <button
             onClick={() => setAccountStatusFilter('INACTIVE')}
-            className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+            className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
               accountStatusFilter === 'INACTIVE'
                 ? 'bg-rose-600 text-white'
                 : 'text-rose-400 hover:text-rose-300'
@@ -1112,7 +1112,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
             </span>
             <button
               onClick={() => setVehicleFilter('ALL')}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                 vehicleFilter === 'ALL'
                   ? 'bg-blue-600 text-white'
                   : 'text-slate-400 hover:text-slate-200'
@@ -1122,7 +1122,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
             </button>
             <button
               onClick={() => setVehicleFilter('WITH_VEHICLE')}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                 vehicleFilter === 'WITH_VEHICLE'
                   ? 'bg-blue-600 text-white'
                   : 'text-slate-400 hover:text-slate-200'
@@ -1133,9 +1133,9 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
             </button>
             <button
               onClick={() => setVehicleFilter('WITHOUT_VEHICLE')}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors ${
+              className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                 vehicleFilter === 'WITHOUT_VEHICLE'
-                  ? 'bg-amber-500 text-slate-950 font-black'
+                  ? 'bg-amber-600 text-white font-black'
                   : 'text-amber-400 hover:text-amber-300'
               }`}
               title="رانندگان بدون خودروی تحویلی (نیروی آماده‌به‌کار / کمکی / ذخیره) - سوابق مرخصی ایشان ثبت و نگهداری می‌شود"
@@ -1144,7 +1144,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
               <span
                 className={`text-[10px] px-1 rounded-full font-mono ${
                   vehicleFilter === 'WITHOUT_VEHICLE'
-                    ? 'bg-black/20 text-black'
+                    ? 'bg-black/25 text-white'
                     : 'bg-amber-500/20 text-amber-300'
                 }`}
               >
@@ -1169,7 +1169,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
             <div className="flex items-center gap-1 bg-[#101b33] p-0.5 rounded-lg border border-[#1e2f52]">
               <button
                 onClick={() => setShiftFilter('ALL')}
-                className={`px-2.5 py-1 rounded text-[11px] font-bold transition ${
+                className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
                   shiftFilter === 'ALL' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1177,8 +1177,8 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
               </button>
               <button
                 onClick={() => setShiftFilter('DAY')}
-                className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 transition ${
-                  shiftFilter === 'DAY' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'
+                className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  shiftFilter === 'DAY' ? 'bg-amber-600 text-white font-black shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Sun className="w-3.5 h-3.5" />
@@ -1186,7 +1186,7 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
               </button>
               <button
                 onClick={() => setShiftFilter('NIGHT')}
-                className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 transition ${
+                className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer ${
                   shiftFilter === 'NIGHT' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -1271,9 +1271,9 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                               <div
                                 className={`w-10 h-10 rounded-xl bg-gradient-to-br ${
                                   isDriverActive
-                                    ? 'from-slate-700 to-slate-900 border-slate-600'
-                                    : 'from-slate-800 to-slate-950 border-slate-700 text-slate-500'
-                                } border flex items-center justify-center text-white font-bold text-sm shadow`}
+                                    ? 'from-blue-600 to-indigo-700 border-blue-500/40 text-white'
+                                    : 'from-slate-600 to-slate-800 border-slate-500 text-white'
+                                } border flex items-center justify-center font-bold text-sm shadow avatar`}
                               >
                                 {driver.name.slice(0, 1)}
                               </div>
@@ -1454,52 +1454,56 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
                           <div className="grid grid-cols-4 gap-1.5 text-[11px]">
                             <button
+                              type="button"
                               onClick={() => handleQuickSetDriver(driver.id, 'none')}
-                              className={`py-1.5 rounded-lg font-bold matrix-status-cell ${
+                              className={`py-1.5 rounded-lg font-bold matrix-status-cell cursor-pointer ${
                                 isPresent
-                                  ? `bg-emerald-600 text-white shadow-md shadow-emerald-900/40 ring-1 ring-emerald-400/40 ${
+                                  ? `bg-emerald-600 text-white border border-emerald-500 shadow-md shadow-emerald-900/30 ring-1 ring-emerald-400/40 ${
                                       isDriverAnimating ? 'animate-status-switch ring-2 ring-emerald-300 scale-105' : 'animate-status-pop'
                                     } animate-status-ripple-present`
-                                  : 'bg-[#15233e] text-slate-300 hover:bg-emerald-600/30 hover:text-emerald-300'
+                                  : 'attendance-status-inactive attendance-status-inactive-present bg-[#15233e] text-slate-200 border border-[#24385e] hover:bg-emerald-600/30 hover:text-emerald-300'
                               }`}
                             >
                               حاضر
                             </button>
 
                             <button
+                              type="button"
                               onClick={() => handleQuickSetDriver(driver.id, 'leave')}
-                              className={`py-1.5 rounded-lg font-bold matrix-status-cell ${
+                              className={`py-1.5 rounded-lg font-bold matrix-status-cell cursor-pointer ${
                                 isLeave
-                                  ? `bg-amber-600 text-white shadow-md shadow-amber-900/40 ring-1 ring-amber-400/40 ${
+                                  ? `bg-amber-600 text-white border border-amber-500 shadow-md shadow-amber-900/30 ring-1 ring-amber-400/40 ${
                                       isDriverAnimating ? 'animate-status-switch ring-2 ring-amber-300 scale-105' : 'animate-status-pop'
                                     } animate-status-ripple-leave`
-                                  : 'bg-[#15233e] text-slate-300 hover:bg-amber-600/30 hover:text-amber-300'
+                                  : 'attendance-status-inactive attendance-status-inactive-leave bg-[#15233e] text-slate-200 border border-[#24385e] hover:bg-amber-600/30 hover:text-amber-300'
                               }`}
                             >
                               مرخصی
                             </button>
 
                             <button
+                              type="button"
                               onClick={() => handleQuickSetDriver(driver.id, 'workshop')}
-                              className={`py-1.5 rounded-lg font-bold matrix-status-cell ${
+                              className={`py-1.5 rounded-lg font-bold matrix-status-cell cursor-pointer ${
                                 isWorkshop
-                                  ? `bg-orange-600 text-white shadow-md shadow-orange-900/40 ring-1 ring-orange-400/40 ${
+                                  ? `bg-orange-600 text-white border border-orange-500 shadow-md shadow-orange-900/30 ring-1 ring-orange-400/40 ${
                                       isDriverAnimating ? 'animate-status-switch ring-2 ring-orange-300 scale-105' : 'animate-status-pop'
                                     } animate-status-ripple-workshop`
-                                  : 'bg-[#15233e] text-slate-300 hover:bg-orange-600/30 hover:text-orange-300'
+                                  : 'attendance-status-inactive attendance-status-inactive-workshop bg-[#15233e] text-slate-200 border border-[#24385e] hover:bg-orange-600/30 hover:text-orange-300'
                               }`}
                             >
                               تعمیرگاه
                             </button>
 
                             <button
+                              type="button"
                               onClick={() => handleQuickSetDriver(driver.id, 'absent')}
-                              className={`py-1.5 rounded-lg font-bold matrix-status-cell ${
+                              className={`py-1.5 rounded-lg font-bold matrix-status-cell cursor-pointer ${
                                 isAbsent
-                                  ? `bg-rose-600 text-white shadow-md shadow-rose-900/40 ring-1 ring-rose-400/40 ${
+                                  ? `bg-rose-600 text-white border border-rose-500 shadow-md shadow-rose-900/30 ring-1 ring-rose-400/40 ${
                                       isDriverAnimating ? 'animate-status-switch ring-2 ring-rose-300 scale-105' : 'animate-status-pop'
                                     } animate-status-ripple-absent`
-                                  : 'bg-[#15233e] text-slate-300 hover:bg-rose-600/30 hover:text-rose-300'
+                                  : 'attendance-status-inactive attendance-status-inactive-absent bg-[#15233e] text-slate-200 border border-[#24385e] hover:bg-rose-600/30 hover:text-rose-300'
                               }`}
                             >
                               غایب
@@ -1578,8 +1582,8 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
                                 className={`w-10 h-10 rounded-xl bg-gradient-to-br ${
                                   isStaffActive
                                     ? staff.avatarColor || 'from-emerald-600 to-teal-700'
-                                    : 'from-slate-800 to-slate-950 text-slate-500'
-                                } border border-white/20 flex items-center justify-center text-white font-bold text-sm shadow`}
+                                    : 'from-slate-600 to-slate-800'
+                                } border border-white/20 flex items-center justify-center text-white font-bold text-sm shadow avatar`}
                               >
                                 {staff.name.slice(0, 1)}
                               </div>
@@ -1742,52 +1746,56 @@ export const AttendanceManagementHubView: FC<AttendanceManagementHubViewProps> =
 
                           <div className="grid grid-cols-4 gap-1.5 text-[11px]">
                             <button
+                              type="button"
                               onClick={() => handleQuickSetStaff(staff.id, 'none')}
-                              className={`py-1.5 rounded-lg font-bold matrix-status-cell ${
+                              className={`py-1.5 rounded-lg font-bold matrix-status-cell cursor-pointer ${
                                 isPresent
-                                  ? `bg-emerald-600 text-white shadow-md shadow-emerald-900/40 ring-1 ring-emerald-400/40 ${
+                                  ? `bg-emerald-600 text-white border border-emerald-500 shadow-md shadow-emerald-900/30 ring-1 ring-emerald-400/40 ${
                                       isStaffAnimating ? 'animate-status-switch ring-2 ring-emerald-300 scale-105' : 'animate-status-pop'
                                     } animate-status-ripple-present`
-                                  : 'bg-[#15233e] text-slate-300 hover:bg-emerald-600/30 hover:text-emerald-300'
+                                  : 'attendance-status-inactive attendance-status-inactive-present bg-[#15233e] text-slate-200 border border-[#24385e] hover:bg-emerald-600/30 hover:text-emerald-300'
                               }`}
                             >
                               حاضر
                             </button>
 
                             <button
+                              type="button"
                               onClick={() => handleQuickSetStaff(staff.id, 'leave')}
-                              className={`py-1.5 rounded-lg font-bold matrix-status-cell ${
+                              className={`py-1.5 rounded-lg font-bold matrix-status-cell cursor-pointer ${
                                 isLeave
-                                  ? `bg-amber-600 text-white shadow-md shadow-amber-900/40 ring-1 ring-amber-400/40 ${
+                                  ? `bg-amber-600 text-white border border-amber-500 shadow-md shadow-amber-900/30 ring-1 ring-amber-400/40 ${
                                       isStaffAnimating ? 'animate-status-switch ring-2 ring-amber-300 scale-105' : 'animate-status-pop'
                                     } animate-status-ripple-leave`
-                                  : 'bg-[#15233e] text-slate-300 hover:bg-amber-600/30 hover:text-amber-300'
+                                  : 'attendance-status-inactive attendance-status-inactive-leave bg-[#15233e] text-slate-200 border border-[#24385e] hover:bg-amber-600/30 hover:text-amber-300'
                               }`}
                             >
                               مرخصی
                             </button>
 
                             <button
+                              type="button"
                               onClick={() => handleQuickSetStaff(staff.id, 'workshop')}
-                              className={`py-1.5 rounded-lg font-bold matrix-status-cell ${
+                              className={`py-1.5 rounded-lg font-bold matrix-status-cell cursor-pointer ${
                                 isWorkshop
-                                  ? `bg-orange-600 text-white shadow-md shadow-orange-900/40 ring-1 ring-orange-400/40 ${
+                                  ? `bg-orange-600 text-white border border-orange-500 shadow-md shadow-orange-900/30 ring-1 ring-orange-400/40 ${
                                       isStaffAnimating ? 'animate-status-switch ring-2 ring-orange-300 scale-105' : 'animate-status-pop'
                                     } animate-status-ripple-workshop`
-                                  : 'bg-[#15233e] text-slate-300 hover:bg-orange-600/30 hover:text-orange-300'
+                                  : 'attendance-status-inactive attendance-status-inactive-workshop bg-[#15233e] text-slate-200 border border-[#24385e] hover:bg-orange-600/30 hover:text-orange-300'
                               }`}
                             >
                               استراحت
                             </button>
 
                             <button
+                              type="button"
                               onClick={() => handleQuickSetStaff(staff.id, 'absent')}
-                              className={`py-1.5 rounded-lg font-bold matrix-status-cell ${
+                              className={`py-1.5 rounded-lg font-bold matrix-status-cell cursor-pointer ${
                                 isAbsent
-                                  ? `bg-rose-600 text-white shadow-md shadow-rose-900/40 ring-1 ring-rose-400/40 ${
+                                  ? `bg-rose-600 text-white border border-rose-500 shadow-md shadow-rose-900/30 ring-1 ring-rose-400/40 ${
                                       isStaffAnimating ? 'animate-status-switch ring-2 ring-rose-300 scale-105' : 'animate-status-pop'
                                     } animate-status-ripple-absent`
-                                  : 'bg-[#15233e] text-slate-300 hover:bg-rose-600/30 hover:text-rose-300'
+                                  : 'attendance-status-inactive attendance-status-inactive-absent bg-[#15233e] text-slate-200 border border-[#24385e] hover:bg-rose-600/30 hover:text-rose-300'
                               }`}
                             >
                               غایب

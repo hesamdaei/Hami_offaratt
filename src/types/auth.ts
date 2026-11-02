@@ -1,3 +1,5 @@
+import { VoipConfig } from './voip';
+
 export type ModulePermission = 'full' | 'view' | 'none';
 
 export type PermissionModuleKey =
@@ -73,6 +75,9 @@ export interface AppUser {
   personnelCode?: string; // کد پرسنلی مرتبط
   dossierType?: 'STAFF' | 'DRIVER' | 'SYSTEM'; // نوع پرونده متصل
   createdFrom?: 'USER_MANAGEMENT' | 'STAFF_DOSSIER' | 'DRIVER_DOSSIER' | 'SYSTEM_SEED'; // محل ایجاد حساب
+
+  // تنظیمات اختصاصی مرکز تلفن و داخلی ویپ برای هر کاربر به صورت مجزا
+  voipConfig?: Partial<VoipConfig>;
 }
 
 export type SafeAppUser = Omit<AppUser, 'password' | 'passwordHash' | 'recoveryCode'>;

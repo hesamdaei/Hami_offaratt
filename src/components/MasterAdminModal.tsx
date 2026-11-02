@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { DataIntegrityDiagnosticTab } from './DataIntegrityDiagnosticTab';
 import { AppUser } from '../types/auth';
-import { isMasterAdmin, canManageSystemSettings } from '../utils/authService';
+import { isMasterAdmin, canManageSystemSettings, getStoredUsers } from '../utils/authService';
 import {
   checkLanServerStatus,
   LanServerStatus,
@@ -115,8 +115,12 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
   const [isSendingBot, setIsSendingBot] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
 
-  // VoIP PBX State
-  const [voipConfig, setVoipConfig] = useState<VoipConfig>(getVoipConfig());
+  // VoIP PBX State (Per-User & Global)
+  const [voipUsers, setVoipUsers] = useState<AppUser[]>(() => getStoredUsers());
+  const [selectedVoipUserId, setSelectedVoipUserId] = useState<string>(() => currentUser?.id || 'GLOBAL_DEFAULT');
+  const [voipConfig, setVoipConfig] = useState<VoipConfig>(() =>
+    getVoipConfig(currentUser?.id || 'GLOBAL_DEFAULT')
+  );
   const [isTestingVoip, setIsTestingVoip] = useState(false);
   const [voipTestResult, setVoipTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [voipLogs, setVoipLogs] = useState<VoipCallLog[]>([]);
@@ -128,7 +132,11 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
     setBotConfig(getBaleBotConfig());
     setHistoryCount(getBaleHistory().length);
     setCustomServerUrl(getCustomLanServerUrl());
-    setVoipConfig(getVoipConfig());
+    const freshUsers = getStoredUsers();
+    setVoipUsers(freshUsers);
+    const defaultTarget = currentUser?.id || 'GLOBAL_DEFAULT';
+    setSelectedVoipUserId(defaultTarget);
+    setVoipConfig(getVoipConfig(defaultTarget));
     setVoipTestResult(null);
     setVoipLogs(getVoipCallLogs());
 
@@ -138,7 +146,7 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
       setLanStatus(res);
       setLoadingLan(false);
     });
-  }, [isOpen, initialTab]);
+  }, [isOpen, initialTab, currentUser?.id]);
 
   if (!isOpen) return null;
 
@@ -220,9 +228,26 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
   };
 
   // Handlers for VoIP
+  const handleSelectVoipUser = (userId: string) => {
+    setSelectedVoipUserId(userId);
+    setVoipConfig(getVoipConfig(userId));
+    setVoipTestResult(null);
+  };
+
   const handleSaveVoip = () => {
-    saveVoipConfig(voipConfig);
-    onShowToast('تنظیمات سانترال ویپ با موفقیت ذخیره شد.', 'success');
+    saveVoipConfig(voipConfig, selectedVoipUserId, {
+      alsoUpdateGlobalServerDefaults: true,
+    });
+    setVoipUsers(getStoredUsers());
+    const targetUser = voipUsers.find((u) => u.id === selectedVoipUserId);
+    onShowToast(
+      selectedVoipUserId === 'GLOBAL_DEFAULT'
+        ? 'تنظیمات پایه مرکزی سانترال با موفقیت ذخیره شد.'
+        : `تنظیمات مرکز تلفن کاربر «${targetUser?.fullName || 'انتخابی'}» (داخلی ${toFaDigits(
+            voipConfig.operatorExtension || '—'
+          )}) با موفقیت ذخیره شد.`,
+      'success'
+    );
   };
 
   const handleTestVoip = async () => {
@@ -518,12 +543,75 @@ export const MasterAdminModal: FC<MasterAdminModalProps> = ({
           {/* TAB 2: VOIP PBX (Unified Asterisk AMI, CTI, Test & Guide) */}
           {activeTab === 'voip' && (
             <div className="space-y-4">
+              {/* Per-User VoIP Selector Box */}
+              <div className="p-3.5 rounded-xl bg-[#0e172c] border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <div>
+                    <span className="font-bold text-white block">
+                      انتخاب کاربر جهت ثبت و اصلاح جداگانه تنظیمات مرکز تلفن:
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      تنظیمات داخلی، پیش‌شماره خط، حالت تماس و آی‌پی تلفن برای هر کاربر به صورت مجزا ذخیره می‌شود
+                    </span>
+                  </div>
+                </div>
+
+                <select
+                  value={selectedVoipUserId}
+                  onChange={(e) => handleSelectVoipUser(e.target.value)}
+                  className="bg-[#091020] border border-emerald-500/40 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-emerald-400 cursor-pointer"
+                >
+                  {voipUsers.map((u) => {
+                    const uCfg = getVoipConfig(u.id);
+                    return (
+                      <option key={u.id} value={u.id} className="bg-[#0c1424]">
+                        {u.fullName} (@{u.username}) — داخلی: {toFaDigits(uCfg.operatorExtension || '—')}
+                      </option>
+                    );
+                  })}
+                  <option value="GLOBAL_DEFAULT" className="bg-[#0c1424]">
+                    ⚙️ تنظیمات پایه مرکزی سانترال (پیش‌فرض کل سیستم)
+                  </option>
+                </select>
+              </div>
+
+              {/* Dedicated User Extension & Prefix Quick Row */}
+              <div className="p-4 rounded-xl bg-[#111a30] border border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-[11px] text-amber-300 font-bold mb-1">
+                    شماره داخلی اختصاصی این کاربر (Operator Extension):
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={voipConfig.operatorExtension}
+                    onChange={(e) => setVoipConfig({ ...voipConfig, operatorExtension: e.target.value })}
+                    placeholder="مثلاً 101 یا 102"
+                    className="w-full px-3 py-1.5 text-xs bg-[#0b1222] border border-amber-500/40 rounded-lg text-amber-300 font-mono font-bold text-center focus:outline-hidden focus:border-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-emerald-300 font-bold mb-1">
+                    پیش‌شماره آزادسازی خط شهری این کاربر (Dial Prefix):
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={voipConfig.dialPrefix}
+                    onChange={(e) => setVoipConfig({ ...voipConfig, dialPrefix: e.target.value })}
+                    placeholder="مثلاً 9 یا 0 یا خالی"
+                    className="w-full px-3 py-1.5 text-xs bg-[#0b1222] border border-emerald-500/40 rounded-lg text-white font-mono font-bold text-center focus:outline-hidden focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
               {/* VoIP Mode Selector */}
               <div className="p-4 rounded-xl bg-[#111a30] border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <PhoneCall className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-bold text-white">شیوه برقراری تماس و پروتکل ارتباطی</span>
+                    <span className="text-xs font-bold text-white">شیوه برقراری تماس و پروتکل ارتباطی کاربر</span>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                     <input

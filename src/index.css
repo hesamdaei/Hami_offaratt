@@ -246,58 +246,92 @@ html.light h6,
 }
 
 /* Semantic & Status Badge/Text Colors for High Contrast in Light Mode */
+html.light .text-emerald-200,
 html.light .text-emerald-300,
 html.light .text-emerald-400,
+.light .text-emerald-200,
 .light .text-emerald-300,
 .light .text-emerald-400 {
   color: #047857 !important;
 }
+html.light .text-teal-200,
+html.light .text-teal-300,
+html.light .text-teal-400,
+.light .text-teal-200,
+.light .text-teal-300,
+.light .text-teal-400 {
+  color: #0f766e !important;
+}
+html.light .text-cyan-200,
+html.light .text-cyan-300,
+html.light .text-cyan-400,
+.light .text-cyan-200,
+.light .text-cyan-300,
+.light .text-cyan-400 {
+  color: #0e7490 !important;
+}
+html.light .text-amber-200,
 html.light .text-amber-300,
 html.light .text-amber-400,
+.light .text-amber-200,
 .light .text-amber-300,
 .light .text-amber-400 {
   color: #b45309 !important;
 }
+html.light .text-orange-200,
 html.light .text-orange-300,
 html.light .text-orange-400,
+.light .text-orange-200,
 .light .text-orange-300,
 .light .text-orange-400 {
   color: #c2410c !important;
 }
+html.light .text-sky-200,
 html.light .text-sky-300,
 html.light .text-sky-400,
+.light .text-sky-200,
 .light .text-sky-300,
 .light .text-sky-400 {
   color: #0284c7 !important;
 }
+html.light .text-blue-200,
 html.light .text-blue-300,
 html.light .text-blue-400,
+.light .text-blue-200,
 .light .text-blue-300,
 .light .text-blue-400 {
   color: #1d4ed8 !important;
 }
+html.light .text-indigo-200,
 html.light .text-indigo-300,
 html.light .text-indigo-400,
+.light .text-indigo-200,
 .light .text-indigo-300,
 .light .text-indigo-400 {
   color: #4338ca !important;
 }
+html.light .text-purple-200,
 html.light .text-purple-300,
 html.light .text-purple-400,
+.light .text-purple-200,
 .light .text-purple-300,
 .light .text-purple-400 {
   color: #6d28d9 !important;
 }
+html.light .text-rose-200,
 html.light .text-rose-300,
 html.light .text-rose-400,
+.light .text-rose-200,
 .light .text-rose-300,
 .light .text-rose-400 {
   color: #be123c !important;
 }
 
 /* Primary Card Surfaces, Modals, Popovers, and Containers */
-html.light [class*="bg-[#"]:not([class*="FFC20E"]):not([class*="003399"]):not([class*="22c55e"]):not([class*="ef4444"]):not([class*="blue-"]):not([class*="emerald-"]):not([class*="rose-"]):not([class*="amber-"]):not([class*="indigo-"]):not([class*="purple-"]):not([class*="from-"]):not([class*="to-"]),
-.light [class*="bg-[#"]:not([class*="FFC20E"]):not([class*="003399"]):not([class*="22c55e"]):not([class*="ef4444"]):not([class*="blue-"]):not([class*="emerald-"]):not([class*="rose-"]):not([class*="amber-"]):not([class*="indigo-"]):not([class*="purple-"]):not([class*="from-"]):not([class*="to-"]),
+html.light [class*="bg-[#0"]:not([class*="003399"]):not([class*="from-"]):not([class*="to-"]),
+.light [class*="bg-[#0"]:not([class*="003399"]):not([class*="from-"]):not([class*="to-"]),
+html.light [class*="bg-[#1"]:not([class*="from-"]):not([class*="to-"]),
+.light [class*="bg-[#1"]:not([class*="from-"]):not([class*="to-"]),
 html.light [class*="bg-slate-900"],
 .light [class*="bg-slate-900"],
 html.light [class*="bg-slate-950"],
@@ -312,7 +346,7 @@ html.light aside > div,
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04) !important;
 }
 
-/* Master Admin User Card in Light Mode (Elegant Soft Amber Gold, Never Dark Brown) */
+/* Master Admin & Tint Strips in Light Mode (Soft Pastel Tints, Never Dark) */
 html.light [class*="bg-amber-950"],
 .light [class*="bg-amber-950"] {
   background-color: #fffbeb !important;
@@ -323,6 +357,18 @@ html.light [class*="bg-amber-950"] .text-white,
 .light [class*="bg-amber-950"] .text-white {
   color: #0f172a !important;
 }
+html.light [class*="bg-emerald-950"],
+.light [class*="bg-emerald-950"] {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #065f46 !important;
+}
+html.light [class*="bg-cyan-950"],
+.light [class*="bg-cyan-950"] {
+  background-color: #ecfeff !important;
+  border-color: #a5f3fc !important;
+  color: #155e75 !important;
+}
 
 /* Inner Panels, Nested Metric Boxes, Filter Strips, and Sub-toolbars */
 html.light [class*="bg-[#101b33]"],
@@ -331,18 +377,24 @@ html.light [class*="bg-[#101e38]"],
 .light [class*="bg-[#101e38]"],
 html.light [class*="bg-[#091120]"],
 .light [class*="bg-[#091120]"],
+html.light [class*="bg-[#091122]"],
+.light [class*="bg-[#091122]"],
 html.light [class*="bg-[#0a1120]"],
 .light [class*="bg-[#0a1120]"],
 html.light [class*="bg-[#0a1222]"],
 .light [class*="bg-[#0a1222]"],
 html.light [class*="bg-[#0c1424]"],
 .light [class*="bg-[#0c1424]"],
+html.light [class*="bg-[#0c1426]"],
+.light [class*="bg-[#0c1426]"],
 html.light [class*="bg-[#070d18]"],
 .light [class*="bg-[#070d18]"],
 html.light [class*="bg-[#142036]"],
 .light [class*="bg-[#142036]"],
 html.light [class*="bg-[#162238]"],
 .light [class*="bg-[#162238]"],
+html.light [class*="bg-[#121c33]"],
+.light [class*="bg-[#121c33]"],
 html.light [class*="bg-[#070b14]"],
 .light [class*="bg-[#070b14]"],
 html.light [class*="bg-[#09101f]"],
@@ -366,21 +418,61 @@ html.light [class*="bg-slate-800"][class*="h-1.5"],
   background-color: #e2e8f0 !important;
 }
 
-/* Secondary Action Buttons & Chips (e.g. خروجی اکسل, چاپ لیست, بک‌آپ, etc.) */
+/* Secondary Action Buttons & Chips & Attendance Inactive Status Buttons */
 html.light [class*="bg-[#142340]"],
 .light [class*="bg-[#142340]"],
+html.light [class*="bg-[#14233f]"],
+.light [class*="bg-[#14233f]"],
 html.light [class*="bg-[#121d33]"],
-.light [class*="bg-[#121d33]"] {
+.light [class*="bg-[#121d33]"],
+html.light [class*="bg-[#15233e]"],
+.light [class*="bg-[#15233e]"],
+html.light [class*="bg-[#172542]"],
+.light [class*="bg-[#172542]"],
+html.light .attendance-status-inactive,
+.light .attendance-status-inactive {
   background-color: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
   color: #1e293b !important;
 }
 html.light [class*="bg-[#142340]"]:hover,
 .light [class*="bg-[#142340]"]:hover,
+html.light [class*="bg-[#14233f]"]:hover,
+.light [class*="bg-[#14233f]"]:hover,
 html.light [class*="bg-[#121d33]"]:hover,
-.light [class*="bg-[#121d33]"]:hover {
+.light [class*="bg-[#121d33]"]:hover,
+html.light [class*="bg-[#15233e]"]:hover,
+.light [class*="bg-[#15233e]"]:hover,
+html.light [class*="bg-[#172542]"]:hover,
+.light [class*="bg-[#172542]"]:hover {
   background-color: #e2e8f0 !important;
   color: #0f172a !important;
+}
+
+/* Semantic Hover States for Attendance Card Status Buttons in Light Mode */
+html.light .attendance-status-inactive-present:hover,
+.light .attendance-status-inactive-present:hover {
+  background-color: #d1fae5 !important;
+  border-color: #6ee7b7 !important;
+  color: #047857 !important;
+}
+html.light .attendance-status-inactive-leave:hover,
+.light .attendance-status-inactive-leave:hover {
+  background-color: #fef3c7 !important;
+  border-color: #fcd34d !important;
+  color: #b45309 !important;
+}
+html.light .attendance-status-inactive-workshop:hover,
+.light .attendance-status-inactive-workshop:hover {
+  background-color: #ffedd5 !important;
+  border-color: #fdba74 !important;
+  color: #c2410c !important;
+}
+html.light .attendance-status-inactive-absent:hover,
+.light .attendance-status-inactive-absent:hover {
+  background-color: #ffe4e6 !important;
+  border-color: #fda4af !important;
+  color: #be123c !important;
 }
 
 /* Hover States on Dark Classes: Turn subtle light gray instead of jet black */
@@ -500,59 +592,9 @@ html.light textarea::placeholder,
   color: #94a3b8 !important;
 }
 
-/* Preserving High-Contrast White Text on Solid Buttons */
-html.light .bg-blue-600,
-.light .bg-blue-600,
-html.light .bg-blue-500,
-.light .bg-blue-500,
-html.light .bg-emerald-600,
-.light .bg-emerald-600,
-html.light .bg-emerald-500,
-.light .bg-emerald-500,
-html.light .bg-rose-600,
-.light .bg-rose-600,
-html.light .bg-rose-500,
-.light .bg-rose-500,
-html.light .bg-red-600,
-.light .bg-red-600,
-html.light .bg-red-700,
-.light .bg-red-700,
-html.light .bg-indigo-600,
-.light .bg-indigo-600,
-html.light .bg-indigo-500,
-.light .bg-indigo-500,
-html.light .bg-purple-600,
-.light .bg-purple-600,
-html.light .bg-purple-500,
-.light .bg-purple-500,
-html.light .bg-amber-600,
-.light .bg-amber-600,
-html.light .bg-orange-600,
-.light .bg-orange-600,
-html.light [class*="from-blue-"],
-.light [class*="from-blue-"],
-html.light [class*="from-emerald-"],
-.light [class*="from-emerald-"],
-html.light [class*="from-rose-"],
-.light [class*="from-rose-"],
-html.light [class*="from-indigo-"],
-.light [class*="from-indigo-"],
-html.light [class*="from-purple-"],
-.light [class*="from-purple-"],
-html.light [class*="from-amber-600"],
-.light [class*="from-amber-600"],
-html.light [class*="from-orange-600"],
-.light [class*="from-orange-600"],
-html.light [class*="from-teal-"],
-.light [class*="from-teal-"],
-html.light [class*="from-slate-600"],
-.light [class*="from-slate-600"] {
-  color: #ffffff !important;
-}
-
-/* White text safeguard: turn text-white dark unless it is inside a solid colored button/badge or gradient */
-html.light .text-white:not(button[class*="bg-"]):not(button[class*="from-"]):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-red-"]):not([class*="bg-purple-"]):not([class*="bg-indigo-"]):not([class*="bg-amber-6"]):not([class*="bg-orange-6"]):not([class*="from-"]):not([class*="from-"] *):not([class*="bg-gradient-"]):not([class*="bg-gradient-"] *):not([class*="bg-[#003399]"] *):not([class*="bg-[#FFC20E]"] *):not(.badge-solid):not(button.bg-blue-600 *):not(button.bg-emerald-600 *):not(button.bg-rose-600 *):not(button.bg-amber-600 *):not(.avatar *),
-.light .text-white:not(button[class*="bg-"]):not(button[class*="from-"]):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-red-"]):not([class*="bg-purple-"]):not([class*="bg-indigo-"]):not([class*="bg-amber-6"]):not([class*="bg-orange-6"]):not([class*="from-"]):not([class*="from-"] *):not([class*="bg-gradient-"]):not([class*="bg-gradient-"] *):not([class*="bg-[#003399]"] *):not([class*="bg-[#FFC20E]"] *):not(.badge-solid):not(button.bg-blue-600 *):not(button.bg-emerald-600 *):not(button.bg-rose-600 *):not(button.bg-amber-600 *):not(.avatar *) {
+/* White text safeguard: turn text-white dark ONLY on general containers/headings, NEVER on solid buttons, gradients, or avatars */
+html.light .text-white:not(button):not(button *):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-red-"]):not([class*="bg-purple-"]):not([class*="bg-indigo-"]):not([class*="bg-amber-6"]):not([class*="bg-orange-6"]):not([class*="bg-teal-"]):not([class*="bg-cyan-"]):not([class*="from-"]):not([class*="from-"] *):not([class*="bg-gradient-"]):not([class*="bg-gradient-"] *):not([class*="bg-[#003399]"] *):not([class*="bg-[#FFC20E]"] *):not(.badge-solid):not(.avatar):not(.avatar *),
+.light .text-white:not(button):not(button *):not([class*="bg-blue-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-red-"]):not([class*="bg-purple-"]):not([class*="bg-indigo-"]):not([class*="bg-amber-6"]):not([class*="bg-orange-6"]):not([class*="bg-teal-"]):not([class*="bg-cyan-"]):not([class*="from-"]):not([class*="from-"] *):not([class*="bg-gradient-"]):not([class*="bg-gradient-"] *):not([class*="bg-[#003399]"] *):not([class*="bg-[#FFC20E]"] *):not(.badge-solid):not(.avatar):not(.avatar *) {
   color: #0f172a !important;
 }
 
@@ -681,17 +723,17 @@ html.light [class*="bg-[#111c34]"],
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* User Card Headings & Names */
-html.light [class*="bg-[#0f192e]"] .text-white,
-.light [class*="bg-[#0f192e]"] .text-white,
-html.light [class*="bg-[#111c30]"] .text-white,
-.light [class*="bg-[#111c30]"] .text-white,
-html.light [class*="bg-[#111c34]"] .text-white,
-.light [class*="bg-[#111c34]"] .text-white,
-html.light [class*="bg-[#10192b]"] .text-white,
-.light [class*="bg-[#10192b]"] .text-white,
-html.light [class*="bg-[#0d1628]"] .text-white,
-.light [class*="bg-[#0d1628]"] .text-white {
+/* User & Attendance Card Headings & Names (Exclude buttons, badges, and avatars!) */
+html.light [class*="bg-[#0f192e]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]):not([class*="bg-gradient-"] *):not([class*="from-"]):not([class*="from-"] *),
+.light [class*="bg-[#0f192e]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]):not([class*="bg-gradient-"] *):not([class*="from-"]):not([class*="from-"] *),
+html.light [class*="bg-[#111c30]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]),
+.light [class*="bg-[#111c30]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]),
+html.light [class*="bg-[#111c34]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]),
+.light [class*="bg-[#111c34]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]),
+html.light [class*="bg-[#10192b]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]),
+.light [class*="bg-[#10192b]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]),
+html.light [class*="bg-[#0d1628]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]),
+.light [class*="bg-[#0d1628]"] .text-white:not(button):not(button *):not(.avatar):not(.avatar *):not([class*="bg-gradient-"]) {
   color: #0f172a !important;
 }
 
@@ -736,15 +778,31 @@ html.light [class*="bg-slate-800"][class*="text-slate-300"],
   color: #475569 !important;
 }
 
-/* User Card Action Buttons */
+/* Secondary Dark-Surface Buttons Across All Cards & Views in Light Mode */
 html.light button[class*="bg-slate-800"],
-.light button[class*="bg-slate-800"] {
+.light button[class*="bg-slate-800"],
+html.light button[class*="bg-slate-900"],
+.light button[class*="bg-slate-900"],
+html.light button[class*="bg-slate-700"],
+.light button[class*="bg-slate-700"] {
   background-color: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
   color: #1e293b !important;
 }
+html.light button[class*="bg-slate-800"] span,
+.light button[class*="bg-slate-800"] span,
+html.light button[class*="bg-slate-900"] span,
+.light button[class*="bg-slate-900"] span,
+html.light button[class*="bg-slate-700"] span,
+.light button[class*="bg-slate-700"] span {
+  color: #1e293b !important;
+}
 html.light button[class*="bg-slate-800"]:hover,
-.light button[class*="bg-slate-800"]:hover {
+.light button[class*="bg-slate-800"]:hover,
+html.light button[class*="bg-slate-900"]:hover,
+.light button[class*="bg-slate-900"]:hover,
+html.light button[class*="bg-slate-700"]:hover,
+.light button[class*="bg-slate-700"]:hover {
   background-color: #e2e8f0 !important;
   color: #0f172a !important;
 }
@@ -781,6 +839,105 @@ html.light .driver-card-print [class*="from-slate-800"][class*="to-slate-900"],
 .light .driver-card-print [class*="from-slate-800"][class*="to-slate-900"] {
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
   color: #1d4ed8 !important;
+}
+
+/* 4. HIGH-PRIORITY SOLID BUTTON & AVATAR WHITE TEXT SAFEGUARD IN LIGHT MODE
+   Placed after all card rules so active status buttons and gradient avatars ALWAYS keep crisp white text */
+html.light .bg-blue-600,
+.light .bg-blue-600,
+html.light .bg-blue-600 *,
+.light .bg-blue-600 *,
+html.light .bg-blue-500,
+.light .bg-blue-500,
+html.light .bg-blue-500 *,
+.light .bg-blue-500 *,
+html.light .bg-emerald-600,
+.light .bg-emerald-600,
+html.light .bg-emerald-600 *,
+.light .bg-emerald-600 *,
+html.light .bg-emerald-500,
+.light .bg-emerald-500,
+html.light .bg-emerald-500 *,
+.light .bg-emerald-500 *,
+html.light .bg-amber-600,
+.light .bg-amber-600,
+html.light .bg-amber-600 *,
+.light .bg-amber-600 *,
+html.light .bg-orange-600,
+.light .bg-orange-600,
+html.light .bg-orange-600 *,
+.light .bg-orange-600 *,
+html.light .bg-orange-500,
+.light .bg-orange-500,
+html.light .bg-orange-500 *,
+.light .bg-orange-500 *,
+html.light .bg-rose-600,
+.light .bg-rose-600,
+html.light .bg-rose-600 *,
+.light .bg-rose-600 *,
+html.light .bg-rose-500,
+.light .bg-rose-500,
+html.light .bg-rose-500 *,
+.light .bg-rose-500 *,
+html.light .bg-red-600,
+.light .bg-red-600,
+html.light .bg-red-600 *,
+.light .bg-red-600 *,
+html.light .bg-red-700,
+.light .bg-red-700,
+html.light .bg-indigo-600,
+.light .bg-indigo-600,
+html.light .bg-indigo-600 *,
+.light .bg-indigo-600 *,
+html.light .bg-indigo-500,
+.light .bg-indigo-500,
+html.light .bg-purple-600,
+.light .bg-purple-600,
+html.light .bg-purple-600 *,
+.light .bg-purple-600 *,
+html.light .bg-purple-500,
+.light .bg-purple-500,
+html.light .bg-teal-600,
+.light .bg-teal-600,
+html.light .bg-teal-600 *,
+.light .bg-teal-600 *,
+html.light .bg-cyan-600,
+.light .bg-cyan-600,
+html.light .bg-cyan-600 *,
+.light .bg-cyan-600 *,
+html.light .avatar,
+.light .avatar,
+html.light .avatar *,
+.light .avatar *,
+html.light [class*="from-blue-"],
+.light [class*="from-blue-"],
+html.light [class*="from-blue-"] *,
+.light [class*="from-blue-"] *,
+html.light [class*="from-emerald-"],
+.light [class*="from-emerald-"],
+html.light [class*="from-emerald-"] *,
+.light [class*="from-emerald-"] *,
+html.light [class*="from-rose-"],
+.light [class*="from-rose-"],
+html.light [class*="from-indigo-"],
+.light [class*="from-indigo-"],
+html.light [class*="from-indigo-"] *,
+.light [class*="from-indigo-"] *,
+html.light [class*="from-purple-"],
+.light [class*="from-purple-"],
+html.light [class*="from-amber-600"],
+.light [class*="from-amber-600"],
+html.light [class*="from-orange-600"],
+.light [class*="from-orange-600"],
+html.light [class*="from-teal-"],
+.light [class*="from-teal-"],
+html.light [class*="from-sky-"],
+.light [class*="from-sky-"],
+html.light [class*="from-sky-"] *,
+.light [class*="from-sky-"] *,
+html.light [class*="from-slate-600"],
+.light [class*="from-slate-600"] {
+  color: #ffffff !important;
 }
 
 /* 4. Modals and Dialogs in Light Mode */

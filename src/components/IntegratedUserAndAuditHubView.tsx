@@ -39,6 +39,7 @@ import {
   Lock,
   ChevronLeft,
   ChevronRight,
+  PhoneCall,
 } from 'lucide-react';
 import { AppUser, UserPermissions, ModulePermission } from '../types/auth';
 import {
@@ -68,6 +69,9 @@ import {
 } from '../utils/authService';
 import { saveServerUsers, fetchServerUsers } from '../utils/lanSyncService';
 import { SqlArchitectureModal } from './SqlArchitectureModal';
+import { VoipSettingsModal } from './VoipSettingsModal';
+import { getVoipConfig, saveVoipConfig } from '../utils/voipService';
+import { VoipMode } from '../types/voip';
 import { DECODED_BACKUP } from '../utils/backupDecoder';
 import { toFaDigits } from '../utils/jalaali';
 
@@ -195,6 +199,20 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     normalizeUserPermissions({})
   );
 
+  // Per-User VoIP Fields in Create & Edit Modals
+  const [newVoipExtension, setNewVoipExtension] = useState('101');
+  const [newVoipPrefix, setNewVoipPrefix] = useState('');
+  const [newVoipMode, setNewVoipMode] = useState<VoipMode>('softphone');
+  const [newVoipIpPhoneIp, setNewVoipIpPhoneIp] = useState('');
+
+  const [editVoipExtension, setEditVoipExtension] = useState('101');
+  const [editVoipPrefix, setEditVoipPrefix] = useState('');
+  const [editVoipMode, setEditVoipMode] = useState<VoipMode>('softphone');
+  const [editVoipIpPhoneIp, setEditVoipIpPhoneIp] = useState('');
+
+  // Dedicated VoIP Settings Modal Target User
+  const [voipTargetUser, setVoipTargetUser] = useState<AppUser | null>(null);
+
   // Quick Password Reset Modal
   const [passwordResetUser, setPasswordResetUser] = useState<AppUser | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState('');
@@ -217,6 +235,10 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     setNewRoleTitle('اپراتور شیفت');
     setNewPhoneNumber('');
     setNewBaleId('');
+    setNewVoipExtension('101');
+    setNewVoipPrefix('');
+    setNewVoipMode('softphone');
+    setNewVoipIpPhoneIp('');
     setNewAvatarColor(AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]);
     setNewPermissions(
       normalizeUserPermissions({
@@ -253,6 +275,15 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       return;
     }
 
+    const baseVoip = getVoipConfig('GLOBAL_DEFAULT');
+    const userVoipConfig = {
+      ...baseVoip,
+      operatorExtension: newVoipExtension.trim() || '101',
+      dialPrefix: newVoipPrefix.trim(),
+      mode: newVoipMode,
+      ipPhoneIp: newVoipIpPhoneIp.trim(),
+    };
+
     const createRes = createSystemUser({
       username: newUsername,
       password: newPassword,
@@ -264,6 +295,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       avatarColor: newAvatarColor,
       dossierType: 'NONE',
       createdFrom: 'USER_MANAGEMENT',
+      voipConfig: userVoipConfig,
     });
 
     if (!createRes.ok || !createRes.user) {
@@ -272,6 +304,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     }
 
     const newUser = createRes.user;
+    saveVoipConfig(userVoipConfig, newUser.id);
     setUsers(getStoredUsers());
 
     // Record Audit Log
@@ -296,6 +329,7 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       onShowToast('شما مجوز ویرایش کاربران را ندارید.', 'error');
       return;
     }
+    const uVoip = getVoipConfig(user.id);
     setEditingUser(user);
     setEditFullName(user.fullName);
     setEditUsername(user.username);
@@ -305,6 +339,10 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
     setEditBaleId(user.baleId || '');
     setEditAvatarColor(user.avatarColor || AVATAR_COLORS[0]);
     setEditPermissions(normalizeUserPermissions(user.permissions, user.isMasterAdmin));
+    setEditVoipExtension(uVoip.operatorExtension || '101');
+    setEditVoipPrefix(uVoip.dialPrefix || '');
+    setEditVoipMode(uVoip.mode || 'softphone');
+    setEditVoipIpPhoneIp(uVoip.ipPhoneIp || '');
   };
 
   const handleSaveEditUser = (e: FormEvent) => {
@@ -327,6 +365,15 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       isActive: editingUser.isActive,
     };
 
+    const existingVoip = getVoipConfig(editingUser.id);
+    const updatedVoipConfig = {
+      ...existingVoip,
+      operatorExtension: editVoipExtension.trim() || '101',
+      dialPrefix: editVoipPrefix.trim(),
+      mode: editVoipMode,
+      ipPhoneIp: editVoipIpPhoneIp.trim(),
+    };
+
     const updateRes = updateSystemUser(editingUser.id, {
       fullName: cleanFullName,
       roleTitle: editRoleTitle.trim() || editingUser.roleTitle,
@@ -335,12 +382,15 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
       baleId: editBaleId.trim() || undefined,
       avatarColor: editAvatarColor || editingUser.avatarColor,
       permissions: editingUser.isMasterAdmin ? editingUser.permissions : editPermissions,
+      voipConfig: updatedVoipConfig,
     });
 
     if (!updateRes.ok || !updateRes.user) {
       onShowToast(updateRes.error || 'خطا در ذخیره تغییرات کاربر.', 'error');
       return;
     }
+
+    saveVoipConfig(updatedVoipConfig, editingUser.id);
 
     const updatedUsers = getStoredUsers();
     setUsers(updatedUsers);
@@ -941,6 +991,47 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                         ID: {user.id}
                       </span>
                     </div>
+
+                    {/* Dedicated User Telephony / PBX Strip */}
+                    {(() => {
+                      const uVoip = getVoipConfig(user.id);
+                      const modeLabel =
+                        uVoip.mode === 'ipphone_cti'
+                          ? 'تلفن رومیزی (CTI)'
+                          : uVoip.mode === 'asterisk_ami'
+                          ? 'سانترال استریسک'
+                          : uVoip.mode === 'webhook'
+                          ? 'وب‌هوک'
+                          : 'سافت‌فون';
+                      return (
+                        <div className="flex items-center justify-between gap-2 mb-2.5 px-2.5 py-1.5 rounded-lg bg-cyan-950/25 border border-cyan-500/25 text-[11px]">
+                          <div className="flex items-center gap-1.5 text-cyan-200 truncate">
+                            <PhoneCall className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                            <span>داخلی تلفن:</span>
+                            <span className="font-mono font-black text-amber-300" dir="ltr">
+                              {toFaDigits(uVoip.operatorExtension || '۱۰۱')}
+                            </span>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-[10px] text-slate-300">{modeLabel}</span>
+                            {uVoip.dialPrefix && (
+                              <span className="text-[10px] font-mono text-emerald-300" dir="ltr">
+                                (کد خط: {toFaDigits(uVoip.dialPrefix)})
+                              </span>
+                            )}
+                          </div>
+                          {(hasUserManagementPermission || isUserSelf) && (
+                            <button
+                              type="button"
+                              onClick={() => setVoipTargetUser(user)}
+                              className="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 font-bold text-[10px] transition shrink-0 cursor-pointer"
+                              title="ثبت و اصلاح مجزای تنظیمات مرکز تلفن برای این کاربر"
+                            >
+                              تنظیم تلفن
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Permissions Badges Matrix */}
                     <div className="bg-[#0a1222] p-2.5 rounded-xl border border-[#1b2b48] mb-3 space-y-1.5">
@@ -1663,6 +1754,66 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                 </div>
               </div>
 
+              {/* Dedicated Per-User Telephony / VoIP Configuration Section */}
+              <div className="bg-[#0a1222] border border-cyan-500/30 rounded-xl p-3.5 space-y-2.5">
+                <div className="font-bold text-cyan-300 text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <PhoneCall className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>تنظیمات اختصاصی مرکز تلفن و داخلی ویپ این کاربر:</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400">قابل ثبت و اصلاح مجزا برای هر کاربر</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-slate-300 text-[11px] mb-1">شماره داخلی (Extension)</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={newVoipExtension}
+                      onChange={(e) => setNewVoipExtension(e.target.value)}
+                      placeholder="101"
+                      className="w-full bg-[#0f192e] border border-[#1e2f52] rounded-lg px-2.5 py-1.5 text-amber-300 font-mono font-bold text-center focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 text-[11px] mb-1">کد آزادسازی خط (Prefix)</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={newVoipPrefix}
+                      onChange={(e) => setNewVoipPrefix(e.target.value)}
+                      placeholder="مثلاً 9 یا 0"
+                      className="w-full bg-[#0f192e] border border-[#1e2f52] rounded-lg px-2.5 py-1.5 text-white font-mono text-center focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 text-[11px] mb-1">شیوه تماس</label>
+                    <select
+                      value={newVoipMode}
+                      onChange={(e) => setNewVoipMode(e.target.value as VoipMode)}
+                      className="w-full bg-[#0f192e] border border-[#1e2f52] rounded-lg px-2 py-1.5 text-white text-[11px] focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="softphone">سافت‌فون (ویندوز)</option>
+                      <option value="ipphone_cti">تلفن رومیزی (Yealink)</option>
+                      <option value="asterisk_ami">سانترال استریسک (AMI)</option>
+                      <option value="webhook">وب‌هوک سفارشی</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 text-[11px] mb-1">آی‌پی تلفن رومیزی</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={newVoipIpPhoneIp}
+                      onChange={(e) => setNewVoipIpPhoneIp(e.target.value)}
+                      placeholder="192.168.1.45"
+                      className="w-full bg-[#0f192e] border border-[#1e2f52] rounded-lg px-2.5 py-1.5 text-emerald-300 font-mono text-left focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Module Permissions Matrix */}
               <div className="bg-[#0a1222] border border-[#1b2b48] rounded-xl p-3.5 space-y-3">
                 <div className="font-bold text-white text-xs border-b border-[#1b2b48] pb-1.5 flex items-center justify-between">
@@ -1878,6 +2029,76 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
                     onChange={(e) => setEditPhoneNumber(e.target.value)}
                     className="w-full bg-[#0a1222] border border-[#1e2f52] rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500 font-mono"
                   />
+                </div>
+              </div>
+
+              {/* Dedicated Per-User Telephony / VoIP Configuration Section in Edit User Modal */}
+              <div className="bg-[#0a1222] border border-cyan-500/30 rounded-xl p-3.5 space-y-2.5">
+                <div className="font-bold text-cyan-300 text-xs flex items-center justify-between flex-wrap gap-2">
+                  <span className="flex items-center gap-1.5">
+                    <PhoneCall className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>تنظیمات اختصاصی مرکز تلفن و داخلی ویپ «{editingUser.fullName}»:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = editingUser;
+                      setEditingUser(null);
+                      setVoipTargetUser(target);
+                    }}
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 font-bold transition cursor-pointer"
+                  >
+                    پیکربندی پیشرفته سانترال این کاربر
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-slate-300 text-[11px] mb-1">شماره داخلی (Extension)</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={editVoipExtension}
+                      onChange={(e) => setEditVoipExtension(e.target.value)}
+                      placeholder="101"
+                      className="w-full bg-[#0f192e] border border-[#1e2f52] rounded-lg px-2.5 py-1.5 text-amber-300 font-mono font-bold text-center focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 text-[11px] mb-1">کد آزادسازی خط (Prefix)</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={editVoipPrefix}
+                      onChange={(e) => setEditVoipPrefix(e.target.value)}
+                      placeholder="مثلاً 9 یا 0"
+                      className="w-full bg-[#0f192e] border border-[#1e2f52] rounded-lg px-2.5 py-1.5 text-white font-mono text-center focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 text-[11px] mb-1">شیوه تماس</label>
+                    <select
+                      value={editVoipMode}
+                      onChange={(e) => setEditVoipMode(e.target.value as VoipMode)}
+                      className="w-full bg-[#0f192e] border border-[#1e2f52] rounded-lg px-2 py-1.5 text-white text-[11px] focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="softphone">سافت‌فون (ویندوز)</option>
+                      <option value="ipphone_cti">تلفن رومیزی (Yealink)</option>
+                      <option value="asterisk_ami">سانترال استریسک (AMI)</option>
+                      <option value="webhook">وب‌هوک سفارشی</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 text-[11px] mb-1">آی‌پی تلفن رومیزی</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={editVoipIpPhoneIp}
+                      onChange={(e) => setEditVoipIpPhoneIp(e.target.value)}
+                      placeholder="192.168.1.45"
+                      className="w-full bg-[#0f192e] border border-[#1e2f52] rounded-lg px-2.5 py-1.5 text-emerald-300 font-mono text-left focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2251,6 +2472,18 @@ export const IntegratedUserAndAuditHubView: FC<IntegratedUserAndAuditHubViewProp
           rules: DECODED_BACKUP.rules || {},
         }}
         onShowToast={onShowToast}
+      />
+
+      {/* Dedicated Per-User VoIP Settings Modal */}
+      <VoipSettingsModal
+        isOpen={Boolean(voipTargetUser)}
+        onClose={() => {
+          setVoipTargetUser(null);
+          setUsers(getStoredUsers());
+        }}
+        currentUser={currentUser}
+        targetUser={voipTargetUser}
+        onShowToast={(msg, type) => onShowToast(msg, type || 'info')}
       />
     </div>
   );

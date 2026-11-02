@@ -1,14 +1,17 @@
 import { VoipConfig, VoipCallLog, DEFAULT_VOIP_CONFIG } from '../types/voip';
+import { AppUser } from '../types/auth';
+import { getStoredSession, getStoredUsers, updateSystemUser } from './authService';
 import { normalizePersianDigits } from './jalaali';
 import { getLanServerBaseUrl } from './lanSyncService';
 
 const STORAGE_KEY_VOIP_CONFIG = 'hamibar_voip_config_v1';
+const STORAGE_KEY_VOIP_USER_CONFIGS = 'hamibar_voip_user_configs_v1';
 const STORAGE_KEY_VOIP_LOGS = 'hamibar_voip_logs_v1';
 
 /**
- * دریافت تنظیمات سیستم ویپ از حافظه کلاینت
+ * دریافت تنظیمات پایه / سراسری مرکز تلفن (مقادیر پیش‌فرض سرور سانترال)
  */
-export function getVoipConfig(): VoipConfig {
+export function getGlobalBaseVoipConfig(): VoipConfig {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_VOIP_CONFIG);
     if (saved) {
@@ -16,20 +19,206 @@ export function getVoipConfig(): VoipConfig {
       return { ...DEFAULT_VOIP_CONFIG, ...parsed };
     }
   } catch (e) {
-    console.warn('خطا در بارگذاری تنظیمات ویپ:', e);
+    console.warn('خطا در بارگذاری تنظیمات پایه ویپ:', e);
   }
   return { ...DEFAULT_VOIP_CONFIG };
 }
 
 /**
- * ذخیره تنظیمات ویپ در حافظه کلاینت
+ * ذخیره تنظیمات پایه / سراسری مرکز تلفن
  */
-export function saveVoipConfig(config: VoipConfig): void {
+export function saveGlobalBaseVoipConfig(config: Partial<VoipConfig>): void {
   try {
-    localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(config));
+    const current = getGlobalBaseVoipConfig();
+    const merged: VoipConfig = { ...current, ...config };
+    localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(merged));
+    window.dispatchEvent(new CustomEvent('hamibar:voip-config-updated'));
   } catch (e) {
-    console.error('خطا در ذخیره تنظیمات ویپ:', e);
+    console.error('خطا در ذخیره تنظیمات پایه ویپ:', e);
   }
+}
+
+/**
+ * خواندن نقشه تنظیمات اختصاصی کاربران از localStorage
+ */
+function getPerUserVoipConfigMap(): Record<string, Partial<VoipConfig>> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_VOIP_USER_CONFIGS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    }
+  } catch {}
+  return {};
+}
+
+/**
+ * تشخیص کاربر هدف (شناسه کاربر مشخص‌شده یا کاربر لاگین‌شده فعلی)
+ */
+function resolveTargetUser(userOrId?: AppUser | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> } | string | null): {
+  userId: string | null;
+  username: string | null;
+  userObj: AppUser | null;
+} {
+  if (userOrId === 'GLOBAL_DEFAULT') {
+    return { userId: null, username: null, userObj: null };
+  }
+
+  const allUsers = getStoredUsers();
+
+  if (typeof userOrId === 'string' && userOrId.trim()) {
+    const clean = userOrId.trim();
+    const found = allUsers.find(
+      (u) => u.id === clean || u.username.toLowerCase() === clean.toLowerCase()
+    );
+    return {
+      userId: found?.id || clean,
+      username: found?.username || null,
+      userObj: found || null,
+    };
+  }
+
+  if (userOrId && typeof userOrId === 'object') {
+    const found = allUsers.find(
+      (u) =>
+        (userOrId.id && u.id === userOrId.id) ||
+        (userOrId.username && u.username.toLowerCase() === userOrId.username.toLowerCase())
+    );
+    return {
+      userId: found?.id || userOrId.id || null,
+      username: found?.username || userOrId.username || null,
+      userObj: found || (userOrId as AppUser),
+    };
+  }
+
+  // اگر آرگومان ارسال نشده باشد، کاربر فعال در نشست جاری را بررسی کن
+  const session = getStoredSession();
+  if (session && session.id) {
+    const found = allUsers.find(
+      (u) => u.id === session.id || u.username.toLowerCase() === session.username.toLowerCase()
+    );
+    return {
+      userId: found?.id || session.id,
+      username: found?.username || session.username,
+      userObj: found || (session as AppUser),
+    };
+  }
+
+  return { userId: null, username: null, userObj: null };
+}
+
+/**
+ * دریافت تنظیمات مرکز تلفن برای یک کاربر مشخص (یا کاربر لاگین‌شده جاری)
+ * هر کاربر تنظیمات اختصاصی خود (داخلی، پیش‌شماره خط، حالت اتصال، آی‌پی تلفن و...) را دارد
+ * و در صورت عدم ثبت مقادیر سرور، از مقادیر پیش‌فرض مرکزی سانترال ارث‌بری می‌کند.
+ */
+export function getVoipConfig(
+  userOrId?: AppUser | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> } | string | null
+): VoipConfig {
+  const globalBase = getGlobalBaseVoipConfig();
+
+  if (userOrId === 'GLOBAL_DEFAULT') {
+    return globalBase;
+  }
+
+  try {
+    const { userId, username, userObj } = resolveTargetUser(userOrId);
+    if (!userId && !username) {
+      return globalBase;
+    }
+
+    const userMap = getPerUserVoipConfigMap();
+    const localPerUser =
+      (userId && userMap[userId]) ||
+      (username && userMap[username.toLowerCase()]) ||
+      {};
+
+    const storedInUserRecord = userObj?.voipConfig || {};
+
+    return {
+      ...DEFAULT_VOIP_CONFIG,
+      ...globalBase,
+      ...storedInUserRecord,
+      ...localPerUser,
+    };
+  } catch (e) {
+    console.warn('خطا در بارگذاری تنظیمات اختصاصی ویپ کاربر:', e);
+    return globalBase;
+  }
+}
+
+/**
+ * ذخیره و اصلاح تنظیمات مرکز تلفن به صورت مجزا برای هر کاربر
+ */
+export function saveVoipConfig(
+  config: VoipConfig,
+  userOrId?: AppUser | { id?: string; username?: string; voipConfig?: Partial<VoipConfig> } | string | null,
+  options?: { alsoUpdateGlobalServerDefaults?: boolean }
+): void {
+  try {
+    if (userOrId === 'GLOBAL_DEFAULT') {
+      localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(config));
+      window.dispatchEvent(new CustomEvent('hamibar:voip-config-updated'));
+      return;
+    }
+
+    const { userId, username, userObj } = resolveTargetUser(userOrId);
+
+    // ۱. اگر گزینه بروزرسانی پایه سرور فعال باشد یا کاربر مشخصی در کار نباشد، تنظیمات پایه سرور را هم ذخیره کن
+    if (!userId || options?.alsoUpdateGlobalServerDefaults) {
+      const currentGlobal = getGlobalBaseVoipConfig();
+      const nextGlobal: VoipConfig = !userId
+        ? config
+        : {
+            ...currentGlobal,
+            amiHost: config.amiHost || currentGlobal.amiHost,
+            amiPort: config.amiPort || currentGlobal.amiPort,
+            amiUser: config.amiUser || currentGlobal.amiUser,
+            amiSecret: config.amiSecret || currentGlobal.amiSecret,
+            amiContext: config.amiContext || currentGlobal.amiContext,
+            channelType: config.channelType || currentGlobal.channelType,
+          };
+      localStorage.setItem(STORAGE_KEY_VOIP_CONFIG, JSON.stringify(nextGlobal));
+    }
+
+    // ۲. ذخیره در نقشه اختصاصی کاربر در localStorage
+    if (userId) {
+      const userMap = getPerUserVoipConfigMap();
+      userMap[userId] = { ...config };
+      if (username) {
+        userMap[username.toLowerCase()] = { ...config };
+      }
+      localStorage.setItem(STORAGE_KEY_VOIP_USER_CONFIGS, JSON.stringify(userMap));
+
+      // ۳. ذخیره در رکورد کاربری (AppUser.voipConfig) جهت همگام‌سازی پایدار در سرور شبکه و نشست‌ها
+      if (userObj) {
+        updateSystemUser(userObj.id, {
+          voipConfig: { ...config },
+        });
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent('hamibar:voip-config-updated'));
+  } catch (e) {
+    console.error('خطا در ذخیره تنظیمات ویپ کاربر:', e);
+  }
+}
+
+/**
+ * بررسی اینکه آیا کاربر تنظیمات اختصاصی ثبت‌شده دارد یا از پیش‌فرض استفاده می‌کند
+ */
+export function hasCustomUserVoipConfig(userOrId: AppUser | string): boolean {
+  const { userId, username, userObj } = resolveTargetUser(userOrId);
+  if (!userId) return false;
+  const userMap = getPerUserVoipConfigMap();
+  const hasInMap = Boolean(
+    (userId && userMap[userId] && Object.keys(userMap[userId]).length > 0) ||
+      (username && userMap[username.toLowerCase()] && Object.keys(userMap[username.toLowerCase()]).length > 0)
+  );
+  const hasInRecord = Boolean(userObj?.voipConfig && Object.keys(userObj.voipConfig).length > 0);
+  return hasInMap || hasInRecord;
 }
 
 /**
@@ -109,15 +298,16 @@ export interface VoipCallResult {
 }
 
 /**
- * آغاز فرآیند تماس کلیک به تماس (Click-to-Call) با ویپ
+ * آغاز فرآیند تماس کلیک به تماس (Click-to-Call) با ویپ (با استفاده از تنظیمات اختصاصی کاربر جاری)
  */
 export async function initiateVoipCall(
   rawPhoneNumber: string,
   recipientName: string,
-  overrideConfig?: Partial<VoipConfig>
+  overrideConfig?: Partial<VoipConfig>,
+  userOrId?: AppUser | string | null
 ): Promise<VoipCallResult> {
   const currentConfig: VoipConfig = {
-    ...getVoipConfig(),
+    ...getVoipConfig(userOrId),
     ...(overrideConfig || {}),
   };
 

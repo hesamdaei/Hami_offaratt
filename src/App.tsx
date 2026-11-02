@@ -2736,6 +2736,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
         }}
         onOpenLanSharing={() => setIsLanModalOpen(true)}
         onOpenBackup={() => setIsBackupModalOpen(true)}
+        onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
         onShowToast={(msg, type) => showToast(msg, type)}
       />
 
@@ -2818,7 +2819,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           currentUser={currentUser}
           onOpenSettings={() => {
             setVoipCallTarget(null);
-            handleOpenMasterAdmin('voip');
+            setIsVoipSettingsOpen(true);
           }}
           onShowToast={(msg, type) => showToast(msg, type)}
         />

@@ -860,6 +860,9 @@ export async function syncAndMergeUsers(serverUsers?: AppUser[] | null): Promise
       personnelCode: srvUser.personnelCode || matchingLocal?.personnelCode,
       dossierType: srvUser.dossierType || matchingLocal?.dossierType,
       createdFrom: srvUser.createdFrom || matchingLocal?.createdFrom,
+      voipConfig: srvUser.voipConfig || matchingLocal?.voipConfig
+        ? { ...(matchingLocal?.voipConfig || {}), ...(srvUser.voipConfig || {}) }
+        : undefined,
       permissions: normalizeUserPermissions(
         srvUser.permissions || matchingLocal?.permissions,
         Boolean(srvUser.isMasterAdmin || matchingLocal?.isMasterAdmin || cleanUsername === 'admin')
@@ -956,6 +959,7 @@ export interface CreateSystemUserInput {
   personnelCode?: string;
   dossierType?: 'STAFF' | 'DRIVER' | 'SYSTEM' | 'NONE' | 'SYSTEM_ONLY';
   createdFrom?: 'USER_MANAGEMENT' | 'STAFF_DOSSIER' | 'DRIVER_DOSSIER';
+  voipConfig?: AppUser['voipConfig'];
 }
 
 /**
@@ -1059,6 +1063,7 @@ export function createSystemUser(input: CreateSystemUserInput): {
         ? 'DRIVER'
         : 'SYSTEM',
     createdFrom: input.createdFrom || (input.staffId ? 'STAFF_DOSSIER' : input.driverId ? 'DRIVER_DOSSIER' : 'USER_MANAGEMENT'),
+    voipConfig: input.voipConfig ? { ...input.voipConfig } : undefined,
   };
 
   const updatedUsers = [...currentUsers, newUser];
@@ -1084,6 +1089,7 @@ export interface UpdateSystemUserInput {
   driverId?: string;
   personnelCode?: string;
   dossierType?: 'STAFF' | 'DRIVER' | 'SYSTEM' | 'NONE' | 'SYSTEM_ONLY';
+  voipConfig?: AppUser['voipConfig'];
 }
 
 /**
@@ -1112,7 +1118,7 @@ export function updateSystemUser(
     ...target,
     id: target.id, // شناسه داخلی کاملاً ثابت
     username: target.username, // نام کاربری پس از ایجاد مطلقاً غیرقابل تغییر است
-    fullName: updates.fullName !== undefined ? updates.fullName.trim() || target.fullName : target.fullName,
+    fullName: updates.fullName !== undefined ? updates.fullName.trim() || target.fullName : target.roleTitle ? target.fullName : target.fullName,
     roleTitle: updates.roleTitle !== undefined ? updates.roleTitle.trim() || target.roleTitle : target.roleTitle,
     phoneNumber: updates.phoneNumber !== undefined ? updates.phoneNumber.trim() : target.phoneNumber,
     baleId: updates.baleId !== undefined ? updates.baleId.trim() : target.baleId,
@@ -1135,6 +1141,10 @@ export function updateSystemUser(
       updates.dossierType === 'STAFF' || updates.dossierType === 'DRIVER'
         ? updates.dossierType
         : target.dossierType,
+    voipConfig:
+      updates.voipConfig !== undefined
+        ? { ...(target.voipConfig || {}), ...updates.voipConfig }
+        : target.voipConfig,
     updatedAt: new Date().toISOString(),
   };
 

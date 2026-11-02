@@ -24,11 +24,14 @@ import {
   Check,
   Mail,
   Edit3,
+  PhoneCall,
 } from 'lucide-react';
 import { AppUser, ModulePermission } from '../types/auth';
 import { isMasterAdmin, getStoredUsers, saveStoredUsers, saveStoredSession } from '../utils/authService';
 import { hashPassword, verifyPassword } from '../utils/securityCrypto';
 import { saveServerUsers } from '../utils/lanSyncService';
+import { getVoipConfig } from '../utils/voipService';
+import { toFaDigits } from '../utils/jalaali';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -39,6 +42,7 @@ interface UserProfileModalProps {
   onOpenUserManagement?: () => void;
   onOpenLanSharing?: () => void;
   onOpenBackup?: () => void;
+  onOpenVoipSettings?: () => void;
   onShowToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
@@ -51,6 +55,7 @@ export const UserProfileModal: FC<UserProfileModalProps> = ({
   onOpenUserManagement,
   onOpenLanSharing,
   onOpenBackup,
+  onOpenVoipSettings,
   onShowToast,
 }) => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -384,6 +389,22 @@ export const UserProfileModal: FC<UserProfileModalProps> = ({
                   <KeyRound className="w-4 h-4 text-amber-400" />
                   <span>{isChangingPassword ? 'انصراف از تغییر رمز' : 'تغییر رمز عبور من'}</span>
                 </button>
+
+                {onOpenVoipSettings && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenVoipSettings();
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/35 text-cyan-300 text-xs font-bold border border-cyan-500/30 transition cursor-pointer"
+                  >
+                    <PhoneCall className="w-4 h-4 text-cyan-400" />
+                    <span>
+                      تنظیمات مرکز تلفن من (داخلی {toFaDigits(getVoipConfig(currentUser.id).operatorExtension || '۱۰۱')})
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
 
