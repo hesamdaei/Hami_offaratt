@@ -86,6 +86,7 @@ import { ReservationGuideAndCalculatorView } from './components/ReservationGuide
 import { INITIAL_ORDERS, OrderItem } from './utils/ordersData';
 import { normalizeVehicleOilData } from './utils/maintenanceStandardsConfig';
 import { DeveloperDocsView } from './components/DeveloperDocsView';
+import { VALID_APP_TABS } from './constants/navigationConfig';
 
 const STORAGE_KEY_DRIVERS = 'hamibar_drivers_list_v1';
 const STORAGE_KEY_RECORDS = 'hamibar_attendance_records_v1';
@@ -97,6 +98,20 @@ const STORAGE_KEY_ATTENDANCE_NOTES = 'hamibar_attendance_notes_v1';
 const BACKUP_APPLIED_KEY = 'hami_backup_applied_14050806_v5';
 const PDF_SYNC_KEY = 'hamibar_backup_14050806_sync_v6';
 
+function parseTabFromLocation(): ActiveAppTab | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const queryTab = params.get('tab')?.toUpperCase() as ActiveAppTab | undefined;
+  if (queryTab && VALID_APP_TABS.has(queryTab)) {
+    return queryTab;
+  }
+  const hashTab = window.location.hash.replace(/^#\/?/, '').toUpperCase() as ActiveAppTab;
+  if (hashTab && VALID_APP_TABS.has(hashTab)) {
+    return hashTab;
+  }
+  return null;
+}
+
 interface HamiAppContentProps {
   currentUser: AppUser | null;
   setCurrentUser: React.Dispatch<React.SetStateAction<AppUser | null>>;
@@ -105,21 +120,43 @@ interface HamiAppContentProps {
 const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }) => {
   const today = useMemo(() => getTodayJalaali(), []);
 
-  // Standalone Phonebook Tab Check (?tab=PHONEBOOK or ?standalone=true)
+  // Standalone Phonebook Window Check (?standalone=true or /phonebook)
   const isStandalonePhonebook = useMemo(() => {
     if (typeof window === 'undefined') return false;
     const p = new URLSearchParams(window.location.search);
-    return p.get('tab') === 'PHONEBOOK' || p.get('standalone') === 'true' || window.location.pathname === '/phonebook';
+    return p.get('standalone') === 'true' || window.location.pathname === '/phonebook';
   }, []);
 
-  // Main active navigation tab
+  // Main active navigation tab (initialized from URL ?tab=... if valid)
   const [activeTab, setActiveTab] = useState<ActiveAppTab>(() => {
-    if (typeof window !== 'undefined') {
-      const p = new URLSearchParams(window.location.search);
-      if (p.get('tab') === 'PHONEBOOK') return 'PHONEBOOK';
-    }
-    return 'DASHBOARD';
+    return parseTabFromLocation() || 'DASHBOARD';
   });
+
+  // Sync activeTab changes to URL query parameter (?tab=...) so Refresh & Direct URLs work seamlessly
+  useEffect(() => {
+    if (typeof window === 'undefined' || isStandalonePhonebook) return;
+    const url = new URL(window.location.href);
+    const currentUrlTab = url.searchParams.get('tab');
+    if (currentUrlTab !== activeTab) {
+      url.searchParams.set('tab', activeTab);
+      window.history.pushState({ tab: activeTab }, '', url.toString());
+    }
+  }, [activeTab, isStandalonePhonebook]);
+
+  // Listen to browser Back & Forward buttons (popstate)
+  useEffect(() => {
+    if (typeof window === 'undefined' || isStandalonePhonebook) return;
+    const handlePopState = () => {
+      const target = parseTabFromLocation() || 'DASHBOARD';
+      if (currentUser && !canAccessTab(currentUser, target)) {
+        showToast('شما مجوز دسترسی به این بخش از سامانه را ندارید.', 'error');
+        return;
+      }
+      setActiveTab(target);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentUser, isStandalonePhonebook]);
 
   // Orders and Cargo Reservations State
   const [orders, setOrders] = useState<OrderItem[]>(() => {
@@ -181,7 +218,10 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   };
 
   const handleNavigateToFleetInsurance = (vehicleId?: string) => {
-    setActiveTab('OIL_SERVICE');
+    const targetTab: ActiveAppTab = canAccessTab(currentUser, 'FLEET_MANAGEMENT')
+      ? 'FLEET_MANAGEMENT'
+      : 'OIL_SERVICE';
+    setActiveTab(targetTab);
     setFleetSubTab('INSURANCE_ALERTS');
     if (vehicleId) {
       setHighlightedInsuranceVehicleId(vehicleId);

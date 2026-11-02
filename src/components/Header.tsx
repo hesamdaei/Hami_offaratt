@@ -1,40 +1,28 @@
-import { FC, useState, useEffect, useMemo, ComponentType, useRef } from 'react';
+import { FC, useState, useEffect, useMemo, useRef } from 'react';
 import {
-  UserCheck,
-  CalendarDays,
-  Users,
-  Droplet,
-  BookOpen,
   Search,
   ChevronDown,
+  ChevronLeft,
   Menu,
   X,
   PanelRight,
   Database,
   Truck,
-  Network,
   Bell,
   User,
   LogOut,
   Shield,
   ShieldAlert,
   SlidersHorizontal,
-  Bot,
   Printer,
   Sun,
   Moon,
   Send,
-  FileCheck,
   PhoneCall,
   KeyRound,
   Activity,
-  FileSpreadsheet,
-  LayoutDashboard,
-  PackageCheck,
-  Compass,
-  Calculator,
-  ScanLine,
-  Code2,
+  Users,
+  LayoutGrid,
 } from 'lucide-react';
 import { toFaDigits } from '../utils/jalaali';
 import { QuickSearchSpotlight } from './QuickSearchSpotlight';
@@ -43,27 +31,22 @@ import { PrintSettingsModal } from './PrintSettingsModal';
 import { VehicleItem, DriverDirectoryItem } from '../utils/fleetSeedData';
 import { FilterView } from '../types';
 import { AppUser } from '../types/auth';
-import { isMasterAdmin, canViewModule, canManageUsers, canManageSystemSettings, canAccessTab } from '../utils/authService';
+import {
+  isMasterAdmin,
+  canManageUsers,
+  canManageSystemSettings,
+  canAccessBackup,
+} from '../utils/authService';
 import { getFleetInsuranceAlerts } from '../utils/insuranceAlerts';
+import {
+  ActiveAppTab,
+  getVisibleNavigationGroups,
+  getVisibleNavigationItems,
+  getNavItemByTab,
+  getNavGroupByTab,
+} from '../constants/navigationConfig';
 
-export type ActiveAppTab =
-  | 'DASHBOARD'
-  | 'ATTENDANCE'
-  | 'VEHICLE_ASSIGNMENT'
-  | 'DRIVERS'
-  | 'STAFF'
-  | 'FLEET_MANAGEMENT'
-  | 'OIL_SERVICE'
-  | 'HANDOVER'
-  | 'CUSTOMERS'
-  | 'ORDERS'
-  | 'OPERATIONS'
-  | 'FINANCE'
-  | 'REGULATIONS'
-  | 'REPORTS'
-  | 'USERS_LOGS'
-  | 'PHONEBOOK'
-  | 'DEVELOPER_DOCS';
+export type { ActiveAppTab };
 
 export interface HeaderProps {
   activeTab?: ActiveAppTab;
@@ -90,7 +73,9 @@ export interface HeaderProps {
   onLogout?: () => void;
   onOpenBale?: () => void;
   onOpenEitaa?: () => void;
-  onOpenMasterAdmin?: (initialTab?: 'api' | 'voip' | 'network' | 'bale' | 'eitaa' | 'users' | 'backup' | 'debug') => void;
+  onOpenMasterAdmin?: (
+    initialTab?: 'api' | 'voip' | 'network' | 'bale' | 'eitaa' | 'users' | 'backup' | 'debug'
+  ) => void;
   onNavigateToInsuranceAlerts?: () => void;
   onOpenVoipSettings?: () => void;
   onOpenPhonebookPopup?: () => void;
@@ -101,20 +86,9 @@ export interface HeaderProps {
   onToggleTheme?: () => void;
 }
 
-interface NavItemConfig {
-  id: ActiveAppTab;
-  title: string;
-  shortTitle: string;
-  icon: ComponentType<{ className?: string }>;
-  badge?: string | number;
-}
-
 export const Header: FC<HeaderProps> = ({
-  activeTab = 'ATTENDANCE',
+  activeTab = 'DASHBOARD',
   onTabChange,
-  totalDrivers = 0,
-  totalStaff = 0,
-  totalVehiclesCount = 0,
   vehicles = [],
   driverDirectory = [],
   isSidebarOpen,
@@ -132,7 +106,6 @@ export const Header: FC<HeaderProps> = ({
   onOpenEitaa,
   onOpenMasterAdmin,
   onNavigateToInsuranceAlerts,
-  onOpenVoipSettings,
   onOpenPhonebookPopup,
   isMobileMenuOpen: propIsMobileMenuOpen,
   onToggleMobileMenu,
@@ -140,33 +113,39 @@ export const Header: FC<HeaderProps> = ({
   theme = 'dark',
   onToggleTheme,
 }) => {
-  // Spotlight Search Modal
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
-  // Mobile drawer local fallback state
   const [localMobileMenuOpen, setLocalMobileMenuOpen] = useState(false);
-  const isMobileMenuOpen = propIsMobileMenuOpen !== undefined ? propIsMobileMenuOpen : localMobileMenuOpen;
-  const toggleMobileMenu = onToggleMobileMenu || (() => setLocalMobileMenuOpen((prev) => !prev));
+  const isMobileMenuOpen =
+    propIsMobileMenuOpen !== undefined ? propIsMobileMenuOpen : localMobileMenuOpen;
+  const toggleMobileMenu =
+    onToggleMobileMenu || (() => setLocalMobileMenuOpen((prev) => !prev));
   const closeMobileMenu = onCloseMobileMenu || (() => setLocalMobileMenuOpen(false));
 
-  // Unified Tools & Settings Dropdown Menu
+  // Tools & Account Dropdown
   const [isMasterMenuOpen, setIsMasterMenuOpen] = useState(false);
+  // All Modules Megamenu Popover (useful when sidebar is closed or on tablet)
+  const [isModulesMenuOpen, setIsModulesMenuOpen] = useState(false);
   const [isPrintSettingsOpen, setIsPrintSettingsOpen] = useState(false);
-  const masterMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicked outside
+  const masterMenuRef = useRef<HTMLDivElement>(null);
+  const modulesMenuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (masterMenuRef.current && !masterMenuRef.current.contains(event.target as Node)) {
         setIsMasterMenuOpen(false);
       }
+      if (modulesMenuRef.current && !modulesMenuRef.current.contains(event.target as Node)) {
+        setIsModulesMenuOpen(false);
+      }
     };
-    if (isMasterMenuOpen) {
+    if (isMasterMenuOpen || isModulesMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isMasterMenuOpen]);
+  }, [isMasterMenuOpen, isModulesMenuOpen]);
 
   // Keyboard shortcut for Spotlight (Ctrl+K)
   useEffect(() => {
@@ -180,132 +159,35 @@ export const Header: FC<HeaderProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Fleet Insurance Expiry Alerts check (< 7 days)
   const insuranceAlertData = useMemo(() => {
     return getFleetInsuranceAlerts(vehicles, 7);
   }, [vehicles]);
 
-  const unassignedVehiclesCount = useMemo(() => {
-    return vehicles.filter(
-      (v) => !v.driverName || v.driverName === 'بدون راننده' || v.driverName === 'NONE'
-    ).length;
-  }, [vehicles]);
+  // Permitted navigation groups & items from centralized config
+  const visibleGroups = useMemo(() => {
+    return getVisibleNavigationGroups(currentUser);
+  }, [currentUser]);
 
-  // Navigation modules definition
-  const navModules: NavItemConfig[] = [
-    {
-      id: 'DASHBOARD',
-      title: 'داشبورد عملیات ترابری',
-      shortTitle: 'داشبورد',
-      icon: LayoutDashboard,
-    },
-    {
-      id: 'ATTENDANCE',
-      title: 'تابلوی حضور و غیاب',
-      shortTitle: 'حضور و غیاب',
-      icon: CalendarDays,
-      badge: totalDrivers > 0 ? toFaDigits(totalDrivers) : undefined,
-    },
-    {
-      id: 'VEHICLE_ASSIGNMENT',
-      title: 'تخصیص خودرو و راننده',
-      shortTitle: 'تخصیص خودرو',
-      icon: Truck,
-      badge: unassignedVehiclesCount > 0 ? `${toFaDigits(unassignedVehiclesCount)} آزاد` : undefined,
-    },
-    {
-      id: 'DRIVERS',
-      title: 'پرونده رانندگان',
-      shortTitle: 'رانندگان',
-      icon: Users,
-      badge: driverDirectory.length > 0 ? toFaDigits(driverDirectory.length) : undefined,
-    },
-    {
-      id: 'STAFF',
-      title: 'پرونده پرسنل',
-      shortTitle: 'پرسنل',
-      icon: UserCheck,
-      badge: totalStaff > 0 ? toFaDigits(totalStaff) : undefined,
-    },
-    {
-      id: 'FLEET_MANAGEMENT',
-      title: 'مدیریت ناوگان و خودروها',
-      shortTitle: 'مدیریت ناوگان',
-      icon: Truck,
-      badge: totalVehiclesCount > 0 ? toFaDigits(totalVehiclesCount) : undefined,
-    },
-    {
-      id: 'OIL_SERVICE',
-      title: 'تعویض روغن و کارکرد ناوگان',
-      shortTitle: 'تعویض روغن',
-      icon: Droplet,
-    },
-    {
-      id: 'ORDERS',
-      title: 'سفارش‌ها و رزرو بار',
-      shortTitle: 'سفارش‌ها',
-      icon: PackageCheck,
-    },
-    {
-      id: 'OPERATIONS',
-      title: 'عملیات و اعزام دیسپچ',
-      shortTitle: 'اعزام و دیسپچ',
-      icon: Compass,
-    },
-    {
-      id: 'FINANCE',
-      title: 'امور مالی و تعرفه‌ها',
-      shortTitle: 'امور مالی',
-      icon: Calculator,
-    },
-    {
-      id: 'CUSTOMERS',
-      title: 'مشتریان و رهگیری بار',
-      shortTitle: 'رهگیری بار',
-      icon: ScanLine,
-    },
-    {
-      id: 'HANDOVER',
-      title: 'برگه و صورت‌جلسه تحویل خودرو',
-      shortTitle: 'تحویل خودرو',
-      icon: FileCheck,
-      badge: '۶۶ قلم',
-    },
-    {
-      id: 'REGULATIONS',
-      title: 'آیین‌نامه انضباطی',
-      shortTitle: 'آیین‌نامه',
-      icon: BookOpen,
-    },
-    {
-      id: 'REPORTS',
-      title: 'گزارش‌های مدیریتی و اکسل',
-      shortTitle: 'گزارش‌ها',
-      icon: FileSpreadsheet,
-    },
-    {
-      id: 'USERS_LOGS',
-      title: 'مدیریت کاربران و سطوح دسترسی',
-      shortTitle: 'مدیریت کاربران',
-      icon: Shield,
-    },
-    {
-      id: 'PHONEBOOK',
-      title: 'دفترچه تلفن و مخاطبین',
-      shortTitle: 'دفترچه تلفن',
-      icon: PhoneCall,
-      badge: 'جدید',
-    },
-    {
-      id: 'DEVELOPER_DOCS',
-      title: 'مستندات فنی و راهنمای توسعه',
-      shortTitle: 'مستندات فنی',
-      icon: Code2,
-    },
-  ];
+  const visibleItems = useMemo(() => {
+    return getVisibleNavigationItems(currentUser);
+  }, [currentUser]);
 
-  // Filter modules based on logged-in user permissions via centralized RBAC matrix
-  const visibleNavModules = navModules.filter((item) => canAccessTab(currentUser, item.id));
+  // Quick-access pinned bar items (Core daily items + current active tab if it's a specialized module)
+  const quickBarItems = useMemo(() => {
+    const baseQuick = visibleItems.filter((item) => item.isQuickAccess);
+    const currentItem = getNavItemByTab(activeTab);
+    if (
+      currentItem &&
+      visibleItems.some((v) => v.id === currentItem.id) &&
+      !baseQuick.some((q) => q.id === currentItem.id)
+    ) {
+      return [...baseQuick, currentItem];
+    }
+    return baseQuick;
+  }, [visibleItems, activeTab]);
+
+  const currentNavItem = useMemo(() => getNavItemByTab(activeTab), [activeTab]);
+  const currentNavGroup = useMemo(() => getNavGroupByTab(activeTab), [activeTab]);
 
   const handleTabClick = (tab: ActiveAppTab) => {
     if (typeof onTabChange === 'function') {
@@ -331,44 +213,69 @@ export const Header: FC<HeaderProps> = ({
   };
 
   return (
-    <header className="relative z-50 mb-3 select-none">
-      {/* CLEAN TOP BAR WITH OPERATIONS NAVIGATION & DROPDOWN */}
-      <div className="relative z-50 bg-white/95 dark:bg-[#0b1325]/95 backdrop-blur-md text-slate-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 shadow-sm">
-        {/* RIGHT (RTL): Sidebar Toggle + Brand */}
-        <div className="flex items-center gap-2 shrink-0">
+    <header className="relative z-40 mb-3 select-none" dir="rtl">
+      <div className="relative z-40 bg-white/95 dark:bg-[#0b1325]/95 backdrop-blur-md text-slate-900 dark:text-white rounded-2xl border border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 shadow-sm">
+        {/* RIGHT (RTL): Sidebar Toggle + Brand + Contextual Breadcrumb */}
+        <div className="flex items-center gap-2 min-w-0">
           {onToggleSidebar && (
             <button
               type="button"
               onClick={onToggleSidebar}
-              className={`hidden lg:flex items-center justify-center w-8 h-8 rounded-lg transition cursor-pointer ${
+              className={`hidden lg:flex items-center justify-center w-8 h-8 rounded-xl transition cursor-pointer shrink-0 ${
                 isSidebarOpen
                   ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/70'
               }`}
-              title="باز/بستن منوی عملیات کناری"
-              aria-label="تغییر وضعیت سایدبار"
+              title={isSidebarOpen ? 'بستن منوی کناری' : 'باز کردن منوی کناری'}
+              aria-label="تغییر وضعیت منوی کناری"
             >
               <PanelRight className="w-4 h-4" />
             </button>
           )}
 
           {/* Brand Identity */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#070b14] flex items-center justify-center p-0.5">
-              <img src="/brand-logo.png" alt="حامی" className="w-full h-full object-contain rounded" />
+          <button
+            type="button"
+            onClick={() => handleTabClick('DASHBOARD')}
+            className="flex items-center gap-2 shrink-0 cursor-pointer group"
+            title="بازگشت به داشبورد عملیات"
+          >
+            <div className="w-8 h-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#070b14] flex items-center justify-center p-0.5">
+              <img
+                src="/brand-logo.png"
+                alt="حامی"
+                className="w-full h-full object-contain rounded"
+              />
             </div>
-            <span className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white">
+            <span className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white group-hover:text-amber-500 transition">
               حامی
             </span>
-          </div>
+          </button>
+
+          {/* Contextual Breadcrumb (Current Group > Current Page) */}
+          {currentNavItem && (
+            <nav
+              aria-label="مسیر صفحه جاری"
+              className="hidden sm:flex items-center gap-1.5 pr-2 mr-1 border-r border-slate-200 dark:border-slate-800 text-xs min-w-0"
+            >
+              {currentNavGroup && (
+                <>
+                  <span className="text-slate-400 dark:text-slate-500 font-bold truncate hidden xl:inline">
+                    {currentNavGroup.shortTitle}
+                  </span>
+                  <ChevronLeft className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 shrink-0 hidden xl:inline" />
+                </>
+              )}
+              <span className="font-extrabold text-amber-600 dark:text-amber-400 truncate">
+                {currentNavItem.label}
+              </span>
+            </nav>
+          )}
         </div>
 
-        {/* CENTER: Operations / Modules Navigation Bar (Always accessible on Desktop/Tablet) */}
-        <nav
-          aria-label="منوی عملیات سامانه"
-          className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 px-1"
-        >
-          {visibleNavModules.map((item) => {
+        {/* CENTER: Focused Quick-Access Bar + Grouped "All Modules" Selector */}
+        <div className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 px-1">
+          {quickBarItems.map((item) => {
             const ItemIcon = item.icon;
             const isSelected = activeTab === item.id;
             return (
@@ -376,30 +283,97 @@ export const Header: FC<HeaderProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => handleTabClick(item.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13.5px] font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                aria-current={isSelected ? 'page' : undefined}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/90 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                <ItemIcon className="w-4 h-4 shrink-0" />
-                <span>{item.shortTitle}</span>
+                <ItemIcon className="w-3.5 h-3.5 shrink-0" />
+                <span>{item.shortLabel}</span>
               </button>
             );
           })}
-        </nav>
 
-        {/* LEFT (LTR): Action Controls & Operations Dropdown */}
+          {/* Grouped All-Modules Popover Button */}
+          <div className="relative" ref={modulesMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsModulesMenuOpen((prev) => !prev)}
+              aria-expanded={isModulesMenuOpen}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition cursor-pointer ${
+                isModulesMenuOpen
+                  ? 'bg-slate-900 text-white border-slate-800 dark:bg-slate-800 dark:text-amber-400 dark:border-amber-500/40'
+                  : 'bg-slate-50 dark:bg-[#111c33] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+              title="مشاهده دسته‌بندی کامل تمام بخش‌های سامانه"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-amber-500" />
+              <span>همه بخش‌ها</span>
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${isModulesMenuOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {isModulesMenuOpen && (
+              <div className="fixed sm:absolute right-2 sm:right-auto left-2 sm:left-0 top-14 sm:top-full mt-1 sm:w-[540px] max-h-[80vh] overflow-y-auto bg-white dark:bg-[#0d1629] border border-slate-200 dark:border-slate-700/90 rounded-2xl shadow-2xl p-3 z-[110] text-right">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {visibleGroups.map((group) => {
+                    const GroupIcon = group.icon;
+                    return (
+                      <div
+                        key={group.id}
+                        className="bg-slate-50/70 dark:bg-[#09101f] border border-slate-200/70 dark:border-slate-800/80 rounded-xl p-2.5 space-y-1.5"
+                      >
+                        <div className="flex items-center gap-1.5 text-[11px] font-black text-amber-600 dark:text-amber-400 pb-1 border-b border-slate-200/70 dark:border-slate-800">
+                          <GroupIcon className="w-3.5 h-3.5" />
+                          <span>{group.title}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          {group.items.map((mod) => {
+                            const ModIcon = mod.icon;
+                            const isSelected = activeTab === mod.id;
+                            return (
+                              <button
+                                key={mod.id}
+                                type="button"
+                                onClick={() => {
+                                  setIsModulesMenuOpen(false);
+                                  handleTabClick(mod.id);
+                                }}
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-bold transition text-right cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-amber-500 text-slate-950 font-black'
+                                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800/80'
+                                }`}
+                              >
+                                <ModIcon className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">{mod.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* LEFT (LTR): Action Controls & Tools/User Dropdown */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* 1. Compact Insurance Alert Indicator (Only if alerts > 0) */}
+          {/* 1. Insurance Alert Indicator */}
           {insuranceAlertData.totalAlertsCount > 0 && (
             <button
               type="button"
               onClick={() => {
                 if (onNavigateToInsuranceAlerts) onNavigateToInsuranceAlerts();
-                else handleTabClick('OIL_SERVICE');
+                else handleTabClick('FLEET_MANAGEMENT');
               }}
-              className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-bold transition cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/25 text-xs font-bold transition cursor-pointer"
               title={`${toFaDigits(insuranceAlertData.totalAlertsCount)} خودرو نیازمند تمدید بیمه یا معاینه فنی`}
             >
               <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
@@ -408,36 +382,36 @@ export const Header: FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* 2. Spotlight Quick Search */}
+          {/* 2. Spotlight Quick Search (Ctrl+K) */}
           <button
             type="button"
             onClick={() => setIsSpotlightOpen(true)}
-            className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800/70 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs transition cursor-pointer gap-1.5"
-            title="جستجوی سریع (Ctrl + K)"
+            className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800/70 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs transition cursor-pointer gap-1.5"
+            title="جستجوی سریع در منوها، رانندگان و خودروها (Ctrl + K)"
           >
             <Search className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span className="hidden xl:inline text-slate-500 dark:text-slate-400">جستجو</span>
           </button>
 
-          {/* 2.1 Minimal Phonebook & Dialer Popup Button */}
+          {/* 3. Minimal Phonebook & Dialer Popup Button */}
           {onOpenPhonebookPopup && (
             <button
               type="button"
               onClick={onOpenPhonebookPopup}
-              className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 text-xs font-bold transition cursor-pointer gap-1.5"
-              title="پاپ‌آپ مینیمال دفترچه تلفن و شماره‌گیر سریع"
+              className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 text-xs font-bold transition cursor-pointer gap-1.5"
+              title="پنجره شناور دفترچه تلفن و تماس سریع با رانندگان"
             >
               <PhoneCall className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span className="hidden xl:inline">تلفن</span>
             </button>
           )}
 
-          {/* 3. Theme Toggle (Icon Only) */}
+          {/* 4. Theme Toggle */}
           {onToggleTheme && (
             <button
               type="button"
               onClick={onToggleTheme}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/70 transition cursor-pointer"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/70 transition cursor-pointer"
               title={theme === 'light' ? 'حالت تیره' : 'حالت روشن'}
               aria-label="تغییر پوسته"
             >
@@ -449,12 +423,12 @@ export const Header: FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* 4. Notification Bell (Icon Only) */}
+          {/* 5. Notification Bell */}
           {onOpenNotifications && (
             <button
               type="button"
               onClick={onOpenNotifications}
-              className="relative w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/70 transition cursor-pointer"
+              className="relative w-8 h-8 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/70 transition cursor-pointer"
               title="اعلان‌ها"
               aria-label="اعلان‌ها"
             >
@@ -465,35 +439,21 @@ export const Header: FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* 4.1 Admin-Only System & API Settings Quick Launcher */}
-          {currentUser && canManageSystemSettings(currentUser) && onOpenMasterAdmin && (
-            <button
-              type="button"
-              onClick={() => onOpenMasterAdmin('api')}
-              className="relative w-8 h-8 rounded-lg flex items-center justify-center text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition cursor-pointer"
-              title="مرکز تنظیمات سیستم، وب‌سرویس‌ها، API و ویپ (مخصوص مدیران ارشد)"
-              aria-label="تنظیمات سیستم و وب‌سرویس‌ها"
-            >
-              <Shield className="w-4 h-4 text-amber-500" />
-            </button>
-          )}
-
-          {/* 5. Unified Operations, Tools & User Dropdown */}
+          {/* 6. Unified Tools & Account Dropdown (No duplicate 17-item module grid) */}
           <div className="relative z-50" ref={masterMenuRef}>
             <button
               type="button"
               onClick={() => setIsMasterMenuOpen((prev) => !prev)}
-              className={`flex items-center gap-1.5 px-2.5 h-8 rounded-lg border transition text-xs font-bold cursor-pointer ${
+              aria-expanded={isMasterMenuOpen}
+              className={`flex items-center gap-1.5 px-2.5 h-8 rounded-xl border transition text-xs font-bold cursor-pointer ${
                 isMasterMenuOpen
                   ? 'bg-slate-900 text-white border-slate-900 dark:bg-amber-500 dark:text-slate-950 dark:border-amber-400'
                   : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200/80 dark:bg-slate-800/70 dark:hover:bg-slate-800 dark:text-slate-200 dark:border-slate-700/70'
               }`}
-              title="منوی عملیات و امکانات سیستم"
+              title="ابزارهای کمکی، تنظیمات و حساب کاربری"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline max-w-[95px] truncate">
-                منوی عملیات
-              </span>
+              <span className="hidden sm:inline max-w-[95px] truncate">ابزارها و حساب</span>
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
                   networkDbStatus === 'SYNCED'
@@ -503,65 +463,37 @@ export const Header: FC<HeaderProps> = ({
                     : 'bg-amber-500'
                 }`}
               />
-              <ChevronDown className={`w-3 h-3 transition-transform ${isMasterMenuOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${isMasterMenuOpen ? 'rotate-180' : ''}`}
+              />
             </button>
 
             {isMasterMenuOpen && (
-              <div className="absolute left-0 right-auto top-full mt-2 w-72 max-h-[80vh] overflow-y-auto bg-white dark:bg-[#0d1629] border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-2 z-[100] text-right">
+              <div className="absolute left-0 right-auto top-full mt-2 w-72 max-h-[82vh] overflow-y-auto bg-white dark:bg-[#0d1629] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-2 z-[100] text-right">
                 {currentUser && (
                   <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/80 mb-1.5 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
                         {currentUser.fullName}
                       </div>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                        {isMasterAdmin(currentUser) ? 'مدیر ارشد سیستم' : 'کارشناس دیسپچ'}
+                        {isMasterAdmin(currentUser)
+                          ? 'مدیر ارشد سیستم'
+                          : currentUser.roleTitle || 'کاربر سامانه'}
                       </span>
                     </div>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                      {networkDbStatus === 'SYNCED' ? 'شبکه متصل' : 'محلی'}
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
+                      {networkDbStatus === 'SYNCED' ? 'شبکه متصل' : 'حافظه محلی'}
                     </span>
                   </div>
                 )}
 
-                {/* Quick Module Switcher inside Dropdown */}
-                <div className="mb-1.5 pb-1.5 border-b border-slate-100 dark:border-slate-800/80">
-                  <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">
-                    بخش‌های عملیاتی سامانه
-                  </div>
-                  <div className="grid grid-cols-2 gap-1">
-                    {visibleNavModules.map((mod) => {
-                      const ModIcon = mod.icon;
-                      const isSelected = activeTab === mod.id;
-                      return (
-                        <button
-                          key={mod.id}
-                          type="button"
-                          onClick={() => {
-                            setIsMasterMenuOpen(false);
-                            handleTabClick(mod.id);
-                          }}
-                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold transition text-right cursor-pointer ${
-                            isSelected
-                              ? 'bg-amber-500 text-slate-950'
-                              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80'
-                          }`}
-                        >
-                          <ModIcon className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{mod.shortTitle}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* System Operations & Tools */}
+                {/* Operational Tools */}
                 <div className="space-y-0.5 text-xs">
                   <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">
-                    ابزارها و تنظیمات سیستم
+                    ابزارهای عملیاتی و ارتباطی
                   </div>
 
-                  {/* Bale Messenger */}
                   {(onOpenBale || onOpenEitaa) && (
                     <button
                       type="button"
@@ -570,108 +502,149 @@ export const Header: FC<HeaderProps> = ({
                         const fn = onOpenBale || onOpenEitaa;
                         if (fn) fn();
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
                     >
                       <Send className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       <div>
                         <div className="font-bold">ارسال پیام در بله</div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">پیام آماده به رانندگان</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          ارسال پیام‌های آماده به رانندگان
+                        </div>
                       </div>
                     </button>
                   )}
 
-                  {/* Print & Watermark */}
                   <button
                     type="button"
                     onClick={() => {
                       setIsMasterMenuOpen(false);
                       setIsPrintSettingsOpen(true);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
                   >
                     <Printer className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                     <div>
-                      <div className="font-bold">تنظیمات چاپ و واترمارک</div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">چاپگر لیزری و متن سربرگ</div>
+                      <div className="font-bold">تنظیمات چاپ و سربرگ</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        چاپگر لیزری و واترمارک گزارش‌ها
+                      </div>
                     </div>
                   </button>
 
-                  {/* Admin-Only Infrastructure, APIs, VoIP and Security Section */}
-                  {currentUser && canManageSystemSettings(currentUser) && (
-                    <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-0.5">
-                      <div className="px-2.5 py-1 text-[10px] font-bold text-amber-500 dark:text-amber-400 flex items-center justify-between">
-                        <span>مدیریت زیرساخت و امنیت سیستم</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-bold">
-                          فقط مدیر ارشد
-                        </span>
+                  {currentUser && canAccessBackup(currentUser) && !canManageSystemSettings(currentUser) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMasterMenuOpen(false);
+                        onOpenBackup?.();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                    >
+                      <Database className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <div>
+                        <div className="font-bold">پشتیبان‌گیری و بازیابی</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          مدیریت فایل پشتیبان داده‌ها
+                        </div>
                       </div>
-
-                      {/* 1. APIs, Webhooks & LAN Server */}
-                      <button
-                        type="button"
-                        onClick={() => handleTriggerMasterModal('api')}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
-                      >
-                        <KeyRound className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <div>
-                          <div className="font-bold">تنظیمات وب‌سرویس‌ها و APIها</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">سرور LAN، ربات بله، وب‌هوک و سینک دیتابیس</div>
-                        </div>
-                      </button>
-
-                      {/* 2. VoIP PBX & Telephony */}
-                      <button
-                        type="button"
-                        onClick={() => handleTriggerMasterModal('voip')}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
-                      >
-                        <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        <div>
-                          <div className="font-bold">مرکز تلفن سانترال ویپ (VoIP PBX)</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">اتصال AMI، ایزابل/استریسک، CTI و تست خطوط</div>
-                        </div>
-                      </button>
-
-                      {/* 3. User Management & Permissions */}
-                      <button
-                        type="button"
-                        onClick={() => handleTriggerMasterModal('users')}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
-                      >
-                        <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                        <div>
-                          <div className="font-bold">مدیریت کاربران و سطوح دسترسی</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">تعریف پرسنل، رمزهای عبور و مجوز ماژول‌ها</div>
-                        </div>
-                      </button>
-
-                      {/* 4. Backup & Restore */}
-                      <button
-                        type="button"
-                        onClick={() => handleTriggerMasterModal('backup')}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
-                      >
-                        <Database className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                        <div>
-                          <div className="font-bold">بک‌آپ و بازیابی داده‌ها</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">دانلود و ریستور فایل JSON و پایگاه داده</div>
-                        </div>
-                      </button>
-
-                      {/* 5. Diagnostics */}
-                      <button
-                        type="button"
-                        onClick={() => handleTriggerMasterModal('debug')}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
-                      >
-                        <Activity className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
-                        <div>
-                          <div className="font-bold">پایش سلامت و عیب‌یابی داده‌ها</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">بررسی یکپارچگی رکوردها و رفع مغایرت</div>
-                        </div>
-                      </button>
-                    </div>
+                    </button>
                   )}
+
+                  {/* Admin Infrastructure, APIs, VoIP and Security Section */}
+                  {currentUser &&
+                    (canManageSystemSettings(currentUser) || canManageUsers(currentUser)) && (
+                      <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-0.5">
+                        <div className="px-2.5 py-1 text-[10px] font-bold text-amber-500 dark:text-amber-400 flex items-center justify-between">
+                          <span>مدیریت زیرساخت و امنیت</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-bold">
+                            مدیریتی
+                          </span>
+                        </div>
+
+                        {canManageSystemSettings(currentUser) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleTriggerMasterModal('api')}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                            >
+                              <KeyRound className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <div>
+                                <div className="font-bold">تنظیمات شبکه، وب‌سرویس و API</div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  سرور LAN، سینک دیتابیس و ربات بله
+                                </div>
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleTriggerMasterModal('voip')}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                            >
+                              <PhoneCall className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <div>
+                                <div className="font-bold">مرکز تلفن سانترال ویپ (VoIP)</div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  اتصال AMI، ایزابل/استریسک و کالرآیدی
+                                </div>
+                              </div>
+                            </button>
+                          </>
+                        )}
+
+                        {canManageUsers(currentUser) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsMasterMenuOpen(false);
+                              handleTabClick('USERS_LOGS');
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                          >
+                            <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <div>
+                              <div className="font-bold">کاربران و سطوح دسترسی</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                مدیریت حساب‌های کاربری و لاگ سیستم
+                              </div>
+                            </div>
+                          </button>
+                        )}
+
+                        {canAccessBackup(currentUser) && (
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerMasterModal('backup')}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                          >
+                            <Database className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                            <div>
+                              <div className="font-bold">پشتیبان‌گیری و بازیابی داده‌ها</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                دانلود و ریستور فایل JSON و پایگاه داده
+                              </div>
+                            </div>
+                          </button>
+                        )}
+
+                        {canManageSystemSettings(currentUser) && (
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerMasterModal('debug')}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                          >
+                            <Activity className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                            <div>
+                              <div className="font-bold">پایش سلامت و عیب‌یابی داده‌ها</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                بررسی یکپارچگی رکوردها و رفع مغایرت
+                              </div>
+                            </div>
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                   {onOpenUserArea && (
                     <button
@@ -680,12 +653,14 @@ export const Header: FC<HeaderProps> = ({
                         setIsMasterMenuOpen(false);
                         onOpenUserArea();
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition text-right cursor-pointer"
                     >
                       <User className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
                       <div>
-                        <div className="font-bold">حساب کاربری</div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">تغییر رمز عبور</div>
+                        <div className="font-bold">ناحیه کاربری من</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          مشخصات کاربری و تغییر رمز عبور
+                        </div>
                       </div>
                     </button>
                   )}
@@ -699,7 +674,7 @@ export const Header: FC<HeaderProps> = ({
                         setIsMasterMenuOpen(false);
                         onLogout();
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition text-xs font-bold text-right cursor-pointer"
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition text-xs font-bold text-right cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>خروج از سامانه</span>
@@ -710,26 +685,32 @@ export const Header: FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Mobile Menu Hamburger */}
+          {/* Mobile Menu Trigger (Opens unified grouped Sidebar on mobile) */}
           <button
             type="button"
-            onClick={toggleMobileMenu}
-            className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 rounded-lg lg:hidden transition cursor-pointer"
-            aria-label="منوی موبایل"
+            onClick={() => {
+              if (onToggleSidebar) {
+                onToggleSidebar();
+              } else {
+                toggleMobileMenu();
+              }
+            }}
+            className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 rounded-xl lg:hidden transition cursor-pointer"
+            aria-label="منوی اصلی موبایل"
           >
             {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
-      {/* MOBILE SLIDE-OVER DRAWER */}
-      {isMobileMenuOpen && (
+      {/* Fallback Mobile Drawer (if used standalone without Sidebar12) */}
+      {isMobileMenuOpen && !onToggleSidebar && (
         <div
           onClick={closeMobileMenu}
           className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex lg:hidden animate-in fade-in duration-150"
         >
           <div
-            className="fixed inset-y-0 right-0 w-[82%] max-w-xs bg-white dark:bg-[#0d1629] border-l border-slate-200 dark:border-slate-800 h-full p-4 overflow-y-auto space-y-4 shadow-2xl z-[101] animate-in slide-in-from-right duration-200"
+            className="fixed inset-y-0 right-0 w-[82%] max-w-xs bg-white dark:bg-[#0d1629] border-l border-slate-200 dark:border-slate-800 h-full p-4 overflow-y-auto space-y-4 shadow-2xl z-[101]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
@@ -748,57 +729,39 @@ export const Header: FC<HeaderProps> = ({
               </button>
             </div>
 
-            {/* Mobile Nav Modules */}
-            <div className="space-y-1">
-              <div className="text-[11px] font-bold text-slate-400 px-1 mb-1">بخش‌های سامانه</div>
-              {visibleNavModules.map((item) => {
-                const ItemIcon = item.icon;
-                const isSelected = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      handleTabClick(item.id);
-                      closeMobileMenu();
-                    }}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs text-right transition ${
-                      isSelected
-                        ? 'bg-amber-500 text-slate-950 font-black'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <ItemIcon className="w-4 h-4" />
-                      <span className="font-bold">{item.title}</span>
-                    </div>
-                    {item.badge && (
-                      <span className="text-[10px] opacity-80 font-mono">{item.badge}</span>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="space-y-3">
+              {visibleGroups.map((group) => (
+                <div key={group.id} className="space-y-1">
+                  <div className="text-[11px] font-bold text-amber-500 px-1">{group.title}</div>
+                  {group.items.map((item) => {
+                    const ItemIcon = item.icon;
+                    const isSelected = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          handleTabClick(item.id);
+                          closeMobileMenu();
+                        }}
+                        className={`w-full flex items-center gap-2.5 p-2 rounded-xl text-xs text-right transition ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 font-black'
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <ItemIcon className="w-4 h-4" />
+                        <span className="font-bold">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
 
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
               <PWAInstallButton variant="banner" className="w-full" />
             </div>
-
-            {onLogout && (
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => {
-                    closeMobileMenu();
-                    onLogout();
-                  }}
-                  className="w-full py-2 px-3 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-2"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>خروج از حساب کاربری</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -809,7 +772,9 @@ export const Header: FC<HeaderProps> = ({
         onClose={() => setIsSpotlightOpen(false)}
         vehicles={vehicles}
         drivers={driverDirectory}
-        onSelectTab={(tab) => handleTabClick(tab)}
+        currentUser={currentUser}
+        onOpenBackup={onOpenBackup}
+        onNavigateTab={(tab) => handleTabClick(tab)}
       />
 
       {/* Laser Print & Watermark Settings Modal */}
