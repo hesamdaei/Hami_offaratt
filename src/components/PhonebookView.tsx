@@ -30,6 +30,7 @@ import {
   Clock,
   Delete,
   Keyboard,
+  ArrowRight,
 } from 'lucide-react';
 import {
   PhonebookContact,
@@ -60,7 +61,7 @@ interface PhonebookViewProps {
   staffMembers: StaffMember[];
   isStandalone?: boolean;
   isPopupMode?: boolean;
-  onOpenPopupModal?: () => void;
+  onNavigateHome?: () => void;
   onClosePopup?: () => void;
   onOpenVoipSettings?: () => void;
   currentUser?: AppUser | null;
@@ -109,7 +110,7 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
   drivers,
   staffMembers,
   isPopupMode = false,
-  onOpenPopupModal,
+  onNavigateHome,
   onClosePopup,
   onOpenVoipSettings,
   currentUser,
@@ -513,16 +514,16 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
               </button>
             )}
 
-            {/* Open as Minimal Floating Popup */}
-            {!isPopupMode && onOpenPopupModal && (
+            {/* Back to Main Dashboard Navigation */}
+            {onNavigateHome && !isPopupMode && (
               <button
                 type="button"
-                onClick={onOpenPopupModal}
-                className="px-2.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-                title="باز کردن دفترچه تلفن در پنجره شناور سریع"
+                onClick={onNavigateHome}
+                className="px-2.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                title="بازگشت به پیشخوان اصلی سامانه"
               >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">پنجره شناور</span>
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                <span>بازگشت به پیشخوان</span>
               </button>
             )}
 

@@ -151,7 +151,7 @@ export const Sidebar12: FC<Sidebar12Props> = ({
       case 'STAFF':
         return totalStaff > 0 ? { text: toFaDigits(totalStaff) } : null;
       case 'PHONEBOOK':
-        return { text: 'پاپ‌آپ' };
+        return null;
       default:
         return null;
     }

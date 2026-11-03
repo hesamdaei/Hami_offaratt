@@ -78,7 +78,6 @@ export interface HeaderProps {
   ) => void;
   onNavigateToInsuranceAlerts?: () => void;
   onOpenVoipSettings?: () => void;
-  onOpenPhonebookPopup?: () => void;
   isMobileMenuOpen?: boolean;
   onToggleMobileMenu?: () => void;
   onCloseMobileMenu?: () => void;
@@ -107,7 +106,6 @@ export const Header: FC<HeaderProps> = ({
   onOpenMasterAdmin,
   onNavigateToInsuranceAlerts,
   onOpenVoipSettings,
-  onOpenPhonebookPopup,
   isMobileMenuOpen: propIsMobileMenuOpen,
   onToggleMobileMenu,
   onCloseMobileMenu,
@@ -394,18 +392,20 @@ export const Header: FC<HeaderProps> = ({
             <span className="hidden xl:inline text-slate-500 dark:text-slate-400">جستجو</span>
           </button>
 
-          {/* 3. Minimal Phonebook & Dialer Popup Button */}
-          {onOpenPhonebookPopup && (
-            <button
-              type="button"
-              onClick={onOpenPhonebookPopup}
-              className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 text-xs font-bold transition cursor-pointer gap-1.5"
-              title="پنجره شناور دفترچه تلفن و تماس سریع با رانندگان"
-            >
-              <PhoneCall className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="hidden xl:inline">تلفن</span>
-            </button>
-          )}
+          {/* 3. Phonebook & Unified PBX Button (Opens Phonebook View) */}
+          <button
+            type="button"
+            onClick={() => handleTabClick('PHONEBOOK')}
+            className={`flex items-center justify-center w-8 h-8 sm:w-auto sm:px-2.5 rounded-xl text-xs font-bold transition cursor-pointer gap-1.5 ${
+              activeTab === 'PHONEBOOK'
+                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/25 ring-2 ring-emerald-500/40'
+                : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25'
+            }`}
+            title="دفترچه تلفن هوشمند و ارتباط با رانندگان"
+          >
+            <PhoneCall className={`w-3.5 h-3.5 ${activeTab === 'PHONEBOOK' ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+            <span className="hidden xl:inline">تلفن</span>
+          </button>
 
           {/* 4. Theme Toggle */}
           {onToggleTheme && (

@@ -127,10 +127,9 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
     return p.get('standalone') === 'true' || window.location.pathname === '/phonebook';
   }, []);
 
-  // Main active navigation tab (initialized from URL ?tab=... if valid; PHONEBOOK opens as separate popup)
+  // Main active navigation tab (initialized from URL ?tab=... if valid)
   const [activeTab, setActiveTab] = useState<ActiveAppTab>(() => {
     const parsed = parseTabFromLocation();
-    if (parsed === 'PHONEBOOK') return 'DASHBOARD';
     return parsed || 'DASHBOARD';
   });
 
@@ -214,11 +213,6 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   const handleTabChange = (tab: ActiveAppTab) => {
     if (currentUser && !canAccessTab(currentUser, tab)) {
       showToast('شما مجوز دسترسی به این بخش از سامانه را ندارید.', 'error');
-      return;
-    }
-    if (tab === 'PHONEBOOK') {
-      setIsPhonebookPopupOpen(true);
-      setIsPhonebookMinimized(false);
       return;
     }
     setActiveTab(tab);
@@ -427,54 +421,11 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
   const isSaveInFlightRef = useRef<boolean>(false);
   const hasLocalPendingEditsRef = useRef<boolean>(false);
 
-  // User Area, User Management, Notification Popover, and Separate Floating Phonebook Popup Window states
+  // User Area, User Management, and Notification Popover states
   const [isUserAreaOpen, setIsUserAreaOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isPhonebookPopupOpen, setIsPhonebookPopupOpen] = useState(() => {
-    return parseTabFromLocation() === 'PHONEBOOK';
-  });
-  const [isPhonebookMinimized, setIsPhonebookMinimized] = useState(false);
-  const [isPhonebookWide, setIsPhonebookWide] = useState(false);
-  const [phonebookWindowPos, setPhonebookWindowPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const isDraggingPhonebookRef = useRef(false);
-  const phonebookDragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number }>({
-    mouseX: 0,
-    mouseY: 0,
-    startX: 0,
-    startY: 0,
-  });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const handlePhonebookDragMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    isDraggingPhonebookRef.current = true;
-    phonebookDragStartRef.current = {
-      mouseX: e.clientX,
-      mouseY: e.clientY,
-      startX: phonebookWindowPos.x,
-      startY: phonebookWindowPos.y,
-    };
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!isDraggingPhonebookRef.current) return;
-      const dx = moveEvent.clientX - phonebookDragStartRef.current.mouseX;
-      const dy = moveEvent.clientY - phonebookDragStartRef.current.mouseY;
-      setPhonebookWindowPos({
-        x: phonebookDragStartRef.current.startX + dx,
-        y: phonebookDragStartRef.current.startY + dy,
-      });
-    };
-
-    const handleMouseUp = () => {
-      isDraggingPhonebookRef.current = false;
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  };
 
   // Bale Messenger Modal State
   const [isBaleModalOpen, setIsBaleModalOpen] = useState(false);
@@ -521,8 +472,6 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
 
   const handleStartVoipCall = (phone: string, name?: string, role?: string) => {
     if (!phone) return;
-    // Minimize the Phonebook popup window automatically when a call starts so the Call Display Popup stands as a separate popup window
-    setIsPhonebookMinimized(true);
     setVoipCallTarget({ phone, name: name || 'مخاطب', role });
   };
 
@@ -2407,7 +2356,6 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             onOpenMasterAdmin={handleOpenMasterAdmin}
             onNavigateToInsuranceAlerts={() => handleNavigateToFleetInsurance()}
             onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
-            onOpenPhonebookPopup={() => setIsPhonebookPopupOpen(true)}
             theme={theme}
             onToggleTheme={handleToggleTheme}
           />
@@ -2698,7 +2646,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
                 drivers={driverDirectory}
                 staffMembers={staffMembers}
                 isStandalone={false}
-                onOpenPopupModal={() => setIsPhonebookPopupOpen(true)}
+                onNavigateHome={() => handleTabChange('DASHBOARD')}
                 onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
                 currentUser={currentUser}
                 onCallPhone={handleStartVoipCall}
@@ -2901,142 +2849,6 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
         currentUser={currentUser}
         onShowToast={(msg, type) => showToast(msg, type)}
       />
-
-      {/* Separate Floating Phonebook & Quick Dialer Popup Window (پنجره پاپ‌آپ جداگانه دفترچه تلفن و سانترال) */}
-      {isPhonebookPopupOpen && (
-        isPhonebookMinimized ? (
-          <div
-            className="fixed bottom-5 right-5 z-[140] w-72 bg-slate-900/95 backdrop-blur-xl border-2 border-cyan-500/50 rounded-2xl p-3 shadow-[0_20px_50px_rgba(0,0,0,0.85)] text-slate-100 select-none animate-fadeIn"
-            dir="rtl"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div
-                onClick={() => setIsPhonebookMinimized(false)}
-                className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
-                  <Phone className="w-4 h-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-black text-white truncate">پنجره دفترچه تلفن</div>
-                  <div className="text-[10px] font-bold text-cyan-400 truncate">
-                    کلیک برای بازگشایی مجدد پاپ‌آپ
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsPhonebookMinimized(false)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 transition-colors"
-                  title="بزرگ‌نمایی پنجره دفترچه تلفن"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPhonebookPopupOpen(false);
-                    setIsPhonebookMinimized(false);
-                  }}
-                  className="p-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white transition-colors"
-                  title="بستن پنجره دفترچه تلفن"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="fixed inset-0 z-[140] pointer-events-none flex items-center justify-center p-2 sm:p-4 animate-fadeIn"
-            dir="rtl"
-          >
-            <div
-              style={{
-                transform: `translate3d(${phonebookWindowPos.x}px, ${phonebookWindowPos.y}px, 0)`,
-              }}
-              className={`pointer-events-auto w-full ${
-                isPhonebookWide ? 'max-w-4xl' : 'max-w-2xl'
-              } max-h-[88vh] flex flex-col bg-[#080d1a]/98 backdrop-blur-2xl border-2 border-cyan-500/45 rounded-3xl shadow-[0_30px_90px_rgba(0,0,0,0.88),0_0_40px_rgba(6,182,212,0.18)] overflow-hidden transition-[max-width] duration-200`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Separate Desktop-Style Draggable Window Title Bar */}
-              <div
-                onMouseDown={handlePhonebookDragMouseDown}
-                className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-l from-slate-900 via-slate-900/95 to-cyan-950/60 border-b border-slate-800/90 cursor-move select-none shrink-0"
-              >
-                <div className="flex items-center gap-2">
-                  <GripHorizontal className="w-4 h-4 text-slate-400" />
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="text-xs font-black text-white tracking-tight">
-                    پنجره پاپ‌آپ مستقل دفترچه تلفن و سانترال
-                  </span>
-                  <span className="hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                    جدا از محیط برنامه • قابل جابجایی
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsVoipSettingsOpen(true)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-[10px] font-bold transition-colors"
-                    title="تنظیمات داخلی و سانترال شما"
-                  >
-                    <Settings2 className="w-3 h-3" />
-                    <span>تنظیمات سانترال</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsPhonebookWide((prev) => !prev)}
-                    className="hidden sm:flex p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                    title={isPhonebookWide ? 'اندازه استاندارد پنجره' : 'افزایش عرض پنجره پاپ‌آپ'}
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsPhonebookMinimized(true)}
-                    className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                    title="کوچک‌سازی پنجره در گوشه صفحه"
-                  >
-                    <Minimize2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsPhonebookPopupOpen(false);
-                      setIsPhonebookMinimized(false);
-                    }}
-                    className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-colors"
-                    title="بستن پنجره پاپ‌آپ دفترچه تلفن"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Scrollable Phonebook Content Inside Separate Window */}
-              <div className="p-3 sm:p-4 overflow-y-auto custom-scrollbar flex-1">
-                <PhonebookView
-                  drivers={driverDirectory}
-                  staffMembers={staffMembers}
-                  isStandalone={false}
-                  isPopupMode={true}
-                  onClosePopup={() => {
-                    setIsPhonebookPopupOpen(false);
-                    setIsPhonebookMinimized(false);
-                  }}
-                  onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
-                  currentUser={currentUser}
-                  onCallPhone={handleStartVoipCall}
-                  onShowToast={showToast}
-                />
-              </div>
-            </div>
-          </div>
-        )
-      )}
 
       {/* Mobile Bottom Navigation Bar (Fast & thumb-friendly navigation on mobile) */}
       <MobileBottomNav
