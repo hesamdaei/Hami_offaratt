@@ -47,7 +47,7 @@ import {
 } from './utils/lanSyncService';
 import { Sidebar12 } from './components/Sidebar12';
 import { Toast } from './components/Toast';
-import { CalendarDays, Users, UserCheck, Droplet, BookOpen, Clock, Truck, Menu, Phone, GripHorizontal, Minimize2, Maximize2, X, Settings2, ExternalLink, LayoutGrid, Sun, Moon, PhoneCall } from 'lucide-react';
+import { CalendarDays, Users, UserCheck, Droplet, BookOpen, Clock, Truck, Menu, Phone, GripHorizontal, Minimize2, Maximize2, X, Settings2, ExternalLink, LayoutGrid, Sun, Moon, PhoneCall, Edit3 } from 'lucide-react';
 import { AppUser } from './types/auth';
 import {
   getStoredSession,
@@ -76,7 +76,7 @@ import { MasterAdminModal } from './components/MasterAdminModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { VoipCallModal } from './components/VoipCallModal';
 import { VoipSettingsModal } from './components/VoipSettingsModal';
-import { getVoipConfig } from './utils/voipService';
+import { getVoipConfig, saveVoipConfig } from './utils/voipService';
 import { AppNotification } from './types/notification';
 import { generateSystemNotifications } from './utils/notificationService';
 import { OperationalDashboardView } from './components/OperationalDashboardView';
@@ -121,12 +121,106 @@ interface HamiAppContentProps {
 const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }) => {
   const today = useMemo(() => getTodayJalaali(), []);
 
-  // Standalone Phonebook Window Check (?standalone=true or /phonebook)
-  const isStandalonePhonebook = useMemo(() => {
+  // Standalone Phonebook Execution Mode Check (?standalone=true, ?phonebook=true, ?app=phonebook, /phonebook, #phonebook)
+  const [isStandalonePhonebook, setIsStandalonePhonebook] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const p = new URLSearchParams(window.location.search);
-    return p.get('standalone') === 'true' || window.location.pathname === '/phonebook';
+    return (
+      p.get('standalone') === 'true' ||
+      p.get('phonebook') === 'true' ||
+      p.get('app') === 'phonebook' ||
+      p.get('module') === 'phonebook' ||
+      window.location.pathname === '/phonebook' ||
+      window.location.hash === '#phonebook' ||
+      window.location.hash === '#/phonebook'
+    );
+  });
+
+  // Standalone Default Operator Profile (برای زمان اجرای ماژول تلفن بدون نیاز به لاگین در برنامه اصلی حامی)
+  const [standaloneOperator, setStandaloneOperator] = useState<AppUser>(() => {
+    try {
+      const stored = localStorage.getItem('hamibar_standalone_operator_v1');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {
+      id: 'usr-standalone-operator',
+      username: 'operator',
+      fullName: 'اپراتور دیسپچ و سانترال',
+      roleTitle: 'کارشناس پاسخگویی و ارتباطات ناوگان',
+      isMasterAdmin: false,
+      isActive: true,
+      permissions: {
+        attendance: 'view',
+        vehicleAssignment: 'view',
+        drivers: 'full',
+        staff: 'full',
+        fleetManagement: 'view',
+        oilService: 'none',
+        orders: 'none',
+        operations: 'view',
+        handover: 'view',
+        customers: 'view',
+        finance: 'none',
+        regulations: 'view',
+        phonebook: 'full',
+        reports: 'view',
+        developerDocs: 'view',
+        canDeleteRecords: false,
+        canExportExcel: true,
+        backupRestore: false,
+        userManagement: false,
+        networkSettings: false,
+        voipSettings: true,
+      },
+    };
+  });
+
+  const [isOperatorModalOpen, setIsOperatorModalOpen] = useState(false);
+  const [operatorTempName, setOperatorTempName] = useState(standaloneOperator.fullName);
+  const [operatorTempExt, setOperatorTempExt] = useState('101');
+
+  // Listen to browser URL changes & popstate for standalone phonebook mode
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const p = new URLSearchParams(window.location.search);
+      const isStandalone = (
+        p.get('standalone') === 'true' ||
+        p.get('phonebook') === 'true' ||
+        p.get('app') === 'phonebook' ||
+        p.get('module') === 'phonebook' ||
+        window.location.pathname === '/phonebook' ||
+        window.location.hash === '#phonebook' ||
+        window.location.hash === '#/phonebook'
+      );
+      setIsStandalonePhonebook(isStandalone);
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
   }, []);
+
+  const handleReturnToMainApp = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('standalone');
+    url.searchParams.delete('phonebook');
+    url.searchParams.delete('app');
+    url.searchParams.delete('module');
+    if (url.pathname === '/phonebook') url.pathname = '/';
+    url.hash = '';
+    window.history.pushState({}, '', url.pathname + (url.search ? url.search : ''));
+    setIsStandalonePhonebook(false);
+  };
+
+  const handleOpenStandalonePhonebook = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('standalone', 'true');
+    window.history.pushState({}, '', url.toString());
+    setIsStandalonePhonebook(true);
+  };
 
   // Main active navigation tab (initialized from URL ?tab=... if valid; PHONEBOOK opens as separate popup)
   const [activeTab, setActiveTab] = useState<ActiveAppTab>(() => {
@@ -2257,14 +2351,30 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
     showToast('کلیه سوابق حضور و غیاب پاکسازی شدند.', 'info');
   };
 
-  // If user is not authenticated, render the enterprise Login screen
-  if (!currentUser) {
-    return <LoginView onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  // Dedicated Standalone Phonebook Tab Window Mode (باز شونده در تب/پنجره اختصاصی)
+  // Dedicated Standalone Phonebook Execution Mode (قابل اجرا به صورت کاملاً مستقل و خودکفا بدون نیاز به برنامه اصلی حامی یا لاگین)
   if (isStandalonePhonebook) {
-    const userVoip = getVoipConfig(currentUser);
+    const effectivePhonebookUser = currentUser || standaloneOperator;
+    const userVoip = getVoipConfig(effectivePhonebookUser);
+
+    const handleSaveOperatorProfile = (e: React.FormEvent) => {
+      e.preventDefault();
+      const updatedUser: AppUser = {
+        ...standaloneOperator,
+        fullName: operatorTempName.trim() || 'اپراتور مستقل دفترچه تلفن',
+      };
+      setStandaloneOperator(updatedUser);
+      try {
+        localStorage.setItem('hamibar_standalone_operator_v1', JSON.stringify(updatedUser));
+      } catch {}
+
+      // Save extension to VoIP settings
+      const cleanExt = operatorTempExt.trim() || '101';
+      saveVoipConfig({ ...userVoip, operatorExtension: cleanExt }, updatedUser);
+
+      setIsOperatorModalOpen(false);
+      showToast('مشخصات اپراتور و شماره داخلی سانترال با موفقیت به‌روزرسانی شد.', 'success');
+    };
+
     return (
       <div
         dir="rtl"
@@ -2288,28 +2398,42 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-mono">
                     {APP_BUILD_TAG}
                   </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hidden sm:inline">
-                    دفترچه تلفن و سانترال مستقل
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                    ماژول مستقل دفترچه تلفن و سانترال
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  ارتباط مستقیم تلفنی و سانترال ویپ با رانندگان، دیسپچ و پرسنل ناوگان
+                  اجرای مستقل و مستقیم جهت برقراری تماس VoIP با رانندگان، دیسپچ و پرسنل بدون وابستگی به سامانه اصلی
                 </p>
               </div>
             </div>
 
             {/* User, Extension, Theme & Return to Main App */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Active User and PBX Extension Badge */}
+              {/* Active Operator and PBX Extension Badge */}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="font-bold text-slate-700 dark:text-slate-200">
-                  {currentUser.fullName}
+                  {effectivePhonebookUser.fullName}
                 </span>
                 <span className="text-slate-400">|</span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">
                   داخلی {toFaDigits(userVoip.operatorExtension || '101')}
                 </span>
+                {!currentUser && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOperatorTempName(effectivePhonebookUser.fullName);
+                      setOperatorTempExt(userVoip.operatorExtension || '101');
+                      setIsOperatorModalOpen(true);
+                    }}
+                    className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                    title="تغییر نام اپراتور و شماره داخلی"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                  </button>
+                )}
               </div>
 
               {/* PBX Settings Button */}
@@ -2338,15 +2462,16 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
                 )}
               </button>
 
-              {/* Return / Open Main App Button */}
-              <a
-                href="/"
-                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-sm transition"
-                title="ورود به سامانه اصلی حامی"
+              {/* Switch to Main Hami System */}
+              <button
+                type="button"
+                onClick={handleReturnToMainApp}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                title="ورود به سامانه جامع حامی"
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                <span>سامانه اصلی</span>
-              </a>
+                <span>سامانه اصلی حامی</span>
+              </button>
             </div>
           </header>
 
@@ -2357,7 +2482,7 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
               staffMembers={staffMembers}
               isStandalone={true}
               isPopupMode={false}
-              currentUser={currentUser}
+              currentUser={effectivePhonebookUser}
               onCallPhone={handleStartVoipCall}
               onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
               onShowToast={showToast}
@@ -2373,20 +2498,93 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
             phoneNumber={voipCallTarget.phone}
             recipientName={voipCallTarget.name}
             recipientRole={voipCallTarget.role}
-            currentUser={currentUser}
+            currentUser={effectivePhonebookUser}
             onOpenSettings={() => {
               setIsVoipSettingsOpen(true);
             }}
             onShowToast={(msg, type) => showToast(msg, type)}
           />
         )}
+
         {/* VoIP PBX Settings & History Modal */}
         <VoipSettingsModal
           isOpen={isVoipSettingsOpen}
           onClose={() => setIsVoipSettingsOpen(false)}
-          currentUser={currentUser}
+          currentUser={effectivePhonebookUser}
           onShowToast={showToast}
         />
+
+        {/* Standalone Operator & Extension Quick Editor Modal */}
+        {isOperatorModalOpen && (
+          <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-amber-500" />
+                  <span>تنظیم مشخصات اپراتور مستقل سانترال</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsOperatorModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveOperatorProfile} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
+                    نام یا عنوان اپراتور
+                  </label>
+                  <input
+                    type="text"
+                    value={operatorTempName}
+                    onChange={(e) => setOperatorTempName(e.target.value)}
+                    placeholder="مثال: اپراتور دیسپچ شیفت ۱"
+                    required
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
+                    شماره داخلی سانترال (Extension)
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={operatorTempExt}
+                    onChange={(e) => setOperatorTempExt(e.target.value)}
+                    placeholder="101"
+                    required
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white font-mono text-center focus:outline-none focus:border-amber-500"
+                  />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                    تماس‌های خروجی و داخلی‌های سانترال از طریق این شماره انجام خواهد شد.
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsOperatorModalOpen(false)}
+                    className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold transition"
+                  >
+                    انصراف
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow-sm"
+                  >
+                    ذخیره مشخصات
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Toast */}
         {toast && (
           <Toast
@@ -2396,6 +2594,16 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
           />
         )}
       </div>
+    );
+  }
+
+  // If user is not authenticated and not in standalone mode, render the enterprise Login screen
+  if (!currentUser) {
+    return (
+      <LoginView
+        onLoginSuccess={handleLoginSuccess}
+        onOpenStandalonePhonebook={handleOpenStandalonePhonebook}
+      />
     );
   }
 

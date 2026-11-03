@@ -17,6 +17,8 @@ import {
   Fingerprint,
   Settings2,
   Server,
+  Phone,
+  PhoneCall,
 } from 'lucide-react';
 import { AppUser } from '../types/auth';
 import {
@@ -36,9 +38,10 @@ import {
 
 interface LoginViewProps {
   onLoginSuccess: (user: AppUser) => void;
+  onOpenStandalonePhonebook?: () => void;
 }
 
-export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
+export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess, onOpenStandalonePhonebook }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'email_recovery'>('login');
 
   // Standard Login State
@@ -853,8 +856,42 @@ export const LoginView: FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
           )}
 
+          {/* Dedicated Standalone Phonebook Direct Launcher (بدون نیاز به ورود به سامانه اصلی) */}
+          <div className="mt-5 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border border-emerald-500/30 flex items-center justify-between gap-3 text-right">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <PhoneCall className="w-4 h-4 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-slate-100">ماژول مستقل دفترچه تلفن و سانترال</span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    بدون نیاز به لاگین
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                  ارتباط مستقیم، جستجوی شماره رانندگان، دیسپچ و برقراری تماس VoIP مستقل
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenStandalonePhonebook) {
+                  onOpenStandalonePhonebook();
+                } else {
+                  window.location.search = '?standalone=true';
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shrink-0 transition flex items-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-600/30 active:scale-95"
+            >
+              <Phone className="w-3.5 h-3.5" />
+              <span>اجرای مستقل</span>
+            </button>
+          </div>
+
           {/* Security Features & Cryptography Footnote */}
-          <div className="mt-6 pt-4 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-2">
+          <div className="mt-5 pt-4 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-2">
             <div className="flex items-center gap-2 text-slate-400">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>اتصال رمزنگاری‌شده سرور با گواهی امنیتی و محافظت ضد Brute-Force</span>
