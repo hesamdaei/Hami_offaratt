@@ -30,6 +30,7 @@ import {
   Clock,
   Delete,
   Keyboard,
+  ExternalLink,
 } from 'lucide-react';
 import {
   PhonebookContact,
@@ -108,6 +109,7 @@ const PERSIAN_LETTERS = [
 export const PhonebookView: FC<PhonebookViewProps> = ({
   drivers,
   staffMembers,
+  isStandalone = false,
   isPopupMode = false,
   onOpenPopupModal,
   onClosePopup,
@@ -511,6 +513,20 @@ export const PhonebookView: FC<PhonebookViewProps> = ({
                   سانترال من (داخلی {toFaDigits(userVoipConfig.operatorExtension || '101')})
                 </span>
               </button>
+            )}
+
+            {/* Open in Standalone New Tab */}
+            {!isStandalone && (
+              <a
+                href="?standalone=true"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer no-underline"
+                title="باز کردن دفترچه تلفن و سانترال در تب جدید (مستقل از برنامه اصلی)"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">تب جدید</span>
+              </a>
             )}
 
             {/* Open as Minimal Floating Popup */}

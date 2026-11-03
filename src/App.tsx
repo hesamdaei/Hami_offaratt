@@ -47,7 +47,7 @@ import {
 } from './utils/lanSyncService';
 import { Sidebar12 } from './components/Sidebar12';
 import { Toast } from './components/Toast';
-import { CalendarDays, Users, UserCheck, Droplet, BookOpen, Clock, Truck, Menu, Phone, GripHorizontal, Minimize2, Maximize2, X, Settings2 } from 'lucide-react';
+import { CalendarDays, Users, UserCheck, Droplet, BookOpen, Clock, Truck, Menu, Phone, GripHorizontal, Minimize2, Maximize2, X, Settings2, ExternalLink, LayoutGrid, Sun, Moon, PhoneCall } from 'lucide-react';
 import { AppUser } from './types/auth';
 import {
   getStoredSession,
@@ -76,6 +76,7 @@ import { MasterAdminModal } from './components/MasterAdminModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { VoipCallModal } from './components/VoipCallModal';
 import { VoipSettingsModal } from './components/VoipSettingsModal';
+import { getVoipConfig } from './utils/voipService';
 import { AppNotification } from './types/notification';
 import { generateSystemNotifications } from './utils/notificationService';
 import { OperationalDashboardView } from './components/OperationalDashboardView';
@@ -2263,24 +2264,108 @@ const HamiAppContent: FC<HamiAppContentProps> = ({ currentUser, setCurrentUser }
 
   // Dedicated Standalone Phonebook Tab Window Mode (باز شونده در تب/پنجره اختصاصی)
   if (isStandalonePhonebook) {
+    const userVoip = getVoipConfig(currentUser);
     return (
       <div
         dir="rtl"
         className={`min-h-screen ${
           theme === 'light' ? 'bg-slate-100 text-slate-900 light' : 'bg-[#0a101f] text-slate-100 dark'
-        } p-3 sm:p-6`}
+        } p-3 sm:p-5 flex flex-col`}
       >
-        <PhonebookView
-          drivers={driverDirectory}
-          staffMembers={staffMembers}
-          isStandalone={true}
-          isPopupMode={true}
-          currentUser={currentUser}
-          onCallPhone={handleStartVoipCall}
-          onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
-          onShowToast={showToast}
-        />
-        {/* VoIP Click-to-Call Modal */}
+        <div className="w-full max-w-[1780px] mx-auto flex-1 flex flex-col space-y-3.5">
+          {/* Standalone Window Top Navigation Bar */}
+          <header className="bg-white/95 dark:bg-[#0f182a]/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl p-3 sm:px-4 shadow-md flex items-center justify-between gap-3 flex-wrap">
+            {/* Brand & App Info */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 font-black text-base shadow-sm">
+                ح
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-black text-slate-900 dark:text-white">
+                    سامانه حامی
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-mono">
+                    {APP_BUILD_TAG}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hidden sm:inline">
+                    دفترچه تلفن و سانترال مستقل
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  ارتباط مستقیم تلفنی و سانترال ویپ با رانندگان، دیسپچ و پرسنل ناوگان
+                </p>
+              </div>
+            </div>
+
+            {/* User, Extension, Theme & Return to Main App */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Active User and PBX Extension Badge */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-bold text-slate-700 dark:text-slate-200">
+                  {currentUser.fullName}
+                </span>
+                <span className="text-slate-400">|</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  داخلی {toFaDigits(userVoip.operatorExtension || '101')}
+                </span>
+              </div>
+
+              {/* PBX Settings Button */}
+              <button
+                type="button"
+                onClick={() => setIsVoipSettingsOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                title="تنظیمات سانترال ویپ"
+              >
+                <Settings2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <span className="hidden md:inline">تنظیمات سانترال</span>
+              </button>
+
+              {/* Theme Toggle */}
+              <button
+                type="button"
+                onClick={handleToggleTheme}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/70 transition cursor-pointer"
+                title={theme === 'light' ? 'حالت تیره' : 'حالت روشن'}
+                aria-label="تغییر پوسته"
+              >
+                {theme === 'light' ? (
+                  <Moon className="w-4 h-4 text-slate-700" />
+                ) : (
+                  <Sun className="w-4 h-4 text-amber-400" />
+                )}
+              </button>
+
+              {/* Return / Open Main App Button */}
+              <a
+                href="/"
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-sm transition"
+                title="ورود به سامانه اصلی حامی"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>سامانه اصلی</span>
+              </a>
+            </div>
+          </header>
+
+          {/* Standalone Full Phonebook Content */}
+          <main className="flex-1">
+            <PhonebookView
+              drivers={driverDirectory}
+              staffMembers={staffMembers}
+              isStandalone={true}
+              isPopupMode={false}
+              currentUser={currentUser}
+              onCallPhone={handleStartVoipCall}
+              onOpenVoipSettings={() => setIsVoipSettingsOpen(true)}
+              onShowToast={showToast}
+            />
+          </main>
+        </div>
+
+        {/* VoIP Click-to-Call Modal Popup */}
         {voipCallTarget && (
           <VoipCallModal
             isOpen={true}
