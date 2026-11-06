@@ -1,0 +1,83 @@
+[
+  {
+    "id": "rule-oil-khavar",
+    "serviceType": "engine_oil",
+    "title": "تعویض روغن موتور و فیلتر روغن (خاور / بنز)",
+    "scope": "category",
+    "category": "khavar",
+    "kmInterval": 5000,
+    "daysInterval": 90,
+    "warningKmLead": 500,
+    "warningDaysLead": 10,
+    "createdAt": 1788497140359
+  },
+  {
+    "id": "rule-oil-hyundai",
+    "serviceType": "engine_oil",
+    "title": "تعویض روغن موتور و فیلتر روغن (هیوندای مایتی)",
+    "scope": "category",
+    "category": "hyundai",
+    "kmInterval": 6500,
+    "daysInterval": 90,
+    "warningKmLead": 500,
+    "warningDaysLead": 10,
+    "createdAt": 1788497140359
+  },
+  {
+    "id": "rule-oil-isuzu",
+    "serviceType": "engine_oil",
+    "title": "تعویض روغن موتور و فیلترها (ایسوزو ۵.۲ / ۶ تن)",
+    "scope": "category",
+    "category": "isuzu",
+    "kmInterval": 7000,
+    "daysInterval": 100,
+    "warningKmLead": 600,
+    "warningDaysLead": 12,
+    "createdAt": 1788497140359
+  },
+  {
+    "id": "rule-oil-nissan",
+    "serviceType": "engine_oil",
+    "title": "تعویض روغن موتور و فیلتر (نیسان دیزل/بنزین)",
+    "scope": "category",
+    "category": "nissan",
+    "kmInterval": 5000,
+    "daysInterval": 90,
+    "warningKmLead": 500,
+    "warningDaysLead": 10,
+    "createdAt": 1788497140359
+  },
+  {
+    "id": "rule-brake-pads-all",
+    "serviceType": "brake_pads",
+    "title": "بازدید و تعویض لنت ترمز و چرخ‌ها",
+    "scope": "all",
+    "kmInterval": 15000,
+    "daysInterval": 180,
+    "warningKmLead": 1000,
+    "warningDaysLead": 15,
+    "createdAt": 1785905140359
+  },
+  {
+    "id": "rule-gearbox-all",
+    "serviceType": "gearbox_oil",
+    "title": "تعویض واسکازین گیربکس و دیفرانسیل",
+    "scope": "all",
+    "kmInterval": 30000,
+    "daysInterval": 365,
+    "warningKmLead": 2000,
+    "warningDaysLead": 25,
+    "createdAt": 1783313140359
+  },
+  {
+    "id": "rule-filters-all",
+    "serviceType": "filters",
+    "title": "تعویض فیلتر گازوئیل/سوخت و فیلتر هوا",
+    "scope": "all",
+    "kmInterval": 8000,
+    "daysInterval": 120,
+    "warningKmLead": 800,
+    "warningDaysLead": 14,
+    "createdAt": 1788497140359
+  }
+]

@@ -1,0 +1,6 @@
+{
+  "name": "حامی | سامانه پیمایش و پایش ناوگان جی‌پی‌اس",
+  "description": "برنامه هوشمند پیمایش جاده‌ای، مسیریابی زنده و مدیریت ناوگان جی‌پی‌اس حامی متصل به ایران‌اسمارت و Protrack",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

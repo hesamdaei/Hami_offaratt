@@ -1,0 +1,8 @@
+src/
+├── modules/
+│   ├── HamiFleetModule.tsx         # کامپوننت مادر، خودگردان و متصل به API
+│   ├── types.ts                    # تمامی تایپ‌ها و اینترفیس‌های داده
+│   └── index.ts                    # نقطه اکسپورت واحد
+├── components/
+│   ├── FleetMapModule.tsx          # نقشه تعاملی، کنترل وضعیت مأموریت و بارنامه
+│   └── MonthlyFuelTrendWidget.tsx  # ویجت Recharts روند ۳۰ روزه مصرف سوخت
